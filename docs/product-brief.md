@@ -33,8 +33,10 @@ replace the whole sentence or field.
 
 ### Conservative
 
-Automatic replacement requires high confidence. Lower-confidence findings
-remain suggestions and do not modify text.
+Automatic replacement must pass a small set of explicit safety rules. The
+first prototype is deliberately limited to simple lowercase spelling mistakes
+whose proposed replacement is one edit away. Findings outside that boundary do
+not modify text.
 
 ### Reversible
 
@@ -76,3 +78,15 @@ must be opt-in and state exactly what text is transmitted.
 
 None combines automatic incremental correction, a persistent native mark, and
 per-change restoration across macOS.
+
+## Future evaluation: correction confidence
+
+Typover does not assign or display a numeric confidence score in the first
+prototype. Apple’s spelling APIs provide ranked candidates, not a calibrated
+probability, and inventing a score would imply precision we have not measured.
+
+A later benchmark may evaluate confidence scoring or calibration after Typover
+has a representative typo corpus and can measure false-positive rates. Any
+future score must improve the automatic-correction decision over the simple
+binary policy, remain explainable, and be validated separately for each
+correction engine. It is not required for the controlled-editor milestone.

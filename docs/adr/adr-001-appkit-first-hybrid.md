@@ -34,7 +34,7 @@ system-wide annotation may still require a new Apple text-system API.
 
 Typover will use an **AppKit-first hybrid architecture**.
 
-- Pure Swift owns correction decisions, confidence policy, range-level diffs,
+- Pure Swift owns correction decisions, eligibility policy, range-level diffs,
   and reversible correction history.
 - AppKit and TextKit own the defining correction interaction, including the
   controlled-editor research harness, text-range geometry, annotations,
@@ -56,7 +56,7 @@ interaction.
 
 1. Keep `TypoverCore` UI-independent.
 2. Add a controlled AppKit/TextKit editor.
-3. Automatically correct one high-confidence word using a range-level edit.
+3. Automatically correct one narrowly eligible word using a range-level edit.
 4. Render a persistent light-gray squiggle on that correction.
 5. Let the writer select the mark and restore the original word.
 6. Preserve correct selection, caret, scrolling, and Undo behavior.

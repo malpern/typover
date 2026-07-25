@@ -1,11 +1,11 @@
 # Typover
 
-Typover is a native macOS experiment in confident, reversible autocorrection.
+Typover is a native macOS experiment in careful, reversible autocorrection.
 
 Instead of waiting for someone to click a misspelling, Typover applies a
-high-confidence correction automatically, leaves a quiet light-gray mark under
-the changed text, and lets the writer restore the original or choose another
-suggestion.
+small, clearly eligible correction automatically, leaves a quiet light-gray
+mark under the changed text, and lets the writer restore the original or choose
+another suggestion.
 
 > Typover fixes mistakes as you type—and always lets you go back.
 
@@ -13,8 +13,8 @@ suggestion.
 
 1. The writer completes a word or sentence.
 2. Typover evaluates only the nearby text needed for context.
-3. A high-confidence correction replaces the smallest possible character
-   range.
+3. A correction that passes Typover’s explicit safety rules replaces the
+   smallest possible character range.
 4. The corrected text retains a subtle, persistent mark.
 5. Clicking the mark offers the original text and alternative corrections.
 
@@ -43,9 +43,10 @@ frameworks.
 ## Build
 
 Typover currently contains a SwiftUI product shell around a controlled AppKit
-and TextKit editor. Type `teh` followed by Space to exercise the first
-deterministic correction, then click its light-gray squiggle to change it back
-or keep it.
+and TextKit editor. It uses Apple’s on-device spelling service to propose
+corrections, then applies only those that pass a deliberately narrow binary
+policy. Type a simple lowercase typo followed by Space, then click its
+light-gray squiggle to change it back, choose another spelling, or keep it.
 
 ```bash
 swift build
@@ -69,8 +70,9 @@ beginning with the Bear compatibility spike.
 
 ## Status
 
-Controlled-editor interaction prototype. No system-wide text monitoring or
-replacement is implemented yet.
+Controlled-editor interaction prototype with Apple spelling candidates, a
+binary automatic-correction policy, ranked alternatives, Change Back, Keep, and
+Undo. No system-wide text monitoring or replacement is implemented yet.
 
 ## License
 

@@ -27,7 +27,7 @@ measured explicitly.
 First demonstrate the complete interaction in Typover’s controlled AppKit and
 TextKit editor:
 
-- [x] automatically replace one high-confidence misspelling;
+- [x] automatically replace one narrowly eligible misspelling;
 - [x] preserve the original and replacement in `TypoverCore`;
 - [x] render a persistent light-gray squiggle;
 - [x] select the squiggle and restore the original;
@@ -41,10 +41,10 @@ evaluated against it rather than defining the interaction while platform
 uncertainties remain.
 
 The first controlled-editor milestone was completed on 2026-07-25 with a
-deterministic `teh` → `the` rule. It remains intentionally narrow. The initial
-long-document scrolling test now passes; next, replace the demo rule with an
-on-device spelling candidate source without weakening the confidence or
-range-safety policy.
+deterministic `teh` → `the` rule. The second milestone replaced that demo rule
+with `NSSpellChecker`, retained a deliberately narrow binary eligibility
+policy, added ranked alternatives and Apple correction feedback, and kept all
+processing on device. The initial long-document scrolling test also passes.
 
 The reference editor now uses a TextKit 2-backed `NSTextView` and the macOS 27
 viewport-layout callback. This is the baseline for the long-document scrolling
@@ -100,7 +100,7 @@ note ID, but it is too coarse and expensive for per-word correction.
 
 ### `TypoverCore`
 
-Owns correction decisions, confidence thresholds, range-level diffs,
+Owns correction decisions, binary eligibility rules, range-level diffs,
 correction records, context fingerprints, and re-anchoring logic. It has no
 dependency on Bear, Accessibility, AppKit, or TextKit.
 

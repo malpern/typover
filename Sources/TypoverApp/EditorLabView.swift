@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TypoverAppleSpell
 import TypoverCore
 
 struct EditorLabView: NSViewRepresentable {
@@ -65,12 +66,22 @@ extension NSAttributedString.Key {
 
 @MainActor
 private final class TypoverTextView: NSTextView {
-  private let correctionEngine: any CorrectionEngine = DemoCorrectionEngine()
-  private let automaticConfidenceThreshold = 0.98
+  private final class AlternativeSelection: NSObject {
+    let correctionID: Correction.ID
+    let replacement: String
+
+    init(correctionID: Correction.ID, replacement: String) {
+      self.correctionID = correctionID
+      self.replacement = replacement
+    }
+  }
+
+  private let correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
 
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
   private var ledger = CorrectionLedger()
+  private var proposalsByID: [Correction.ID: CorrectionProposal] = [:]
   private var viewportRange: NSTextRange?
 
   override func didChangeText() {
@@ -154,17 +165,19 @@ private final class TypoverTextView: NSTextView {
 
     let word = (textStorage.string as NSString).substring(with: wordRange)
     guard
-      let correction = correctionEngine.correction(for: word),
-      correction.changesText,
-      correction.confidence >= automaticConfidenceThreshold
+      let proposal = correctionEngine.proposal(for: word),
+      proposal.correction.changesText
     else {
       return
     }
 
+    let correction = proposal.correction
     correctionsByID[correction.id] = correction
+    proposalsByID[correction.id] = proposal
     ledger.record(correction)
     replaceCorrectionText(
-      correction: correction,
+      correctionAfter: correction,
+      correctionForReverse: correction,
       range: wordRange,
       expectedText: correction.original,
       replacementText: correction.replacement,
@@ -180,8 +193,10 @@ private final class TypoverTextView: NSTextView {
     )
   }
 
+  @discardableResult
   private func replaceCorrectionText(
-    correction: Correction,
+    correctionAfter: Correction,
+    correctionForReverse: Correction,
     range: NSRange,
     expectedText: String,
     replacementText: String,
@@ -190,15 +205,15 @@ private final class TypoverTextView: NSTextView {
     undoAnnotatesReplacement: Bool,
     undoDisposition: CorrectionDisposition,
     actionName: String
-  ) {
+  ) -> Bool {
     guard
       let textStorage,
       NSMaxRange(range) <= textStorage.length,
       (textStorage.string as NSString).substring(with: range) == expectedText,
       shouldChangeText(in: range, replacementString: replacementText)
     else {
-      ledger.transition(correction.id, to: .invalidated)
-      return
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
     }
 
     let selectionBeforeChange = selectedRange()
@@ -213,7 +228,7 @@ private final class TypoverTextView: NSTextView {
     if annotateReplacement {
       textStorage.addAttribute(
         .typoverCorrectionID,
-        value: correction.id.uuidString,
+        value: correctionAfter.id.uuidString,
         range: replacementRange
       )
     } else {
@@ -233,11 +248,14 @@ private final class TypoverTextView: NSTextView {
     didChangeText()
     isPerformingCorrection = false
 
-    ledger.transition(correction.id, to: dispositionAfter)
+    correctionsByID[correctionAfter.id] = correctionAfter
+    ledger.record(correctionAfter)
+    ledger.transition(correctionAfter.id, to: dispositionAfter)
 
     undoManager?.registerUndo(withTarget: self) { target in
       target.replaceCorrectionText(
-        correction: correction,
+        correctionAfter: correctionForReverse,
+        correctionForReverse: correctionAfter,
         range: replacementRange,
         expectedText: replacementText,
         replacementText: expectedText,
@@ -249,6 +267,7 @@ private final class TypoverTextView: NSTextView {
       )
     }
     undoManager?.setActionName(actionName)
+    return true
   }
 
   private func reconcileAnnotations() {
@@ -275,6 +294,9 @@ private final class TypoverTextView: NSTextView {
         textStorage.removeAttribute(.typoverCorrectionID, range: range)
       }
       ledger.transition(id, to: .invalidated)
+      if let proposal = proposalsByID[id] {
+        correctionEngine.record(.edited, for: proposal)
+      }
     }
   }
 
@@ -340,6 +362,34 @@ private final class TypoverTextView: NSTextView {
     changeBackItem.target = self
     menu.addItem(changeBackItem)
 
+    let replacements =
+      ([proposalsByID[id]?.correction.replacement].compactMap { $0 }
+      + (proposalsByID[id]?.alternatives ?? []))
+      .filter { $0 != correction.replacement }
+
+    if !replacements.isEmpty {
+      menu.addItem(.separator())
+      for replacement in replacements {
+        let alternativeItem = NSMenuItem(
+          title: String(
+            localized: "Change to “\(replacement)”",
+            bundle: #bundle,
+            comment:
+              "Menu action that changes an automatic correction to another spelling. The variable is the alternative spelling."
+          ),
+          action: #selector(useAlternative(_:)),
+          keyEquivalent: ""
+        )
+        alternativeItem.representedObject = AlternativeSelection(
+          correctionID: id,
+          replacement: replacement
+        )
+        alternativeItem.target = self
+        menu.addItem(alternativeItem)
+      }
+    }
+
+    menu.addItem(.separator())
     let keepItem = NSMenuItem(
       title: String(
         localized: "Keep Correction",
@@ -354,17 +404,17 @@ private final class TypoverTextView: NSTextView {
     menu.addItem(keepItem)
 
     menu.addItem(.separator())
-    let alternativesItem = NSMenuItem(
+    let sourceItem = NSMenuItem(
       title: String(
-        localized: "Alternative Corrections Coming Later",
+        localized: "Apple Spelling · On Device",
         bundle: #bundle,
-        comment: "Disabled placeholder describing a future correction-menu capability."
+        comment: "Disabled correction-menu label identifying the local spelling source."
       ),
       action: nil,
       keyEquivalent: ""
     )
-    alternativesItem.isEnabled = false
-    menu.addItem(alternativesItem)
+    sourceItem.isEnabled = false
+    menu.addItem(sourceItem)
 
     menu.popUp(
       positioning: changeBackItem,
@@ -383,8 +433,9 @@ private final class TypoverTextView: NSTextView {
       return
     }
 
-    replaceCorrectionText(
-      correction: correction,
+    let didReplace = replaceCorrectionText(
+      correctionAfter: correction,
+      correctionForReverse: correction,
       range: range,
       expectedText: correction.replacement,
       replacementText: correction.original,
@@ -398,6 +449,46 @@ private final class TypoverTextView: NSTextView {
         comment: "Undo menu action name after restoring an automatically corrected word."
       )
     )
+    if didReplace, let proposal = proposalsByID[id] {
+      correctionEngine.record(.reverted, for: proposal)
+    }
+  }
+
+  @objc
+  private func useAlternative(_ sender: NSMenuItem) {
+    guard
+      let selection = sender.representedObject as? AlternativeSelection,
+      let correction = correctionsByID[selection.correctionID],
+      let range = annotatedRanges(for: selection.correctionID).first
+    else {
+      return
+    }
+
+    let alternative = Correction(
+      id: correction.id,
+      original: correction.original,
+      replacement: selection.replacement,
+      createdAt: correction.createdAt
+    )
+    let didReplace = replaceCorrectionText(
+      correctionAfter: alternative,
+      correctionForReverse: correction,
+      range: range,
+      expectedText: correction.replacement,
+      replacementText: alternative.replacement,
+      annotateReplacement: true,
+      dispositionAfter: .applied,
+      undoAnnotatesReplacement: true,
+      undoDisposition: .applied,
+      actionName: String(
+        localized: "Change Correction",
+        bundle: #bundle,
+        comment: "Undo menu action name after choosing a different spelling correction."
+      )
+    )
+    if didReplace, let proposal = proposalsByID[correction.id] {
+      correctionEngine.record(.edited, for: proposal)
+    }
   }
 
   @objc
@@ -413,6 +504,9 @@ private final class TypoverTextView: NSTextView {
       textStorage.removeAttribute(.typoverCorrectionID, range: range)
     }
     ledger.transition(id, to: .kept)
+    if let proposal = proposalsByID[id] {
+      correctionEngine.record(.accepted, for: proposal)
+    }
   }
 
   private func correctionID(from menuItem: NSMenuItem) -> Correction.ID? {
