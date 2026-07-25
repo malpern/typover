@@ -20,7 +20,10 @@ let package = Package(
     ),
     .executableTarget(
       name: "TypoverApp",
-      dependencies: ["TypoverAppleSpell", "TypoverCore"]
+      dependencies: ["TypoverAppleSpell", "TypoverCore"],
+      resources: [
+        .process("Resources")
+      ]
     ),
     .testTarget(
       name: "TypoverCoreTests",
