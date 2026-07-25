@@ -15,9 +15,9 @@ calibrated probability that a candidate is correct. Adding a made-up numeric
 confidence value would make the prototype appear more certain than its evidence
 supports.
 
-Future engines may use Apple-provided on-device language models or open-source
-models running locally. Those engines should not require changes to the editor,
-annotation, restoration, or Undo behavior.
+Contextual engines may use Apple-provided on-device language models or
+open-source models running locally. Those engines must not require changes to
+the editor, annotation, restoration, or Undo behavior.
 
 ## Decision
 
@@ -43,11 +43,13 @@ Typover will separate candidate generation from the decision to edit text.
 - Typover will not send writing to a network service or silently fall back to a
   cloud model.
 
-## Future model evaluation
+## Contextual model evaluation
 
-After the controlled editor is reliable, Typover may benchmark an
-Apple-provided on-device model and selected open-source local models through the
-same engine boundary. The harness should measure:
+Typover now benchmarks Apple’s on-device model through a separate
+`ContextualCorrectionEngine` boundary and checked-in sentence corpus. The
+bounded transaction policy is recorded in
+[ADR-005](adr-005-apple-contextual-correction.md). Selected open-source local
+models can use the same protocol later. The harness measures:
 
 - correction accuracy and false-positive rate on a representative typo corpus;
 - median and tail latency, including cold start;
@@ -73,8 +75,9 @@ prototype.
 
 ### Costs
 
-- The first policy intentionally misses corrections that require more context
-  or more than one edit.
+- The fast spelling policy intentionally misses corrections that require more
+  context or more than one edit; the slower contextual path handles a bounded
+  subset after sentence completion.
 - Mixed-case names, brands, identifiers, and malformed apostrophe forms remain
   unchanged.
 - Model benchmarking and any useful calibration require a curated evaluation
@@ -82,6 +85,6 @@ prototype.
 
 ## Revisit when
 
-Revisit the policy after the controlled editor has collected a representative
-offline test corpus and the Apple spelling baseline has measured false-positive
-and missed-correction rates.
+Revisit the policy after the contextual corpus contains more representative
+synthetic writing and memory, energy, cold-start, and model-version behavior
+have been measured.

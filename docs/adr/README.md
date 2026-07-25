@@ -4,3 +4,4 @@
 - [ADR-002: Target macOS 27 and TextKit 2 for the editor lab](adr-002-macos-27-textkit-2.md)
 - [ADR-003: Use local correction engines behind a binary policy](adr-003-local-correction-engines.md)
 - [ADR-004: Keep preference learning and correction statistics local](adr-004-local-preference-learning.md)
+- [ADR-005: Use Apple’s on-device model for bounded contextual correction](adr-005-apple-contextual-correction.md)

@@ -188,6 +188,13 @@ public final class CorrectionLearningStore {
     record(.kept, for: proposal.correction.id)
   }
 
+  public func recordOutcome(
+    _ outcome: CorrectionOutcome,
+    for proposal: CorrectionProposal
+  ) {
+    record(outcome, for: proposal.correction.id)
+  }
+
   public func recordReverted(_ proposal: CorrectionProposal) {
     setPreference(
       .suppressed,

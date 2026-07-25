@@ -338,6 +338,114 @@ struct EditorStressTests {
     #expect(!titles.contains("Keep Correction"))
   }
 
+  @Test(
+    "Contextual correction can finish while typing continues after the sentence"
+  )
+  func contextualCorrectionWhileTypingContinues() async throws {
+    let contextualEngine = ImmediateContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home.")
+    fixture.type(" Next")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == "They're going home. Next")
+    let snapshot = try #require(fixture.appliedSnapshots.first)
+    #expect(
+      snapshot.annotatedRanges == [
+        NSRange(location: 0, length: "They're".utf16.count)
+      ]
+    )
+    let menu = try #require(
+      fixture.editor.correctionMenu(for: snapshot.correction.id)
+    )
+    #expect(
+      menu.items.map(\.title).contains(
+        "Apple Intelligence · On Device"
+      )
+    )
+  }
+
+  @Test("A contextual proposal is discarded when its sentence changes")
+  func contextualCorrectionRejectsStaleSentence() async {
+    let contextualEngine = SuspendedContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home.")
+    await contextualEngine.waitUntilRequested()
+    fixture.editor.insertText(
+      "x",
+      replacementRange: NSRange(location: 1, length: 0)
+    )
+    await contextualEngine.resume()
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == "Txheir going home.")
+    #expect(fixture.appliedSnapshots.isEmpty)
+    #expect(
+      fixture.editor.correctionDiagnostics.last?.kind
+        == .contextualStaleSentence
+    )
+  }
+
+  @Test(
+    "Changing back a contextual correction records the outcome without a global rule"
+  )
+  func contextualChangeBackDoesNotCreateGlobalPreference() async throws {
+    let contextualEngine = ImmediateContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "it's",
+        replacement: "its"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("The dog wagged it's tail.")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+    let id = try #require(fixture.appliedSnapshots.first?.correction.id)
+
+    #expect(fixture.editor.changeBack(correctionID: id))
+    #expect(fixture.editor.string == "The dog wagged it's tail.")
+    #expect(fixture.learningStore.rememberedRules.isEmpty)
+    #expect(fixture.learningStore.statistics().correctionsApplied == 1)
+    #expect(fixture.learningStore.statistics().reverted == 1)
+  }
+
+  @Test("Pasted sentences never start contextual correction")
+  func pastedSentenceDoesNotStartContextualCorrection() async {
+    let contextualEngine = CountingContextualEngine()
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.editor.insertPastedTextForTesting("Their going home.")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(await contextualEngine.requestCount == 0)
+    #expect(fixture.editor.string == "Their going home.")
+    #expect(fixture.appliedSnapshots.isEmpty)
+  }
+
 }
 
 @MainActor
@@ -349,7 +457,11 @@ private final class EditorFixture {
   private let learningDirectory: URL
   private let scrollView: NSScrollView
 
-  init(initialText: String = "") {
+  init(
+    initialText: String = "",
+    contextualCorrectionEngine: any ContextualCorrectionEngine =
+      DisabledContextualCorrectionEngine()
+  ) {
     engine = TestCorrectionEngine()
     editor = TypoverTextView(usingTextLayoutManager: true)
     learningDirectory = FileManager.default.temporaryDirectory
@@ -370,6 +482,7 @@ private final class EditorFixture {
     editor.textContainer?.widthTracksTextView = true
     editor.configureForTesting(
       correctionEngine: engine,
+      contextualCorrectionEngine: contextualCorrectionEngine,
       learningStore: learningStore,
       undoManager: UndoManager()
     )
@@ -404,6 +517,91 @@ private final class EditorFixture {
 
   func removeLearningStore() {
     try? FileManager.default.removeItem(at: learningDirectory)
+  }
+}
+
+private actor ImmediateContextualEngine: ContextualCorrectionEngine {
+  let candidate: ContextualCorrectionCandidate?
+
+  init(candidate: ContextualCorrectionCandidate?) {
+    self.candidate = candidate
+  }
+
+  func availability(
+    for _: String?
+  ) -> ContextualCorrectionAvailability {
+    .available
+  }
+
+  func proposal(
+    for _: ContextualCorrectionRequest
+  ) -> ContextualCorrectionCandidate? {
+    candidate
+  }
+}
+
+private actor CountingContextualEngine: ContextualCorrectionEngine {
+  private(set) var requestCount = 0
+
+  func availability(
+    for _: String?
+  ) -> ContextualCorrectionAvailability {
+    .available
+  }
+
+  func proposal(
+    for _: ContextualCorrectionRequest
+  ) -> ContextualCorrectionCandidate? {
+    requestCount += 1
+    return nil
+  }
+}
+
+private actor SuspendedContextualEngine: ContextualCorrectionEngine {
+  private let candidate: ContextualCorrectionCandidate?
+  private var requestWasReceived = false
+  private var requestWaiters: [CheckedContinuation<Void, Never>] = []
+  private var responseContinuation:
+    CheckedContinuation<
+      ContextualCorrectionCandidate?, Never
+    >?
+
+  init(candidate: ContextualCorrectionCandidate?) {
+    self.candidate = candidate
+  }
+
+  func availability(
+    for _: String?
+  ) -> ContextualCorrectionAvailability {
+    .available
+  }
+
+  func proposal(
+    for _: ContextualCorrectionRequest
+  ) async -> ContextualCorrectionCandidate? {
+    requestWasReceived = true
+    for waiter in requestWaiters {
+      waiter.resume()
+    }
+    requestWaiters.removeAll()
+
+    return await withCheckedContinuation { continuation in
+      responseContinuation = continuation
+    }
+  }
+
+  func waitUntilRequested() async {
+    guard !requestWasReceived else {
+      return
+    }
+    await withCheckedContinuation { continuation in
+      requestWaiters.append(continuation)
+    }
+  }
+
+  func resume() {
+    responseContinuation?.resume(returning: candidate)
+    responseContinuation = nil
   }
 }
 

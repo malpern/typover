@@ -40,17 +40,34 @@ not independently add accents to words Apple considers correctly spelled.
 
 ## Surrounding text
 
-Existing text before and after the caret is context-only. Moving the caret does
-not make surrounding prose eligible for automatic replacement.
+For the fast spelling path, existing text before and after the caret is
+context-only. Moving the caret does not make surrounding prose eligible for
+automatic replacement.
 
 - A newly typed and completed word may change.
 - Existing words before it remain unchanged.
 - Existing words after it remain unchanged.
 - Text elsewhere in the document remains untouched.
 
-A future contextual engine may read a bounded amount of text on both sides of
-the caret, but its editable target must still be an exact, newly completed
-range unless the writer explicitly enters a review mode.
+After the writer types `.`, `!`, `?`, or `…`, Typover may also analyze the most
+recently completed sentence with Apple’s on-device system language model. This
+sentence is capped at 400 UTF-16 code units. A contextual proposal may target a
+word or short phrase earlier in that sentence, which allows valid-word errors
+to be corrected after they have already been written.
+
+Contextual work is asynchronous. The writer can continue typing after the
+captured sentence while the model runs. Typover applies a result only when:
+
+- the captured sentence still matches exactly at its original range;
+- the model’s original substring occurs exactly once in that sentence;
+- the target and replacement are nonempty, bounded, and contain no sentence
+  punctuation or newline;
+- a full-sentence model answer can be reduced deterministically to one smallest
+  changed word or phrase.
+
+Editing inside the captured sentence makes the result stale and it is
+discarded. Pasted text and active marked-text composition do not trigger
+contextual analysis.
 
 ## Transaction safety
 
@@ -118,6 +135,5 @@ file. Typover does not upload or synchronize either dataset.
 ## Deferred behavior
 
 Typover does not autonomously revisit an entire page or document while the
-writer is typing. Background review of a recently completed sentence and
-explicit review of older prose are separate future behaviors with stricter
-staleness, context, and user-attention requirements.
+writer is typing. Explicit review of older prose is a separate future behavior
+with stricter staleness, context, and user-attention requirements.

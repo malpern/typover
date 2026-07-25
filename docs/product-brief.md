@@ -20,7 +20,7 @@ A corrected word receives a persistent light-gray squiggle. Selecting it shows:
 
 - the original typed word;
 - other likely corrections;
-- an action to keep the current correction and remove the mark.
+- the on-device source that proposed the correction.
 
 ## Behavioral principles
 

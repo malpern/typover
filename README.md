@@ -45,10 +45,11 @@ frameworks.
 Typover currently contains a SwiftUI product shell around a controlled AppKit
 and TextKit editor. It uses Apple’s on-device spelling service to propose
 corrections, then applies only those that pass a deliberately narrow binary
-policy. Type a typo followed by Space or sentence punctuation, then click its
-light-gray squiggle to change it back, choose another spelling, or keep it.
-Corrections follow the active caret even when editing an earlier part of the
-document.
+policy. After a sentence is completed, Apple’s on-device system language model
+can also detect one contextual valid-word mistake. Type a typo followed by
+Space or sentence punctuation, then click its light-gray squiggle to change it
+back or choose another spelling. Corrections follow the active caret even when
+editing an earlier part of the document.
 
 ```bash
 swift build
@@ -68,11 +69,14 @@ without reading or recording personal document text:
 ```bash
 swift run TypoverEval
 swift run TypoverEval --json
+swift run TypoverEval --contextual
+swift run TypoverEval --contextual --json
 ```
 
-Reviewed cases gate the test suite. Provisional names, technical vocabulary,
-and multilingual examples are reported separately until their expectations
-receive human review.
+Reviewed spelling cases gate the test suite. Provisional names, technical
+vocabulary, and multilingual examples are reported separately until their
+expectations receive human review. The contextual corpus is a benchmark rather
+than a deterministic gate because Apple can update the system model with macOS.
 
 ## Architecture
 
@@ -91,11 +95,14 @@ The controlled editor’s correction rules are captured in
 
 ## Status
 
-Controlled-editor interaction prototype with Apple spelling candidates, a
-binary automatic-correction policy, ranked alternatives, Change Back, Keep, and
-Undo. Explicit alternatives, manual edits, and Change Back choices are learned
+Controlled-editor interaction prototype with Apple spelling candidates,
+bounded Apple Intelligence sentence analysis, binary automatic-correction
+policies, ranked spelling alternatives, Change Back, and Undo. Explicit
+spelling alternatives, manual edits, and Change Back choices are learned
 locally, and aggregate correction outcomes are retained without document text.
-No system-wide text monitoring or replacement is implemented yet.
+Contextual overrides are measured but do not create unsafe global rules for
+otherwise valid words. No system-wide text monitoring or replacement is
+implemented yet.
 
 ## License
 

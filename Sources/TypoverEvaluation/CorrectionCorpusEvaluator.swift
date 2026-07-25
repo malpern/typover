@@ -185,6 +185,8 @@ public struct CorrectionCorpusEvaluator {
 
   private func sourceName(_ source: CorrectionSource) -> String {
     switch source {
+    case .appleIntelligence:
+      "apple-intelligence"
     case .demo:
       "demo"
     case .appleSpelling:

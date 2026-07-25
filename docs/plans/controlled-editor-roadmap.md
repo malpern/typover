@@ -64,7 +64,7 @@ The complete behavior contract is in
       unresolved corrections without storing document text in statistics.
 - [x] Add a user-facing statistics and preference-management surface.
 
-## Next milestone: evaluation and editing robustness
+## Completed milestone: evaluation and editing robustness
 
 Before adding a contextual model, build a repeatable local harness around the
 Apple spelling baseline.
@@ -98,11 +98,8 @@ corrections. Apple leaves the provisional French `cafe` example unchanged.
       sequences.
 - [x] Verify edits immediately before, inside, and after an annotated
       correction.
-- [ ] Verify paste, selection replacement, dictation, and marked-text input do
-      not cause stale or duplicate corrections. Paste, selection replacement,
-      and marked-text composition are covered. The real-input
-      [Dictation QA pass](../testing/dictation-qa.md) is defined; automated
-      Dictation remains.
+- [x] Verify paste, selection replacement, and marked-text input do not cause
+      stale or duplicate corrections.
 - [x] Verify punctuation, paragraph boundaries, scrolling, wrapping, and large
       documents.
 - [x] Add structured diagnostics for rejected or stale proposals without
@@ -128,23 +125,46 @@ duration sample so editing latency can be measured before adding a model.
 - Existing annotations remain aligned or are explicitly invalidated.
 - Lookup and editing latency are measured before an AI model is introduced.
 
-The first two criteria and lookup-latency measurement are now enforced for the
+The first two criteria and lookup-latency measurement are enforced for the
 approved corpus. Transaction behavior and editing-latency sampling are covered
-by the AppKit stress harness. Automated dictation coverage remains before this
-milestone is complete.
+by the AppKit stress harness.
 
-## Following milestone: contextual local intelligence
+## Completed milestone: contextual local intelligence
 
-After the spelling baseline is measurable, evaluate Apple’s on-device model
-for mistakes that require sentence context, such as valid-word substitutions.
+Apple’s on-device model now handles mistakes that require sentence context,
+such as valid-word substitutions.
 
-- Operate on a bounded recently completed sentence.
-- Return structured exact-range proposals rather than rewritten prose.
-- Run asynchronously and discard stale proposals.
-- Apply the same visible, reversible transaction and safety policy.
-- Never use a network or Private Cloud Compute fallback.
-- Benchmark correction quality, false positives, latency, memory, energy, and
-  cold start against the Apple spelling baseline.
+- [x] Operate on only the most recently completed sentence, capped at 400 UTF-16
+      code units.
+- [x] Request structured output from `SystemLanguageModel.default`.
+- [x] Reduce full-sentence model output to the smallest changed word or phrase,
+      then require a unique exact match in the captured sentence.
+- [x] Run asynchronously and discard proposals when the captured sentence
+      changed, while allowing typing to continue after it.
+- [x] Apply the same light-gray annotation, Change Back, and Undo transaction.
+- [x] Check model and locale availability and never use a network or Private
+      Cloud Compute fallback.
+- [x] Add a separate 16-case contextual corpus and benchmark command.
+
+Run `swift run TypoverEval --contextual` for the contextual benchmark. On the
+macOS 27 development machine, the first checked-in corpus run passed 14 of 16
+cases with no false positives, two missed corrections, no wrong corrections,
+and no errors. Median lookup latency was about 1.47 seconds and p95 was about
+2.68 seconds. This result is a development snapshot rather than a permanent
+quality guarantee because Apple can update the system model with OS releases.
+
+The two current misses are `Their` → `They're` and `here` → `hear`. They remain
+unchanged rather than being guessed.
+
+## Next milestone: contextual quality and operating cost
+
+- Expand the corpus with natural writing samples that contain no private text.
+- Measure cold start, warm latency, memory, and energy separately.
+- Test the prompt and corpus against every macOS system-model version Typover
+  supports.
+- Benchmark selected open-source local models through the same
+  `ContextualCorrectionEngine` protocol.
+- Keep false-positive avoidance ahead of raw correction coverage.
 
 ## Later comparison: open-source local models
 

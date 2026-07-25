@@ -2,6 +2,9 @@ import Foundation
 
 public enum CorrectionDiagnosticKind: String, Codable, Equatable, Sendable {
   case annotationInvalidated
+  case contextualModelFailure
+  case contextualProposalRejected
+  case contextualStaleSentence
   case editRejected
   case pasteSkipped
   case staleRange

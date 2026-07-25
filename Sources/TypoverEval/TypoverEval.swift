@@ -1,12 +1,18 @@
 import Darwin
 import Foundation
+import TypoverAppleIntelligence
 import TypoverAppleSpell
 import TypoverEvaluation
 
 @main
 struct TypoverEvalCommand {
   @MainActor
-  static func main() throws {
+  static func main() async throws {
+    if CommandLine.arguments.contains("--contextual") {
+      try await runContextualEvaluation()
+      return
+    }
+
     let corpus = try CorrectionCorpusLoader.loadBundled()
     let evaluator = CorrectionCorpusEvaluator { language in
       AppleSpellCheckerEngine(language: language)
@@ -25,6 +31,24 @@ struct TypoverEvalCommand {
 
     if report.approvedFailureCount > 0 {
       exit(EXIT_FAILURE)
+    }
+  }
+
+  private static func runContextualEvaluation() async throws {
+    let corpus = try ContextualCorrectionCorpusLoader.loadBundled()
+    let evaluator = ContextualCorrectionEvaluator(
+      engine: AppleContextualCorrectionEngine()
+    )
+    let report = await evaluator.evaluate(corpus)
+
+    if CommandLine.arguments.contains("--json") {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      let data = try encoder.encode(report)
+      FileHandle.standardOutput.write(data)
+      FileHandle.standardOutput.write(Data("\n".utf8))
+    } else {
+      printContextualReport(report)
     }
   }
 
@@ -67,6 +91,43 @@ struct TypoverEvalCommand {
         print(
           "- [\(result.reviewStatus.rawValue)] \(result.caseID): "
             + "expected \(expected), got \(actual)"
+        )
+      }
+    }
+  }
+
+  private static func printContextualReport(
+    _ report: ContextualEvaluationReport
+  ) {
+    print("Typover contextual corpus v\(report.schemaVersion)")
+    print("Apple on-device model: \(report.availability)")
+    print(
+      "Cases: \(report.totalCount), "
+        + "\(report.passedCount) passed, "
+        + "\(report.falsePositiveCount) false positives, "
+        + "\(report.missedCorrectionCount) missed, "
+        + "\(report.wrongCorrectionCount) wrong, "
+        + "\(report.errorCount) errors"
+    )
+    print(
+      "Latency: median \(format(report.medianLookupMilliseconds)) ms, "
+        + "p95 \(format(report.p95LookupMilliseconds)) ms"
+    )
+
+    let mismatches = report.results.filter { $0.outcome != .passed }
+    if !mismatches.isEmpty {
+      print("\nMismatches:")
+      for result in mismatches {
+        let expected =
+          result.expectedOriginal.map { original in
+            "\(original) → \(result.expectedReplacement ?? "")"
+          } ?? "unchanged"
+        let actual =
+          result.actualOriginal.map { original in
+            "\(original) → \(result.actualReplacement ?? "")"
+          } ?? result.outcome.rawValue
+        print(
+          "- \(result.caseID): expected \(expected), got \(actual)"
         )
       }
     }

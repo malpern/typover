@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TypoverAppleIntelligence
 import TypoverAppleSpell
 import TypoverCore
 
@@ -82,6 +83,10 @@ final class TypoverTextView: NSTextView {
     var replacement: String
   }
 
+  private struct PendingUserEdit {
+    let replacement: String
+  }
+
   private final class AlternativeSelection: NSObject {
     let correctionID: Correction.ID
     let replacement: String
@@ -93,8 +98,11 @@ final class TypoverTextView: NSTextView {
   }
 
   private var correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
+  private var contextualCorrectionEngine: any ContextualCorrectionEngine =
+    AppleContextualCorrectionEngine()
   private var learningStore = CorrectionLearningStore()
 
+  private var contextualCorrectionTask: Task<Void, Never>?
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
   private var isPerformingPaste = false
@@ -102,6 +110,7 @@ final class TypoverTextView: NSTextView {
   private var pendingManualCorrections: [Correction.ID: PendingManualCorrection] =
     [:]
   private var proposalsByID: [Correction.ID: CorrectionProposal] = [:]
+  private var pendingUserEdit: PendingUserEdit?
   private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
@@ -131,10 +140,13 @@ final class TypoverTextView: NSTextView {
 
   func configureForTesting(
     correctionEngine: any CorrectionEngine,
+    contextualCorrectionEngine: any ContextualCorrectionEngine =
+      DisabledContextualCorrectionEngine(),
     learningStore: CorrectionLearningStore,
     undoManager: UndoManager
   ) {
     self.correctionEngine = correctionEngine
+    self.contextualCorrectionEngine = contextualCorrectionEngine
     self.learningStore = learningStore
     testingUndoManager = undoManager
   }
@@ -159,6 +171,9 @@ final class TypoverTextView: NSTextView {
       return shouldChange
     }
 
+    pendingUserEdit = PendingUserEdit(
+      replacement: replacementString ?? ""
+    )
     updatePendingManualCorrections(
       for: affectedCharRange,
       replacementString: replacementString ?? ""
@@ -177,12 +192,17 @@ final class TypoverTextView: NSTextView {
       return
     }
 
+    let completedUserEdit = pendingUserEdit
+    pendingUserEdit = nil
     reconcileAnnotations()
     guard !isPerformingPaste else {
       recordDiagnostic(.pasteSkipped)
       return
     }
     applyCorrectionBeforeTypedBoundary()
+    if let completedUserEdit {
+      scheduleContextualCorrection(after: completedUserEdit)
+    }
   }
 
   override func paste(_ sender: Any?) {
@@ -199,6 +219,10 @@ final class TypoverTextView: NSTextView {
 
   func applyPendingCorrectionForTesting() {
     applyCorrectionBeforeTypedBoundary()
+  }
+
+  func waitForContextualCorrectionForTesting() async {
+    await contextualCorrectionTask?.value
   }
 
   override func draw(_ dirtyRect: NSRect) {
@@ -284,6 +308,123 @@ final class TypoverTextView: NSTextView {
         localized: "Correct Spelling",
         bundle: #bundle,
         comment: "Undo menu action name for an automatic Typover correction."
+      )
+    )
+    if didApply {
+      learningStore.recordApplied(proposal)
+    }
+  }
+
+  private func scheduleContextualCorrection(
+    after userEdit: PendingUserEdit
+  ) {
+    guard
+      CompletedSentenceDetector.isSentenceTerminator(userEdit.replacement),
+      selectedRange().length == 0,
+      !hasMarkedText(),
+      let textStorage,
+      let sentence = CompletedSentenceDetector.immediatelyBeforeCaret(
+        in: textStorage.string,
+        caretUTF16Offset: selectedRange().location
+      )
+    else {
+      return
+    }
+
+    contextualCorrectionTask?.cancel()
+    let engine = contextualCorrectionEngine
+    let language = NSSpellChecker.shared.userPreferredLanguages.first
+    contextualCorrectionTask = Task { [weak self] in
+      guard
+        await engine.availability(for: language) == .available,
+        !Task.isCancelled
+      else {
+        return
+      }
+
+      do {
+        let candidate = try await engine.proposal(
+          for: ContextualCorrectionRequest(
+            sentence: sentence.text,
+            language: language
+          )
+        )
+        guard !Task.isCancelled, let candidate else {
+          return
+        }
+        self?.applyContextualCandidate(
+          candidate,
+          to: sentence,
+          language: language
+        )
+      } catch is CancellationError {
+        return
+      } catch {
+        self?.recordDiagnostic(.contextualModelFailure)
+      }
+    }
+  }
+
+  private func applyContextualCandidate(
+    _ candidate: ContextualCorrectionCandidate,
+    to capturedSentence: CompletedSentence,
+    language: String?
+  ) {
+    guard let textStorage else {
+      return
+    }
+    guard NSMaxRange(capturedSentence.range) <= textStorage.length else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard
+      (textStorage.string as NSString).substring(
+        with: capturedSentence.range
+      ) == capturedSentence.text
+    else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard
+      let resolved = ContextualCorrectionResolver.resolve(
+        candidate,
+        in: capturedSentence,
+        language: language
+      )
+    else {
+      recordDiagnostic(
+        .contextualProposalRejected,
+        range: capturedSentence.range
+      )
+      return
+    }
+
+    let proposal = resolved.proposal
+    let correction = proposal.correction
+    correctionsByID[correction.id] = correction
+    proposalsByID[correction.id] = proposal
+    ledger.record(correction)
+    let didApply = replaceCorrectionText(
+      correctionAfter: correction,
+      correctionForReverse: correction,
+      range: resolved.range,
+      expectedText: correction.original,
+      replacementText: correction.replacement,
+      annotateReplacement: true,
+      dispositionAfter: .applied,
+      undoAnnotatesReplacement: false,
+      undoDisposition: .restored,
+      actionName: String(
+        localized: "Correct in Context",
+        bundle: #bundle,
+        comment:
+          "Undo menu action name for an on-device contextual Typover correction."
       )
     )
     if didApply {
@@ -442,9 +583,9 @@ final class TypoverTextView: NSTextView {
       )
       ledger.transition(id, to: .invalidated)
       if let proposal = proposalsByID[id] {
-        correctionEngine.record(.edited, for: proposal)
+        recordEngineResponse(.edited, for: proposal)
         if pendingManualCorrections[id] == nil {
-          learningStore.recordManualEdit(
+          recordManualEdit(
             manualReplacement,
             for: proposal
           )
@@ -533,7 +674,7 @@ final class TypoverTextView: NSTextView {
     else {
       return
     }
-    learningStore.recordManualEdit(pending.replacement, for: proposal)
+    recordManualEdit(pending.replacement, for: proposal)
   }
 
   private func isWordEdit(_ replacement: String) -> Bool {
@@ -696,7 +837,7 @@ final class TypoverTextView: NSTextView {
       )
     )
     if didReplace, let proposal = proposalsByID[id] {
-      correctionEngine.record(.reverted, for: proposal)
+      recordEngineResponse(.reverted, for: proposal)
     }
     return didReplace
   }
@@ -754,7 +895,7 @@ final class TypoverTextView: NSTextView {
       )
     )
     if didReplace, let proposal = proposalsByID[correction.id] {
-      correctionEngine.record(.edited, for: proposal)
+      recordEngineResponse(.edited, for: proposal)
     }
     return didReplace
   }
@@ -773,18 +914,31 @@ final class TypoverTextView: NSTextView {
     case .none:
       return
     case .removePreference:
+      guard proposal.source != .appleIntelligence else {
+        return
+      }
       learningStore.removePreference(
         for: proposal.correction.original,
         language: proposal.language
       )
     case .suppress:
-      learningStore.recordReverted(proposal)
+      if proposal.source == .appleIntelligence {
+        learningStore.recordOutcome(.reverted, for: proposal)
+      } else {
+        learningStore.recordReverted(proposal)
+      }
     case .prefer(let replacement, let outcome):
-      learningStore.recordPreferred(
-        replacement,
-        for: proposal,
-        outcome: outcome
-      )
+      if proposal.source == .appleIntelligence {
+        if let outcome {
+          learningStore.recordOutcome(outcome, for: proposal)
+        }
+      } else {
+        learningStore.recordPreferred(
+          replacement,
+          for: proposal,
+          outcome: outcome
+        )
+      }
     }
   }
 
@@ -804,10 +958,38 @@ final class TypoverTextView: NSTextView {
     return .removePreference
   }
 
+  private func recordManualEdit(
+    _ replacement: String?,
+    for proposal: CorrectionProposal
+  ) {
+    if proposal.source == .appleIntelligence {
+      learningStore.recordOutcome(.manuallyEdited, for: proposal)
+    } else {
+      learningStore.recordManualEdit(replacement, for: proposal)
+    }
+  }
+
+  private func recordEngineResponse(
+    _ response: CorrectionUserResponse,
+    for proposal: CorrectionProposal
+  ) {
+    guard proposal.source != .appleIntelligence else {
+      return
+    }
+    correctionEngine.record(response, for: proposal)
+  }
+
   private func sourceTitle(
     for source: CorrectionSource?
   ) -> String {
     switch source {
+    case .appleIntelligence:
+      return String(
+        localized: "Apple Intelligence · On Device",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying Apple's local contextual model."
+      )
     case .rememberedPreference:
       return String(
         localized: "Remembered Preference · On Device",

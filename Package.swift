@@ -11,10 +11,18 @@ let package = Package(
     .executable(name: "Typover", targets: ["TypoverApp"]),
     .executable(name: "TypoverEval", targets: ["TypoverEval"]),
     .library(name: "TypoverCore", targets: ["TypoverCore"]),
+    .library(
+      name: "TypoverAppleIntelligence",
+      targets: ["TypoverAppleIntelligence"]
+    ),
     .library(name: "TypoverAppleSpell", targets: ["TypoverAppleSpell"]),
   ],
   targets: [
     .target(name: "TypoverCore"),
+    .target(
+      name: "TypoverAppleIntelligence",
+      dependencies: ["TypoverCore"]
+    ),
     .target(
       name: "TypoverAppleSpell",
       dependencies: ["TypoverCore"]
@@ -29,6 +37,7 @@ let package = Package(
     .executableTarget(
       name: "TypoverEval",
       dependencies: [
+        "TypoverAppleIntelligence",
         "TypoverAppleSpell",
         "TypoverCore",
         "TypoverEvaluation",
@@ -36,7 +45,11 @@ let package = Package(
     ),
     .executableTarget(
       name: "TypoverApp",
-      dependencies: ["TypoverAppleSpell", "TypoverCore"],
+      dependencies: [
+        "TypoverAppleIntelligence",
+        "TypoverAppleSpell",
+        "TypoverCore",
+      ],
       resources: [
         .process("Resources")
       ]
@@ -45,6 +58,7 @@ let package = Package(
       name: "TypoverCoreTests",
       dependencies: [
         "TypoverApp",
+        "TypoverAppleIntelligence",
         "TypoverAppleSpell",
         "TypoverCore",
         "TypoverEvaluation",
