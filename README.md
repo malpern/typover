@@ -30,20 +30,22 @@ editor. The first research goal is to establish which parts can be built today
 and which require cooperation from AppKit, TextKit, or Apple’s spell-checking
 frameworks.
 
-## Initial research milestones
+## Research milestones
 
-- Model an individual correction and its reversible history.
+- Model an individual correction and its reversible history. ✅
 - Evaluate word- and sentence-boundary correction without whole-field writes.
 - Measure range replacement across native and web-based editors.
-- Prototype a light-gray correction mark in a controlled TextKit editor.
+- Prototype a light-gray correction mark in a controlled TextKit editor. ✅
 - Evaluate an external overlay for applications that do not expose formatting.
 - Document the boundary between `NSSpellChecker`, `NSSpellServer`, TextKit, and
   Accessibility.
 
 ## Build
 
-Typover currently contains a small SwiftUI concept shell and a core correction
-model.
+Typover currently contains a SwiftUI product shell around a controlled AppKit
+and TextKit editor. Type `teh` followed by Space to exercise the first
+deterministic correction, then click its light-gray squiggle to change it back
+or keep it.
 
 ```bash
 swift build
@@ -53,9 +55,20 @@ swift run Typover
 
 Requires macOS 15 or later and Swift 6.2 or later.
 
+## Architecture
+
+Architecture decisions are recorded in [docs/adr](docs/adr/README.md). Typover
+uses an AppKit-first hybrid architecture: AppKit and TextKit own the defining
+correction interaction, while SwiftUI remains available for conventional
+product surfaces.
+
+Active research work is described in [docs/plans](docs/plans/README.md),
+beginning with the Bear compatibility spike.
+
 ## Status
 
-Exploration. No system-wide text monitoring or replacement is implemented yet.
+Controlled-editor interaction prototype. No system-wide text monitoring or
+replacement is implemented yet.
 
 ## License
 

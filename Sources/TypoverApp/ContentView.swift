@@ -1,16 +1,14 @@
 import SwiftUI
-import TypoverCore
 
 struct ContentView: View {
   var body: some View {
-    VStack(alignment: .leading, spacing: 28) {
+    VStack(alignment: .leading, spacing: 24) {
       TypoverHeader()
-      CorrectionPreview()
-      ResearchStatus()
-      Spacer(minLength: 0)
+      EditorLabSection()
+      EditorPrinciples()
     }
-    .padding(36)
-    .frame(minWidth: 640, minHeight: 460)
+    .padding(32)
+    .frame(minWidth: 720, minHeight: 620)
     .background {
       LinearGradient(
         colors: [
@@ -48,9 +46,9 @@ private struct TypoverHeader: View {
       .fontWeight(.semibold)
 
       Text(
-        "Typover quietly fixes high-confidence mistakes while keeping every automatic change visible and reversible.",
+        "This first lab proves the interaction in an editor we control before we attempt compatibility with Bear.",
         bundle: #bundle,
-        comment: "One-sentence explanation of Typover."
+        comment: "Explanation of why Typover begins with its own editor."
       )
       .font(.title3)
       .foregroundStyle(.secondary)
@@ -59,159 +57,99 @@ private struct TypoverHeader: View {
   }
 }
 
-private struct CorrectionPreview: View {
-  private let correction = Correction(
-    original: "teh",
-    replacement: "the",
-    confidence: 0.99
-  )
-
+private struct EditorLabSection: View {
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Text(
+          "CONTROLLED EDITOR LAB",
+          bundle: #bundle,
+          comment: "Heading above the interactive Typover editor."
+        )
+        .font(.caption)
+        .fontWeight(.semibold)
+        .foregroundStyle(.secondary)
+
+        Spacer()
+
+        Label {
+          Text(
+            "Try: teh + space",
+            bundle: #bundle,
+            comment: "Compact instruction for triggering the demo correction."
+          )
+        } icon: {
+          Image(systemName: "keyboard")
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+      }
+
+      EditorLabView()
+        .frame(minHeight: 240)
+        .padding(1)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+          RoundedRectangle(cornerRadius: 14)
+            .stroke(.separator.opacity(0.65))
+        }
+
       Text(
-        "A CORRECTION IN CONTEXT",
+        "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or keep the correction.",
         bundle: #bundle,
-        comment: "Heading above the correction interaction preview."
+        comment:
+          "Instructions below the Typover editor explaining the reversible correction interaction."
       )
-      .font(.caption)
-      .fontWeight(.semibold)
-      .foregroundStyle(.secondary)
-
-      HStack(spacing: 5) {
-        Text(
-          "I sent",
-          bundle: #bundle,
-          comment: "Beginning of a demonstration sentence."
-        )
-        CorrectionToken(text: correction.replacement)
-        Text(
-          "note yesterday.",
-          bundle: #bundle,
-          comment: "End of a demonstration sentence."
-        )
-      }
-      .font(.title2)
-
-      HStack(spacing: 8) {
-        Image(systemName: "arrow.uturn.backward")
-        Text(
-          "Change back to “teh”",
-          bundle: #bundle,
-          comment: "Example action for restoring the originally typed word."
-        )
-      }
       .font(.callout)
       .foregroundStyle(.secondary)
     }
-    .padding(22)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-    .overlay {
-      RoundedRectangle(cornerRadius: 18)
-        .stroke(.separator.opacity(0.5))
-    }
   }
 }
 
-private struct CorrectionToken: View {
-  let text: String
-
+private struct EditorPrinciples: View {
   var body: some View {
-    VStack(spacing: 1) {
-      Text(text)
-      Squiggle()
-        .stroke(.secondary.opacity(0.65), lineWidth: 1)
-        .frame(height: 3)
-        .accessibilityHidden(true)
-    }
-    .fixedSize()
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(
-      Text(
-        "Automatically corrected to \(text)",
-        bundle: #bundle,
-        comment: "Accessibility description for automatically corrected text."
-      )
-    )
-  }
-}
-
-private struct Squiggle: Shape {
-  func path(in rect: CGRect) -> Path {
-    var path = Path()
-    let wavelength: CGFloat = 5
-    let amplitude = rect.height / 2
-    let centerY = rect.midY
-
-    path.move(to: CGPoint(x: rect.minX, y: centerY))
-
-    var x = rect.minX
-    var rises = true
-    while x < rect.maxX {
-      let nextX = min(x + wavelength / 2, rect.maxX)
-      path.addQuadCurve(
-        to: CGPoint(x: nextX, y: centerY),
-        control: CGPoint(
-          x: (x + nextX) / 2,
-          y: centerY + (rises ? -amplitude : amplitude)
+    ViewThatFits {
+      HStack(spacing: 22) {
+        PrincipleLabel(
+          icon: "selection.pin.in.out",
+          title: "Word-range edits"
         )
-      )
-      rises.toggle()
-      x = nextX
-    }
+        PrincipleLabel(
+          icon: "scribble.variable",
+          title: "Visible corrections"
+        )
+        PrincipleLabel(
+          icon: "arrow.uturn.backward.circle",
+          title: "Immediate restoration"
+        )
+      }
 
-    return path
-  }
-}
-
-private struct ResearchStatus: View {
-  var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text(
-        "FIRST QUESTIONS",
-        bundle: #bundle,
-        comment: "Heading above the initial research areas."
-      )
-      .font(.caption)
-      .fontWeight(.semibold)
-      .foregroundStyle(.secondary)
-
-      ResearchItem(
-        icon: "text.cursor",
-        title: "Incremental replacement",
-        detail: "Change only the affected word or sentence range."
-      )
-      ResearchItem(
-        icon: "scribble.variable",
-        title: "Persistent annotation",
-        detail: "Keep each automatic correction quietly visible."
-      )
-      ResearchItem(
-        icon: "arrow.uturn.backward.circle",
-        title: "Per-change restoration",
-        detail: "Recover the original without disturbing later edits."
-      )
+      VStack(alignment: .leading, spacing: 10) {
+        PrincipleLabel(
+          icon: "selection.pin.in.out",
+          title: "Word-range edits"
+        )
+        PrincipleLabel(
+          icon: "scribble.variable",
+          title: "Visible corrections"
+        )
+        PrincipleLabel(
+          icon: "arrow.uturn.backward.circle",
+          title: "Immediate restoration"
+        )
+      }
     }
   }
 }
 
-private struct ResearchItem: View {
+private struct PrincipleLabel: View {
   let icon: String
   let title: LocalizedStringResource
-  let detail: LocalizedStringResource
 
   var body: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Image(systemName: icon)
-        .frame(width: 20)
-        .foregroundStyle(.secondary)
-
-      Text(title)
-        .fontWeight(.medium)
-
-      Text(detail)
-        .foregroundStyle(.secondary)
-    }
-    .font(.body)
+    Label(title, systemImage: icon)
+      .font(.callout)
+      .foregroundStyle(.secondary)
   }
 }
