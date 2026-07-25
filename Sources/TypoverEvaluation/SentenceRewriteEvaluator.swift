@@ -127,11 +127,34 @@ public struct SentenceRewriteEvaluationReport: Codable, Sendable {
   }
 }
 
+public enum SentenceRewriteSafetyPolicy: Sendable {
+  case modelOnly
+  case typover
+}
+
+public struct SentenceRewriteSafetyComparisonReport: Codable, Sendable {
+  public let modelOnly: SentenceRewriteEvaluationReport
+  public let typoverFiltered: SentenceRewriteEvaluationReport
+
+  public init(
+    modelOnly: SentenceRewriteEvaluationReport,
+    typoverFiltered: SentenceRewriteEvaluationReport
+  ) {
+    self.modelOnly = modelOnly
+    self.typoverFiltered = typoverFiltered
+  }
+}
+
 public struct SentenceRewriteEvaluator {
   private let engine: any ContextualCorrectionEngine
+  private let safetyPolicy: SentenceRewriteSafetyPolicy
 
-  public init(engine: any ContextualCorrectionEngine) {
+  public init(
+    engine: any ContextualCorrectionEngine,
+    safetyPolicy: SentenceRewriteSafetyPolicy = .typover
+  ) {
     self.engine = engine
+    self.safetyPolicy = safetyPolicy
   }
 
   public func evaluate(
@@ -166,7 +189,8 @@ public struct SentenceRewriteEvaluator {
           evaluate(
             proposal,
             for: testCase,
-            lookupDuration: duration
+            lookupDuration: duration,
+            safetyPolicy: safetyPolicy
           )
         )
       } catch {
@@ -187,10 +211,81 @@ public struct SentenceRewriteEvaluator {
     )
   }
 
+  public func evaluateSafetyComparison(
+    _ corpus: SentenceRewriteCorpus
+  ) async -> SentenceRewriteSafetyComparisonReport {
+    var modelOnlyResults: [SentenceRewriteEvaluationResult] = []
+    var typoverFilteredResults: [SentenceRewriteEvaluationResult] = []
+    var availabilityName = "available"
+
+    for testCase in corpus.cases {
+      let availability = await engine.availability(for: testCase.language)
+      guard availability == .available else {
+        availabilityName = Self.name(for: availability)
+        let unavailable = result(for: testCase, outcome: .unavailable)
+        modelOnlyResults.append(unavailable)
+        typoverFilteredResults.append(unavailable)
+        continue
+      }
+
+      do {
+        let clock = ContinuousClock()
+        let start = clock.now
+        let proposal = try await engine.proposal(
+          for: ContextualCorrectionRequest(
+            sentence: testCase.sentence,
+            language: testCase.language,
+            scope: .comprehensive,
+            allowsSentenceRewrite: true
+          )
+        )
+        let duration = start.duration(to: clock.now)
+        modelOnlyResults.append(
+          evaluate(
+            proposal,
+            for: testCase,
+            lookupDuration: duration,
+            safetyPolicy: .modelOnly
+          )
+        )
+        typoverFilteredResults.append(
+          evaluate(
+            proposal,
+            for: testCase,
+            lookupDuration: duration,
+            safetyPolicy: .typover
+          )
+        )
+      } catch {
+        let failure = result(
+          for: testCase,
+          errorDescription: String(describing: error),
+          outcome: .error
+        )
+        modelOnlyResults.append(failure)
+        typoverFilteredResults.append(failure)
+      }
+    }
+
+    return SentenceRewriteSafetyComparisonReport(
+      modelOnly: SentenceRewriteEvaluationReport(
+        schemaVersion: corpus.schemaVersion,
+        availability: availabilityName,
+        results: modelOnlyResults
+      ),
+      typoverFiltered: SentenceRewriteEvaluationReport(
+        schemaVersion: corpus.schemaVersion,
+        availability: availabilityName,
+        results: typoverFilteredResults
+      )
+    )
+  }
+
   private func evaluate(
     _ proposal: ContextualCorrectionResult?,
     for testCase: SentenceRewriteCorpusCase,
-    lookupDuration: Duration
+    lookupDuration: Duration,
+    safetyPolicy: SentenceRewriteSafetyPolicy
   ) -> SentenceRewriteEvaluationResult {
     guard let proposal else {
       return result(
@@ -218,7 +313,8 @@ public struct SentenceRewriteEvaluator {
 
     if candidate.kind != .sentenceRewrite {
       let applies =
-        ContextualCorrectionResolver.resolve(
+        safetyPolicy == .modelOnly
+        || ContextualCorrectionResolver.resolve(
           proposal,
           in: completedSentence(for: testCase),
           language: testCase.language
@@ -240,11 +336,12 @@ public struct SentenceRewriteEvaluator {
     }
 
     guard
-      ContextualCorrectionResolver.resolve(
-        proposal,
-        in: completedSentence(for: testCase),
-        language: testCase.language
-      ) != nil
+      safetyPolicy == .modelOnly
+        || ContextualCorrectionResolver.resolve(
+          proposal,
+          in: completedSentence(for: testCase),
+          language: testCase.language
+        ) != nil
     else {
       return result(
         for: testCase,

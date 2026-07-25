@@ -208,11 +208,20 @@ results, and operating-cost caveats are in the
 
 ## Next milestone: natural-writing and cross-version validation
 
+- Grow the rewrite benchmark from 35 to at least 500 cases, including at least
+  300 diverse unchanged controls.
 - Add consented, de-identified natural writing samples that contain no private
   text.
 - Test the correction and rewrite corpora against every macOS system-model
   version Typover supports.
 - Keep false-positive avoidance ahead of raw correction coverage.
+
+The first cloud reference run used a deliberately shorter prompt. Claude Haiku
+4.5 was faster than the Apple baseline but introduced one regional false
+positive and one meaning-preservation failure. Typover's rules removed the
+false positive but did not catch the meaning change. The OpenAI run remains
+pending because the existing API account had no available quota. See the
+[remote-model comparison](../testing/remote-model-comparison.md).
 
 ## Later comparison: open-source local models
 

@@ -90,3 +90,7 @@ a reproducible application-side baseline, not total device energy or memory.
 Apple can update the system model independently of Typover. Re-run the corpus,
 retain the complete candidate review, and compare operating-cost distributions
 for every supported macOS model version.
+
+The cloud-model reference comparison, its privacy boundary, and the limits of
+this corpus are documented in the
+[remote-model comparison](remote-model-comparison.md).

@@ -9,6 +9,11 @@ import TypoverEvaluation
 struct TypoverEvalCommand {
   @MainActor
   static func main() async throws {
+    if CommandLine.arguments.contains("--remote-rewrite") {
+      try await runRemoteRewriteEvaluation()
+      return
+    }
+
     if CommandLine.arguments.contains("--rewrite") {
       try await runSentenceRewriteEvaluation(
         profile: try contextualPromptProfile()
@@ -48,6 +53,118 @@ struct TypoverEvalCommand {
     if report.approvedFailureCount > 0 {
       exit(EXIT_FAILURE)
     }
+  }
+
+  private static func runRemoteRewriteEvaluation() async throws {
+    let environment = ProcessInfo.processInfo.environment
+    let providers = try remoteRewriteProviders()
+    let corpus = try SentenceRewriteCorpusLoader.loadBundled()
+    let configurations = try providers.map { provider in
+      let credentialName =
+        switch provider {
+        case .openAI:
+          "OPENAI_API_KEY"
+        case .anthropic:
+          "ANTHROPIC_API_KEY"
+        }
+      guard let apiKey = environment[credentialName], !apiKey.isEmpty else {
+        throw RemoteRewriteError.missingCredential(credentialName)
+      }
+      let model =
+        switch provider {
+        case .openAI:
+          "gpt-5-nano-2025-08-07"
+        case .anthropic:
+          "claude-haiku-4-5-20251001"
+        }
+      return (provider: provider, model: model, apiKey: apiKey)
+    }
+    let runs: [RemoteRewriteBenchmarkRun]
+    if configurations.count == 2 {
+      async let first = evaluateRemoteRewriteProvider(
+        configurations[0],
+        corpus: corpus
+      )
+      async let second = evaluateRemoteRewriteProvider(
+        configurations[1],
+        corpus: corpus
+      )
+      runs = await [first, second]
+    } else {
+      runs = [
+        await evaluateRemoteRewriteProvider(
+          configurations[0],
+          corpus: corpus
+        )
+      ]
+    }
+
+    if CommandLine.arguments.contains("--json") {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      let data = try encoder.encode(
+        RemoteRewriteBenchmarkOutput(runs: runs)
+      )
+      FileHandle.standardOutput.write(data)
+      FileHandle.standardOutput.write(Data("\n".utf8))
+    } else {
+      printRemoteRewriteReport(runs)
+    }
+  }
+
+  private static func evaluateRemoteRewriteProvider(
+    _ configuration: (
+      provider: RemoteRewriteProvider,
+      model: String,
+      apiKey: String
+    ),
+    corpus: SentenceRewriteCorpus
+  ) async -> RemoteRewriteBenchmarkRun {
+    let engine = RemoteRewriteEngine(
+      provider: configuration.provider,
+      model: configuration.model,
+      apiKey: configuration.apiKey
+    )
+    let comparison = await SentenceRewriteEvaluator(
+      engine: engine
+    ).evaluateSafetyComparison(corpus)
+    return RemoteRewriteBenchmarkRun(
+      provider: configuration.provider,
+      model: configuration.model,
+      promptProfile: "minimal-editorial-contract-v1",
+      comparison: comparison,
+      usage: await engine.usage()
+    )
+  }
+
+  private static func remoteRewriteProviders()
+    throws -> [RemoteRewriteProvider]
+  {
+    let arguments = CommandLine.arguments
+    let rawValue: String?
+    if let index = arguments.firstIndex(of: "--provider") {
+      guard arguments.indices.contains(index + 1) else {
+        throw TypoverEvalError.missingRemoteProvider
+      }
+      rawValue = arguments[index + 1]
+    } else if let argument = arguments.first(where: {
+      $0.hasPrefix("--provider=")
+    }) {
+      rawValue = String(argument.dropFirst("--provider=".count))
+    } else {
+      rawValue = nil
+    }
+
+    guard let rawValue else {
+      return [.openAI, .anthropic]
+    }
+    if rawValue == "all" {
+      return [.openAI, .anthropic]
+    }
+    guard let provider = RemoteRewriteProvider(rawValue: rawValue) else {
+      throw TypoverEvalError.unknownRemoteProvider(rawValue)
+    }
+    return [provider]
   }
 
   private static func runSentenceRewriteEvaluation(
@@ -362,6 +479,67 @@ struct TypoverEvalCommand {
     }
   }
 
+  private static func printRemoteRewriteReport(
+    _ runs: [RemoteRewriteBenchmarkRun]
+  ) {
+    print("Typover remote sentence-rewrite comparison")
+    print("Prompt: minimal-editorial-contract-v1")
+    for run in runs {
+      let raw = run.comparison.modelOnly
+      let filtered = run.comparison.typoverFiltered
+      print("\n\(run.provider.displayName): \(run.model)")
+      print(
+        "Model only: \(raw.passedUnchangedCount)/\(raw.unchangedCaseCount) "
+          + "controls unchanged, \(raw.candidateRewriteCount)/"
+          + "\(raw.expectedRewriteCount) candidates, "
+          + "\(raw.falsePositiveCount) false positives, "
+          + "\(raw.preservationFailureCount) preservation failures, "
+          + "\(raw.errorCount) errors"
+      )
+      print(
+        "Typover filtered: \(filtered.passedUnchangedCount)/"
+          + "\(filtered.unchangedCaseCount) controls unchanged, "
+          + "\(filtered.candidateRewriteCount)/"
+          + "\(filtered.expectedRewriteCount) candidates, "
+          + "\(filtered.falsePositiveCount) false positives, "
+          + "\(filtered.rejectedProposalCount) safety rejections"
+      )
+      print(
+        "Latency: median \(format(raw.medianLookupMilliseconds)) ms, "
+          + "p95 \(format(raw.p95LookupMilliseconds)) ms"
+      )
+      print(
+        "Usage: \(run.usage.inputTokens) input tokens, "
+          + "\(run.usage.outputTokens) output tokens, estimated $"
+          + run.usage.estimatedCostUSD.formatted(
+            .number.precision(.fractionLength(4))
+          )
+      )
+
+      let proposed = raw.results.filter {
+        $0.actualReplacement != nil
+      }
+      if !proposed.isEmpty {
+        print("Candidates:")
+        for result in proposed {
+          let filteredOutcome =
+            filtered.results.first {
+              $0.caseID == result.caseID
+            }?.outcome.rawValue ?? "missing"
+          print(
+            "- \(result.caseID) [model: \(result.outcome.rawValue), "
+              + "filtered: \(filteredOutcome)]"
+          )
+          print("  \(result.actualReplacement ?? "")")
+        }
+      }
+      let errors = raw.results.filter { $0.outcome == .error }
+      if let firstError = errors.first?.errorDescription {
+        print("First error: \(firstError)")
+      }
+    }
+  }
+
   private static func format(_ value: Double) -> String {
     value.formatted(.number.precision(.fractionLength(2)))
   }
@@ -375,6 +553,18 @@ private struct SentenceRewriteBenchmarkOutput: Codable {
   let promptProfile: String
   let report: SentenceRewriteEvaluationReport
   let operatingCost: ProcessOperatingCost?
+}
+
+private struct RemoteRewriteBenchmarkOutput: Codable {
+  let runs: [RemoteRewriteBenchmarkRun]
+}
+
+private struct RemoteRewriteBenchmarkRun: Codable {
+  let provider: RemoteRewriteProvider
+  let model: String
+  let promptProfile: String
+  let comparison: SentenceRewriteSafetyComparisonReport
+  let usage: RemoteRewriteUsage
 }
 
 private struct ProcessOperatingCost: Codable {
@@ -465,8 +655,10 @@ private struct ProcessResourceSnapshot {
 private enum TypoverEvalError: Error, CustomStringConvertible {
   case missingCorrectionScope
   case missingPromptProfile
+  case missingRemoteProvider
   case unknownCorrectionScope(String)
   case unknownPromptProfile(String)
+  case unknownRemoteProvider(String)
 
   var description: String {
     switch self {
@@ -474,10 +666,14 @@ private enum TypoverEvalError: Error, CustomStringConvertible {
       "Expected careful or comprehensive after --scope."
     case .missingPromptProfile:
       "Expected conservative or focused-grammar after --prompt-profile."
+    case .missingRemoteProvider:
+      "Expected openai, anthropic, or all after --provider."
     case .unknownCorrectionScope(let scope):
       "Unknown correction scope “\(scope)”; use careful or comprehensive."
     case .unknownPromptProfile(let profile):
       "Unknown prompt profile “\(profile)”; use conservative or focused-grammar."
+    case .unknownRemoteProvider(let provider):
+      "Unknown remote provider “\(provider)”; use openai, anthropic, or all."
     }
   }
 }

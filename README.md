@@ -79,6 +79,8 @@ swift run TypoverEval --contextual --scope comprehensive
 swift run TypoverEval --contextual --all-prompt-profiles
 swift run TypoverEval --rewrite
 swift run TypoverEval --rewrite --json
+swift run TypoverEval --remote-rewrite --provider anthropic
+swift run TypoverEval --remote-rewrite --provider openai
 ```
 
 Reviewed spelling cases gate the test suite. Provisional names, technical
@@ -87,6 +89,9 @@ expectations receive human review. The contextual corpus is a benchmark rather
 than a deterministic gate because Apple can update the system model with macOS.
 The rewrite corpus separately measures unwarranted rewrites, fact preservation,
 human-reviewed quality, latency, and process-attributed operating cost.
+Remote-model commands send only the checked-in synthetic rewrite corpus to the
+selected provider and require that provider's API credential in the process
+environment. They are evaluation tools, not production Typover engines.
 
 ## Architecture
 

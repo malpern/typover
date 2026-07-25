@@ -133,6 +133,39 @@ struct SentenceRewriteEvaluatorTests {
     #expect(report.rewriteCandidateRate == 0.2)
   }
 
+  @Test("The comparison scores one proposal before and after Typover safety")
+  func comparesModelOnlyAndFilteredOutcomes() async {
+    let sentence = "Please be advised that the report is ready."
+    let corpus = SentenceRewriteCorpus(
+      schemaVersion: 1,
+      cases: [
+        testCase(
+          id: "polite-control",
+          sentence: sentence,
+          expectation: .unchanged
+        )
+      ]
+    )
+    let engine = RewriteStubEngine(
+      results: [
+        sentence: rewrite(
+          original: sentence,
+          replacement: "The report is ready."
+        )
+      ]
+    )
+
+    let comparison = await SentenceRewriteEvaluator(
+      engine: engine
+    ).evaluateSafetyComparison(corpus)
+
+    #expect(comparison.modelOnly.falsePositiveCount == 1)
+    #expect(comparison.modelOnly.rejectedProposalCount == 0)
+    #expect(comparison.typoverFiltered.passedUnchangedCount == 1)
+    #expect(comparison.typoverFiltered.falsePositiveCount == 0)
+    #expect(comparison.typoverFiltered.rejectedProposalCount == 1)
+  }
+
   private func testCase(
     id: String,
     sentence: String,
