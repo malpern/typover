@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Planned
+- Status: Deferred until the controlled-editor gate is complete
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -35,6 +35,12 @@ TextKit editor:
       correction transaction;
 - [x] stress-test annotation alignment and state while scrolling a long
       controlled document.
+- [x] replace the demo rule with Apple’s local spelling engine and ranked
+      alternatives;
+- [x] support cursor-relative correction, capitalization, Unicode accents, and
+      internal apostrophes while leaving surrounding text unchanged;
+- [ ] complete the correction corpus and editing-robustness gate in the
+      [controlled-editor roadmap](controlled-editor-roadmap.md).
 
 The controlled editor is the reference implementation. Bear compatibility is
 evaluated against it rather than defining the interaction while platform

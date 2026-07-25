@@ -68,7 +68,9 @@ correction interaction, while SwiftUI remains available for conventional
 product surfaces.
 
 Active research work is described in [docs/plans](docs/plans/README.md),
-beginning with the Bear compatibility spike.
+beginning with the controlled-editor evaluation and robustness milestone. Bear
+compatibility remains documented but deferred until the reference prototype is
+highly functional.
 
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
