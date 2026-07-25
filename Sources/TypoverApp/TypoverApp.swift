@@ -4,12 +4,7 @@ import SwiftUI
 @main
 struct TypoverApp: App {
   init() {
-    if let iconURL = Bundle.module.url(
-      forResource: "TypoverAppIcon",
-      withExtension: "png"
-    ), let icon = NSImage(contentsOf: iconURL) {
-      NSApplication.shared.applicationIconImage = icon
-    }
+    NSApplication.shared.applicationIconImage = TypoverBrand.appIcon
   }
 
   var body: some Scene {
@@ -18,5 +13,32 @@ struct TypoverApp: App {
     }
     .defaultSize(width: 760, height: 540)
     .windowResizability(.contentMinSize)
+    .commands {
+      AboutCommands()
+    }
+
+    Window("About Typover", id: "about") {
+      AboutView()
+    }
+    .defaultPosition(.center)
+    .windowResizability(.contentSize)
+  }
+}
+
+private struct AboutCommands: Commands {
+  @Environment(\.openWindow) private var openWindow
+
+  var body: some Commands {
+    CommandGroup(replacing: .appInfo) {
+      Button {
+        openWindow(id: "about")
+      } label: {
+        Text(
+          "About Typover",
+          bundle: #bundle,
+          comment: "App menu command that opens the Typover About window."
+        )
+      }
+    }
   }
 }
