@@ -136,36 +136,18 @@ private final class TypoverTextView: NSTextView {
     let caret = selectedRange().location
     guard
       selectedRange().length == 0,
-      caret > 0,
       let textStorage,
-      let boundary = textStorage.string.utf16CodeUnit(at: caret - 1),
-      CharacterSet.whitespacesAndNewlines.contains(boundary)
+      !hasMarkedText(),
+      let completedWord = CompletedWordDetector.immediatelyBeforeCaret(
+        in: textStorage.string,
+        caretUTF16Offset: caret
+      )
     else {
       return
     }
 
-    let wordEnd = caret - 1
-    let prefix = (textStorage.string as NSString).substring(to: wordEnd)
-    let separatorRange = (prefix as NSString).rangeOfCharacter(
-      from: CharacterSet.letters.inverted,
-      options: .backwards
-    )
-    let wordStart =
-      separatorRange.location == NSNotFound
-      ? 0
-      : NSMaxRange(separatorRange)
-    let wordRange = NSRange(
-      location: wordStart,
-      length: wordEnd - wordStart
-    )
-
-    guard wordRange.length > 0 else {
-      return
-    }
-
-    let word = (textStorage.string as NSString).substring(with: wordRange)
     guard
-      let proposal = correctionEngine.proposal(for: word),
+      let proposal = correctionEngine.proposal(for: completedWord.text),
       proposal.correction.changesText
     else {
       return
@@ -178,7 +160,7 @@ private final class TypoverTextView: NSTextView {
     replaceCorrectionText(
       correctionAfter: correction,
       correctionForReverse: correction,
-      range: wordRange,
+      range: completedWord.range,
       expectedText: correction.original,
       replacementText: correction.replacement,
       annotateReplacement: true,
@@ -594,19 +576,5 @@ private final class TypoverTextView: NSTextView {
 
     NSColor.tertiaryLabelColor.withAlphaComponent(0.72).setStroke()
     path.stroke()
-  }
-}
-
-extension String {
-  fileprivate func utf16CodeUnit(at offset: Int) -> Unicode.Scalar? {
-    guard
-      offset >= 0,
-      offset < utf16.count
-    else {
-      return nil
-    }
-
-    let index = utf16.index(utf16.startIndex, offsetBy: offset)
-    return Unicode.Scalar(utf16[index])
   }
 }

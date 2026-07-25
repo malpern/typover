@@ -34,9 +34,10 @@ replace the whole sentence or field.
 ### Conservative
 
 Automatic replacement must pass a small set of explicit safety rules. The
-first prototype is deliberately limited to simple lowercase spelling mistakes
-whose proposed replacement is one edit away. Findings outside that boundary do
-not modify text.
+controlled-editor policy accepts bounded Unicode words whose proposed
+replacement is one edit away, preserves lowercase, Capitalized, and ALL-CAPS
+patterns, and permits internal apostrophes. Mixed-case words and malformed word
+forms remain unchanged.
 
 ### Reversible
 

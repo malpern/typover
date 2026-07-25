@@ -27,9 +27,15 @@ Typover will separate candidate generation from the decision to edit text.
   language, and lookup duration.
 - `AutomaticCorrectionPolicy` makes a transparent yes-or-no decision about
   whether a proposal is eligible for automatic replacement.
-- The first policy accepts only lowercase ASCII words of a bounded length whose
-  primary correction is one insertion, deletion, substitution, or adjacent
+- The controlled-editor policy accepts bounded Unicode words whose primary
+  correction is one insertion, deletion, substitution, or adjacent
   transposition away.
+- Lowercase, Capitalized, and ALL-CAPS patterns are preserved. Mixed-case words
+  remain unchanged until a later policy can distinguish intentional names and
+  brands from mistakes.
+- Combining accent marks and internal straight or curly apostrophes are valid
+  word characters. Typover does not add accents to words Apple considers
+  correctly spelled.
 - `NSSpellChecker` is the first production candidate source. It runs on device,
   uses the writer’s Apple spelling resources, and receives accepted, reverted,
   and edited feedback.
@@ -69,8 +75,8 @@ prototype.
 
 - The first policy intentionally misses corrections that require more context
   or more than one edit.
-- Capitalized, non-ASCII, and multilingual words remain unchanged in the
-  initial prototype.
+- Mixed-case names, brands, identifiers, and malformed apostrophe forms remain
+  unchanged.
 - Model benchmarking and any useful calibration require a curated evaluation
   corpus.
 

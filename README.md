@@ -45,8 +45,10 @@ frameworks.
 Typover currently contains a SwiftUI product shell around a controlled AppKit
 and TextKit editor. It uses Apple’s on-device spelling service to propose
 corrections, then applies only those that pass a deliberately narrow binary
-policy. Type a simple lowercase typo followed by Space, then click its
+policy. Type a typo followed by Space or sentence punctuation, then click its
 light-gray squiggle to change it back, choose another spelling, or keep it.
+Corrections follow the active caret even when editing an earlier part of the
+document.
 
 ```bash
 swift build
@@ -67,6 +69,9 @@ product surfaces.
 
 Active research work is described in [docs/plans](docs/plans/README.md),
 beginning with the Bear compatibility spike.
+
+The controlled editor’s correction rules are captured in
+[docs/correction-behavior.md](docs/correction-behavior.md).
 
 ## Status
 

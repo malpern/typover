@@ -1,6 +1,13 @@
 import Foundation
 
 public struct AutomaticCorrectionPolicy: Sendable {
+  private enum CaseStyle {
+    case lowercase
+    case capitalized
+    case uppercase
+    case unchanged
+  }
+
   public let minimumWordLength: Int
   public let maximumWordLength: Int
   public let maximumAlternatives: Int
@@ -23,31 +30,50 @@ public struct AutomaticCorrectionPolicy: Sendable {
     language: String?,
     lookupDuration: Duration
   ) -> CorrectionProposal? {
+    let locale = language.map(Locale.init(identifier:)) ?? .current
     guard
-      isEligibleLowercaseWord(original),
-      isEligibleLowercaseWord(primary),
-      original != primary,
-      optimalStringAlignmentDistance(from: original, to: primary) == 1
+      isEligibleWord(original),
+      isEligibleWord(primary),
+      let caseStyle = caseStyle(of: original, locale: locale)
     else {
       return nil
     }
 
-    var seen = Set([original, primary])
+    let replacement = applying(
+      caseStyle,
+      to: primary,
+      locale: locale
+    )
+    guard
+      isEligibleWord(replacement),
+      original != replacement,
+      optimalStringAlignmentDistance(from: original, to: replacement) == 1
+    else {
+      return nil
+    }
+
+    var seen = Set([original, replacement])
     let filteredAlternatives = alternatives.compactMap { candidate -> String? in
+      let normalizedCandidate = applying(
+        caseStyle,
+        to: candidate,
+        locale: locale
+      )
       guard
-        isEligibleLowercaseWord(candidate),
-        seen.insert(candidate).inserted
+        isEligibleWord(candidate),
+        isEligibleWord(normalizedCandidate),
+        seen.insert(normalizedCandidate).inserted
       else {
         return nil
       }
-      return candidate
+      return normalizedCandidate
     }
     .prefix(maximumAlternatives)
 
     return CorrectionProposal(
       correction: Correction(
         original: original,
-        replacement: primary
+        replacement: replacement
       ),
       alternatives: Array(filteredAlternatives),
       source: source,
@@ -114,15 +140,111 @@ public struct AutomaticCorrectionPolicy: Sendable {
     return distances[sourceCharacters.count][targetCharacters.count]
   }
 
-  private func isEligibleLowercaseWord(_ word: String) -> Bool {
+  private func isEligibleWord(_ word: String) -> Bool {
+    let characters = Array(word)
     guard
       (minimumWordLength...maximumWordLength).contains(word.count),
-      word.unicodeScalars.allSatisfy({ scalar in
-        scalar.isASCII && CharacterSet.lowercaseLetters.contains(scalar)
-      })
+      characters.contains(where: isLetter),
+      characters.allSatisfy(isWordCharacter),
+      characters.first.map({ !isApostrophe($0) }) == true,
+      characters.last.map({ !isApostrophe($0) }) == true
     else {
       return false
     }
-    return true
+
+    return characters.indices.allSatisfy { index in
+      guard isApostrophe(characters[index]) else {
+        return true
+      }
+
+      let previousIndex = characters.index(before: index)
+      let nextIndex = characters.index(after: index)
+      return isLetter(characters[previousIndex])
+        && isLetter(characters[nextIndex])
+    }
+  }
+
+  private func isWordCharacter(_ character: Character) -> Bool {
+    if isApostrophe(character) {
+      return true
+    }
+
+    var containsLetter = false
+    for scalar in character.unicodeScalars {
+      if CharacterSet.letters.contains(scalar) {
+        containsLetter = true
+      } else if !CharacterSet.nonBaseCharacters.contains(scalar) {
+        return false
+      }
+    }
+    return containsLetter
+  }
+
+  private func isLetter(_ character: Character) -> Bool {
+    character.unicodeScalars.contains(where: CharacterSet.letters.contains)
+  }
+
+  private func isApostrophe(_ character: Character) -> Bool {
+    character == "'" || character == "’"
+  }
+
+  private func caseStyle(
+    of word: String,
+    locale: Locale
+  ) -> CaseStyle? {
+    let lowercase = word.lowercased(with: locale)
+    let uppercase = word.uppercased(with: locale)
+
+    if lowercase == uppercase {
+      return .unchanged
+    }
+    if word == lowercase {
+      return .lowercase
+    }
+    if word == uppercase {
+      return .uppercase
+    }
+    if word == capitalizingFirstLetter(in: lowercase, locale: locale) {
+      return .capitalized
+    }
+    return nil
+  }
+
+  private func applying(
+    _ style: CaseStyle,
+    to word: String,
+    locale: Locale
+  ) -> String {
+    switch style {
+    case .lowercase:
+      return word.lowercased(with: locale)
+    case .capitalized:
+      return capitalizingFirstLetter(
+        in: word.lowercased(with: locale),
+        locale: locale
+      )
+    case .uppercase:
+      return word.uppercased(with: locale)
+    case .unchanged:
+      return word
+    }
+  }
+
+  private func capitalizingFirstLetter(
+    in word: String,
+    locale: Locale
+  ) -> String {
+    guard let letterIndex = word.firstIndex(where: isLetter) else {
+      return word
+    }
+
+    var result = word
+    let nextIndex = result.index(after: letterIndex)
+    let capitalizedLetter = String(result[letterIndex]).uppercased(with: locale)
+    result.replaceSubrange(
+      letterIndex..<nextIndex,
+      with: capitalizedLetter
+    )
+    return result
   }
 }

@@ -20,15 +20,42 @@ struct AutomaticCorrectionPolicyTests {
     #expect(proposal?.correction.replacement == "spelling")
   }
 
+  @Test("Capitalization is preserved for capitalized and uppercase words")
+  func preservesSupportedCapitalization() {
+    #expect(
+      makeProposal(original: "Teh", primary: "the")?.correction.replacement
+        == "The"
+    )
+    #expect(
+      makeProposal(original: "TEH", primary: "the")?.correction.replacement
+        == "THE"
+    )
+  }
+
+  @Test("Unicode accents are eligible word characters")
+  func acceptsAccentedReplacement() {
+    let proposal = makeProposal(original: "cafe", primary: "café")
+
+    #expect(proposal?.correction.replacement == "café")
+  }
+
+  @Test("An internal apostrophe can be a one-edit correction")
+  func acceptsInternalApostrophe() {
+    let proposal = makeProposal(original: "dont", primary: "don't")
+
+    #expect(proposal?.correction.replacement == "don't")
+  }
+
   @Test("Multiple edits are not eligible")
   func rejectsMultipleEdits() {
     #expect(makeProposal(original: "cta", primary: "cats") == nil)
   }
 
-  @Test("The initial policy is deliberately limited to lowercase ASCII words")
-  func rejectsWordsOutsideInitialScope() {
-    #expect(makeProposal(original: "Teh", primary: "The") == nil)
-    #expect(makeProposal(original: "cafe", primary: "café") == nil)
+  @Test("Mixed-case words and malformed apostrophes remain protected")
+  func rejectsProtectedWordForms() {
+    #expect(makeProposal(original: "iPone", primary: "iPhone") == nil)
+    #expect(makeProposal(original: "'dont", primary: "don't") == nil)
+    #expect(makeProposal(original: "dont'", primary: "don't") == nil)
     #expect(makeProposal(original: "a", primary: "I") == nil)
   }
 
@@ -45,6 +72,20 @@ struct AutomaticCorrectionPolicyTests {
     )
 
     #expect(proposal?.alternatives == ["ten", "tech"])
+  }
+
+  @Test("Alternatives use the original word's capitalization pattern")
+  func normalizesAlternativeCapitalization() {
+    let proposal = policy.proposal(
+      original: "Teh",
+      primary: "the",
+      alternatives: ["ten", "TECH"],
+      source: .appleSpelling,
+      language: "en_US",
+      lookupDuration: .zero
+    )
+
+    #expect(proposal?.alternatives == ["Ten", "Tech"])
   }
 
   @Test("The edit-distance helper handles insertion, substitution, and transposition")
