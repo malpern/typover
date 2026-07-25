@@ -56,16 +56,38 @@ word or short phrase earlier in that sentence, which allows valid-word errors
 to be corrected after they have already been written.
 
 Contextual work is asynchronous. The writer can continue typing after the
-captured sentence while the model runs. Typover applies a result only when:
+captured sentence while the model runs.
+
+The Settings window separates two decisions:
+
+- **Careful** is the default. It may apply one conservative objective
+  contextual correction.
+- **Comprehensive** may apply up to three non-overlapping objective spelling,
+  punctuation, or grammar corrections in the completed sentence.
+- **Allow sentence rewrites** is a separate opt-in available only with
+  Comprehensive. It permits the model to rephrase one completed sentence for
+  clarity while preserving meaning, facts, intent, and tone.
+
+Typover applies a range-level contextual result only when:
 
 - the captured sentence still matches exactly at its original range;
 - the model’s original substring occurs exactly once in that sentence;
 - the target and replacement are nonempty, bounded, and contain no sentence
   punctuation or newline;
-- the model answer can be reduced deterministically to one smallest changed
-  word or phrase;
-- a single-word replacement is lexically related to its original, apart from a
-  narrow reviewed grammar exception.
+- each model answer can be reduced deterministically to a smallest changed word
+  or phrase;
+- every target is unique, valid, and non-overlapping;
+- the complete proposal contains no more than the number of edits allowed by
+  the selected scope;
+- in Careful mode, a single-word replacement is lexically related to its
+  original, apart from a narrow reviewed grammar exception.
+
+If sentence rewrites are enabled, the model may return one complete replacement
+sentence instead of range-level edits. A rewrite is rejected unless it
+preserves the exact captured scope, contains no newline, ends in sentence
+punctuation, and remains within 600 UTF-16 code units. An accepted rewrite is
+underlined across the replacement sentence and can restore the exact original
+sentence through Change Back or Undo.
 
 Editing inside the captured sentence makes the result stale and it is
 discarded. Pasted text and active marked-text composition do not trigger
@@ -81,8 +103,11 @@ Inserting text before an existing correction lets TextKit move its annotation
 with the attributed text. Editing through an annotated correction invalidates
 that correction, removes its mark, and records the user response as an edit.
 
-Every successful automatic correction retains the original word and exposes
-Change Back, alternatives, and normal Undo.
+Every successful automatic correction retains the original text and exposes
+Change Back, alternatives where applicable, and normal Undo. Multiple
+Comprehensive corrections from one result share one Undo transaction but keep
+separate visible annotations and menus. A sentence rewrite is one visible,
+reversible transaction.
 
 Rejected transactions and invalidated annotations produce structured,
 text-free diagnostics containing only a reason, correction identifier, numeric

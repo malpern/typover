@@ -86,6 +86,63 @@ struct ContextualCorrectionEvaluatorTests {
     )
   }
 
+  @Test("The evaluator counts every applied comprehensive edit")
+  func classifiesMultipleAppliedEdits() async {
+    let corpus = ContextualCorrectionCorpus(
+      schemaVersion: 1,
+      cases: [
+        testCase(
+          id: "extra-edit",
+          sentence: "This sentence are bad.",
+          expectation: .correction(
+            original: "are",
+            replacement: "is"
+          )
+        ),
+        testCase(
+          id: "multi-false-positive",
+          sentence: "This sentence is fine.",
+          expectation: .unchanged
+        ),
+      ]
+    )
+    let engine = EvaluatorStubEngine(
+      results: [
+        "This sentence are bad.": ContextualCorrectionResult(
+          candidates: [
+            comprehensiveCandidate(original: "are", replacement: "is"),
+            comprehensiveCandidate(original: "bad", replacement: "poor"),
+          ]
+        ),
+        "This sentence is fine.": ContextualCorrectionResult(
+          candidates: [
+            comprehensiveCandidate(original: "fine", replacement: "good")
+          ]
+        ),
+      ]
+    )
+
+    let report = await ContextualCorrectionEvaluator(
+      engine: engine,
+      scope: .comprehensive
+    ).evaluate(corpus)
+
+    #expect(report.passedCount == 0)
+    #expect(report.falsePositiveCount == 1)
+    #expect(report.wrongCorrectionCount == 1)
+  }
+
+  private func comprehensiveCandidate(
+    original: String,
+    replacement: String
+  ) -> ContextualCorrectionCandidate {
+    ContextualCorrectionCandidate(
+      original: original,
+      replacement: replacement,
+      kind: .comprehensiveEdit
+    )
+  }
+
   private func testCase(
     id: String,
     sentence: String,
@@ -103,10 +160,16 @@ struct ContextualCorrectionEvaluatorTests {
 }
 
 private actor EvaluatorStubEngine: ContextualCorrectionEngine {
-  let candidates: [String: ContextualCorrectionCandidate]
+  let results: [String: ContextualCorrectionResult]
 
   init(candidates: [String: ContextualCorrectionCandidate]) {
-    self.candidates = candidates
+    self.results = candidates.mapValues {
+      ContextualCorrectionResult(candidates: [$0])
+    }
+  }
+
+  init(results: [String: ContextualCorrectionResult]) {
+    self.results = results
   }
 
   func availability(
@@ -117,7 +180,7 @@ private actor EvaluatorStubEngine: ContextualCorrectionEngine {
 
   func proposal(
     for request: ContextualCorrectionRequest
-  ) -> ContextualCorrectionCandidate? {
-    candidates[request.sentence]
+  ) -> ContextualCorrectionResult? {
+    results[request.sentence]
   }
 }

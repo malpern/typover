@@ -4,6 +4,7 @@ import TypoverAppleIntelligence
 import TypoverCore
 
 struct LearningSettingsView: View {
+  let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
 
   @State private var isConfirmingResetAll = false
@@ -17,6 +18,9 @@ struct LearningSettingsView: View {
           availability: AppleContextualModelAvailability.current(
             for: NSSpellChecker.shared.userPreferredLanguages.first
           )
+        )
+        CorrectionBehaviorSection(
+          behaviorSettings: behaviorSettings
         )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
@@ -109,6 +113,129 @@ struct LearningSettingsView: View {
         comment:
           "Explanation of the data removed by resetting all Typover learning."
       )
+    }
+  }
+}
+
+private struct CorrectionBehaviorSection: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+
+  var body: some View {
+    @Bindable var behaviorSettings = behaviorSettings
+
+    GroupBox {
+      VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
+          Text(
+            "Correction scope",
+            bundle: #bundle,
+            comment:
+              "Label above the Typover contextual-correction scope picker."
+          )
+          .font(.headline)
+
+          Picker(
+            String(
+              localized: "Correction scope",
+              bundle: #bundle,
+              comment:
+                "Accessibility label for the Typover correction-scope picker."
+            ),
+            selection: $behaviorSettings.contextualScope
+          ) {
+            Text(
+              "Careful",
+              bundle: #bundle,
+              comment:
+                "Conservative Typover correction-scope option."
+            )
+            .tag(ContextualCorrectionScope.careful)
+
+            Text(
+              "Comprehensive",
+              bundle: #bundle,
+              comment:
+                "Broader Typover correction-scope option covering grammar and punctuation."
+            )
+            .tag(ContextualCorrectionScope.comprehensive)
+          }
+          .labelsHidden()
+          .pickerStyle(.segmented)
+          .accessibilityIdentifier("typover.settings.correction-scope")
+
+          Text(behaviorSettings.contextualScope.explanation)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+
+        Divider()
+
+        VStack(alignment: .leading, spacing: 5) {
+          Toggle(
+            isOn: $behaviorSettings.allowsSentenceRewrites
+          ) {
+            Text(
+              "Allow sentence rewrites",
+              bundle: #bundle,
+              comment:
+                "Setting that permits Typover's local model to rephrase a completed sentence."
+            )
+          }
+          .disabled(
+            behaviorSettings.contextualScope != .comprehensive
+          )
+          .accessibilityIdentifier(
+            "typover.settings.allow-sentence-rewrites"
+          )
+
+          if behaviorSettings.contextualScope == .comprehensive {
+            Text(
+              "The on-device model may rephrase one completed sentence for clarity while preserving its meaning and tone. The rewrite remains visible, reversible, and undoable.",
+              bundle: #bundle,
+              comment:
+                "Explanation below the enabled sentence-rewrite setting."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 20)
+          } else {
+            Text(
+              behaviorSettings.allowsSentenceRewrites
+                ? "Sentence rewriting is paused in Careful. Choose Comprehensive to use it."
+                : "Choose Comprehensive to make sentence rewriting available.",
+              bundle: #bundle,
+              comment:
+                "Explanation below the unavailable sentence-rewrite setting."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 20)
+          }
+        }
+      }
+      .padding(4)
+    } label: {
+      Label {
+        Text(
+          "Automatic correction",
+          bundle: #bundle,
+          comment:
+            "Heading for Typover's automatic-correction behavior settings."
+        )
+      } icon: {
+        Image(systemName: "slider.horizontal.3")
+      }
+    }
+  }
+}
+
+extension ContextualCorrectionScope {
+  fileprivate var explanation: LocalizedStringResource {
+    switch self {
+    case .careful:
+      "Correct spelling, capitalization, apostrophes, and unambiguous contextual mistakes."
+    case .comprehensive:
+      "Also correct objective punctuation and grammar, with up to three visible changes in a completed sentence."
     }
   }
 }
@@ -209,17 +336,17 @@ private struct LearningSettingsHeader: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text(
-        "Statistics & Preferences",
+        "Typover Settings",
         bundle: #bundle,
-        comment: "Title of the Typover learning settings window."
+        comment: "Title of the Typover settings window."
       )
       .font(.largeTitle)
       .fontWeight(.semibold)
 
       Text(
-        "See how Typover is performing and manage the choices it remembers.",
+        "Choose how Typover corrects your writing, see how it is performing, and manage remembered choices.",
         bundle: #bundle,
-        comment: "Introductory explanation in the Typover learning settings window."
+        comment: "Introductory explanation in the Typover settings window."
       )
       .font(.body)
       .foregroundStyle(.secondary)
@@ -368,6 +495,8 @@ extension CorrectionSource {
       "Demo"
     case .appleIntelligence:
       "Apple Intelligence"
+    case .appleIntelligenceRewrite:
+      "Apple Intelligence Rewrite"
     case .appleSpelling:
       "Apple Spelling"
     case .rememberedPreference:
@@ -381,6 +510,8 @@ extension CorrectionSource {
       "hammer"
     case .appleIntelligence:
       "apple.intelligence"
+    case .appleIntelligenceRewrite:
+      "wand.and.sparkles"
     case .appleSpelling:
       "character.book.closed"
     case .rememberedPreference:

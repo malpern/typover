@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import TypoverAppleIntelligence
 import TypoverAppleSpell
+import TypoverCore
 import TypoverEvaluation
 
 @main
@@ -45,11 +46,17 @@ struct TypoverEvalCommand {
   private static func runContextualEvaluation(
     profile: AppleContextualPromptProfile
   ) async throws {
+    let scope = try contextualScope()
+    let allowsSentenceRewrite =
+      scope == .comprehensive
+      && CommandLine.arguments.contains("--allow-sentence-rewrites")
     let corpus = try ContextualCorrectionCorpusLoader.loadBundled()
     let evaluator = ContextualCorrectionEvaluator(
       engine: AppleContextualCorrectionEngine(
         promptProfile: profile
-      )
+      ),
+      scope: scope,
+      allowsSentenceRewrite: allowsSentenceRewrite
     )
     let report = await evaluator.evaluate(corpus)
 
@@ -61,8 +68,48 @@ struct TypoverEvalCommand {
       FileHandle.standardOutput.write(Data("\n".utf8))
     } else {
       print("Prompt profile: \(profile.rawValue)")
+      print("Correction scope: \(scope.rawValue)")
+      print(
+        "Sentence rewrites: "
+          + (allowsSentenceRewrite ? "allowed" : "disabled")
+      )
       printContextualReport(report)
     }
+  }
+
+  private static func contextualScope()
+    throws -> ContextualCorrectionScope
+  {
+    let arguments = CommandLine.arguments
+    if let index = arguments.firstIndex(of: "--scope") {
+      guard arguments.indices.contains(index + 1) else {
+        throw TypoverEvalError.missingCorrectionScope
+      }
+      guard
+        let scope = ContextualCorrectionScope(
+          rawValue: arguments[index + 1]
+        )
+      else {
+        throw TypoverEvalError.unknownCorrectionScope(
+          arguments[index + 1]
+        )
+      }
+      return scope
+    }
+
+    if let argument = arguments.first(where: {
+      $0.hasPrefix("--scope=")
+    }) {
+      let rawValue = String(argument.dropFirst("--scope=".count))
+      guard
+        let scope = ContextualCorrectionScope(rawValue: rawValue)
+      else {
+        throw TypoverEvalError.unknownCorrectionScope(rawValue)
+      }
+      return scope
+    }
+
+    return .careful
   }
 
   private static func contextualPromptProfile()
@@ -193,13 +240,19 @@ struct TypoverEvalCommand {
 }
 
 private enum TypoverEvalError: Error, CustomStringConvertible {
+  case missingCorrectionScope
   case missingPromptProfile
+  case unknownCorrectionScope(String)
   case unknownPromptProfile(String)
 
   var description: String {
     switch self {
+    case .missingCorrectionScope:
+      "Expected careful or comprehensive after --scope."
     case .missingPromptProfile:
       "Expected conservative or focused-grammar after --prompt-profile."
+    case .unknownCorrectionScope(let scope):
+      "Unknown correction scope “\(scope)”; use careful or comprehensive."
     case .unknownPromptProfile(let profile):
       "Unknown prompt profile “\(profile)”; use conservative or focused-grammar."
     }

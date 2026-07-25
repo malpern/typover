@@ -2,12 +2,16 @@ import SwiftUI
 import TypoverCore
 
 struct ContentView: View {
+  let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
 
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       TypoverHeader()
-      EditorLabSection(learningStore: learningStore)
+      EditorLabSection(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore
+      )
       EditorPrinciples()
     }
     .padding(32)
@@ -61,6 +65,7 @@ private struct TypoverHeader: View {
 }
 
 private struct EditorLabSection: View {
+  let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
 
   var body: some View {
@@ -90,15 +95,18 @@ private struct EditorLabSection: View {
         .foregroundStyle(.secondary)
       }
 
-      EditorLabView(learningStore: learningStore)
-        .frame(minHeight: 240)
-        .padding(1)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay {
-          RoundedRectangle(cornerRadius: 14)
-            .stroke(.separator.opacity(0.65))
-        }
+      EditorLabView(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore
+      )
+      .frame(minHeight: 240)
+      .padding(1)
+      .background(Color(nsColor: .textBackgroundColor))
+      .clipShape(RoundedRectangle(cornerRadius: 14))
+      .overlay {
+        RoundedRectangle(cornerRadius: 14)
+          .stroke(.separator.opacity(0.65))
+      }
 
       Text(
         "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or choose another correction.",

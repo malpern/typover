@@ -28,8 +28,9 @@ A corrected word receives a persistent light-gray squiggle. Selecting it shows:
 
 Observe and replace the smallest safe range. Word-boundary corrections may run
 after Space or punctuation. Contextual corrections may reconsider the most
-recently completed sentence, but must apply a range-level diff rather than
-replace the whole sentence or field.
+recently completed sentence and normally apply range-level changes. A separate
+explicit setting may permit one completed sentence to be rewritten for clarity;
+it never permits automatic paragraph, selection, field, or document rewrites.
 
 ### Conservative
 

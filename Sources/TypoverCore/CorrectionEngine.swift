@@ -5,6 +5,7 @@ public enum CorrectionSource: String, Codable, CaseIterable, Equatable, Hashable
 {
   case demo
   case appleIntelligence
+  case appleIntelligenceRewrite
   case appleSpelling
   case rememberedPreference
 }

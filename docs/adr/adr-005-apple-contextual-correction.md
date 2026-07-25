@@ -26,8 +26,8 @@ Typover will use `SystemLanguageModel.default` behind the replaceable
 - Typover has no Private Cloud Compute, server, or other network fallback.
 - A request contains only the most recently completed sentence and is capped at
   400 UTF-16 code units.
-- The model may propose at most one objective correction and must return
-  structured original and replacement text.
+- The default Careful scope may propose at most one objective correction and
+  must return structured original and replacement text.
 - Typover deterministically reduces every returned original/replacement pair
   to the smallest changed whole word or phrase.
 - The proposal must identify one unique exact substring in the captured
@@ -50,7 +50,9 @@ Typover will use `SystemLanguageModel.default` behind the replaceable
 
 - Sentence-context mistakes can be corrected without sending writing off the
   Mac.
-- Model output cannot directly replace a sentence or document.
+- Model output cannot directly replace a document. Sentence replacement is
+  permitted only through the separate, explicit, bounded opt-in defined by
+  [ADR-006](adr-006-separate-correction-scope-from-sentence-rewrites.md).
 - The editor remains responsive because inference is asynchronous.
 - The protocol and contextual corpus can benchmark open-source local engines
   later without changing the interaction.

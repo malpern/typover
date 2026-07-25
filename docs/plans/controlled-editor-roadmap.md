@@ -167,10 +167,34 @@ it is retained only as a benchmark profile. Run
 These results are development snapshots rather than permanent quality
 guarantees because Apple can update the system model with OS releases.
 
+### Correction scope and sentence rewrites
+
+- [x] Keep Careful as the default single-edit contextual behavior.
+- [x] Add a persisted Comprehensive scope for up to three objective spelling,
+      punctuation, or grammar changes.
+- [x] Apply a multi-edit result atomically while preserving a separate visible
+      annotation and restoration menu for each change.
+- [x] Add a separate Comprehensive-only setting that permits one completed
+      sentence to be rewritten for clarity.
+- [x] Preserve the original sentence, annotate the rewrite, and support Change
+      Back plus one-step Undo and Redo.
+- [x] Keep all model inference on device with no network fallback.
+
+On the macOS 27 development machine, the Careful scope passed 40 of 48 cases
+with eight safe misses, while Comprehensive passed 41 of 48 with seven safe
+misses. Both had zero false positives, wrong applied corrections, or model
+errors after deterministic safety validation. Comprehensive median latency was
+about 2.32 seconds and p95 was about 3.75 seconds in the final validation run.
+
+Sentence rewriting is intentionally not scored with the minimal-edit
+contextual corpus. A separate rewrite corpus must evaluate whether a rewrite
+was warranted and whether it preserved meaning, facts, intent, and tone.
+
 ## Next milestone: contextual quality and operating cost
 
 - Add more synthetic and consented, de-identified natural writing samples that
   contain no private text.
+- Add the separate sentence-rewrite corpus and acceptance criteria.
 - Measure cold start, warm latency, memory, and energy separately.
 - Test the prompt and corpus against every macOS system-model version Typover
   supports.

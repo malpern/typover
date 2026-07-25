@@ -187,6 +187,8 @@ public struct CorrectionCorpusEvaluator {
     switch source {
     case .appleIntelligence:
       "apple-intelligence"
+    case .appleIntelligenceRewrite:
+      "apple-intelligence-rewrite"
     case .demo:
       "demo"
     case .appleSpelling:

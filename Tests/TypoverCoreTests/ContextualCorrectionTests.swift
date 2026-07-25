@@ -3,6 +3,23 @@ import Testing
 import TypoverCore
 
 struct ContextualCorrectionTests {
+  @Test("Sentence rewriting requires comprehensive scope")
+  func rewritePermissionRequiresComprehensiveScope() {
+    let careful = ContextualCorrectionRequest(
+      sentence: "This is a sentence.",
+      scope: .careful,
+      allowsSentenceRewrite: true
+    )
+    let comprehensive = ContextualCorrectionRequest(
+      sentence: "This is a sentence.",
+      scope: .comprehensive,
+      allowsSentenceRewrite: true
+    )
+
+    #expect(!careful.allowsSentenceRewrite)
+    #expect(comprehensive.allowsSentenceRewrite)
+  }
+
   @Test("The detector returns only the bounded sentence at the caret")
   func detectsCompletedSentence() {
     let text = "Earlier sentence.  Their going home."
@@ -209,6 +226,146 @@ struct ContextualCorrectionTests {
         in: sentence,
         language: "en_US"
       ) != nil
+    )
+  }
+
+  @Test("Several nonoverlapping comprehensive edits resolve together")
+  func resolvesSeveralComprehensiveEdits() throws {
+    let sentence = CompletedSentence(
+      range: NSRange(location: 20, length: 30),
+      text: "Their going because its late."
+    )
+    let result = ContextualCorrectionResult(
+      candidates: [
+        ContextualCorrectionCandidate(
+          original: "Their",
+          replacement: "They're",
+          kind: .comprehensiveEdit
+        ),
+        ContextualCorrectionCandidate(
+          original: "its",
+          replacement: "it's",
+          kind: .comprehensiveEdit
+        ),
+      ]
+    )
+
+    let resolved = try #require(
+      ContextualCorrectionResolver.resolve(
+        result,
+        in: sentence,
+        language: "en_US"
+      )
+    )
+
+    #expect(resolved.count == 2)
+    #expect(resolved.map(\.range.location) == [20, 40])
+  }
+
+  @Test("Overlapping contextual edits reject the complete result")
+  func rejectsOverlappingEdits() {
+    let sentence = CompletedSentence(
+      range: NSRange(location: 0, length: 25),
+      text: "We should of left early."
+    )
+    let result = ContextualCorrectionResult(
+      candidates: [
+        ContextualCorrectionCandidate(
+          original: "should of",
+          replacement: "should have",
+          kind: .comprehensiveEdit
+        ),
+        ContextualCorrectionCandidate(
+          original: "of",
+          replacement: "have",
+          kind: .comprehensiveEdit
+        ),
+      ]
+    )
+
+    #expect(
+      ContextualCorrectionResolver.resolve(
+        result,
+        in: sentence,
+        language: "en_US"
+      ) == nil
+    )
+  }
+
+  @Test("An explicitly marked complete sentence rewrite resolves")
+  func resolvesSentenceRewrite() throws {
+    let original = "We go store now."
+    let replacement = "We are going to the store now."
+    let sentence = CompletedSentence(
+      range: NSRange(location: 80, length: original.utf16.count),
+      text: original
+    )
+    let result = ContextualCorrectionResult(
+      candidates: [
+        ContextualCorrectionCandidate(
+          original: original,
+          replacement: replacement,
+          kind: .sentenceRewrite
+        )
+      ]
+    )
+
+    let resolved = try #require(
+      ContextualCorrectionResolver.resolve(
+        result,
+        in: sentence,
+        language: "en_US"
+      )?.first
+    )
+
+    #expect(resolved.range == sentence.range)
+    #expect(resolved.proposal.source == .appleIntelligenceRewrite)
+    #expect(resolved.proposal.correction.original == original)
+    #expect(resolved.proposal.correction.replacement == replacement)
+  }
+
+  @Test("A sentence rewrite must remain a complete punctuated sentence")
+  func rejectsIncompleteSentenceRewrite() {
+    let original = "We go store now."
+    let sentence = CompletedSentence(
+      range: NSRange(location: 0, length: original.utf16.count),
+      text: original
+    )
+
+    #expect(
+      ContextualCorrectionResolver.resolve(
+        ContextualCorrectionResult(
+          candidates: [
+            ContextualCorrectionCandidate(
+              original: original,
+              replacement: "We are going to the store now",
+              kind: .sentenceRewrite
+            )
+          ]
+        ),
+        in: sentence,
+        language: "en_US"
+      ) == nil
+    )
+  }
+
+  @Test("A comprehensive edit cannot duplicate its neighboring word")
+  func rejectsAdjacentDuplicate() {
+    let sentence = CompletedSentence(
+      range: NSRange(location: 0, length: 31),
+      text: "Their going to arrive tomorrow."
+    )
+
+    #expect(
+      ContextualCorrectionResolver.resolve(
+        ContextualCorrectionCandidate(
+          original: "going",
+          replacement: "going to",
+          kind: .comprehensiveEdit
+        ),
+        in: sentence,
+        language: "en_US"
+      ) == nil
     )
   }
 }

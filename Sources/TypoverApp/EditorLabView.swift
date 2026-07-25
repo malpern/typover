@@ -5,10 +5,12 @@ import TypoverAppleSpell
 import TypoverCore
 
 struct EditorLabView: NSViewRepresentable {
+  let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
 
   func makeNSView(context: Context) -> NSScrollView {
     let textView = TypoverTextView(usingTextLayoutManager: true)
+    textView.useBehaviorSettings(behaviorSettings)
     textView.useLearningStore(learningStore)
     textView.allowsUndo = true
     textView.autoresizingMask = [.width]
@@ -100,6 +102,7 @@ final class TypoverTextView: NSTextView {
   private var correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
   private var contextualCorrectionEngine: any ContextualCorrectionEngine =
     AppleContextualCorrectionEngine()
+  private var behaviorSettings = CorrectionBehaviorSettings()
   private var learningStore = CorrectionLearningStore()
 
   private var contextualCorrectionTask: Task<Void, Never>?
@@ -114,9 +117,7 @@ final class TypoverTextView: NSTextView {
   private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
-  private(set) var correctionTransactionSamples: [
-    CorrectionTransactionSample
-  ] = []
+  private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
 
   struct CorrectionSnapshot: Equatable {
     let correction: Correction
@@ -142,13 +143,23 @@ final class TypoverTextView: NSTextView {
     correctionEngine: any CorrectionEngine,
     contextualCorrectionEngine: any ContextualCorrectionEngine =
       DisabledContextualCorrectionEngine(),
+    behaviorSettings: CorrectionBehaviorSettings? = nil,
     learningStore: CorrectionLearningStore,
     undoManager: UndoManager
   ) {
     self.correctionEngine = correctionEngine
     self.contextualCorrectionEngine = contextualCorrectionEngine
+    if let behaviorSettings {
+      self.behaviorSettings = behaviorSettings
+    }
     self.learningStore = learningStore
     testingUndoManager = undoManager
+  }
+
+  func useBehaviorSettings(
+    _ behaviorSettings: CorrectionBehaviorSettings
+  ) {
+    self.behaviorSettings = behaviorSettings
   }
 
   func useLearningStore(_ learningStore: CorrectionLearningStore) {
@@ -334,6 +345,10 @@ final class TypoverTextView: NSTextView {
     contextualCorrectionTask?.cancel()
     let engine = contextualCorrectionEngine
     let language = NSSpellChecker.shared.userPreferredLanguages.first
+    let scope = behaviorSettings.contextualScope
+    let allowsSentenceRewrite =
+      scope == .comprehensive
+      && behaviorSettings.allowsSentenceRewrites
     contextualCorrectionTask = Task { [weak self] in
       guard
         await engine.availability(for: language) == .available,
@@ -343,17 +358,19 @@ final class TypoverTextView: NSTextView {
       }
 
       do {
-        let candidate = try await engine.proposal(
+        let result = try await engine.proposal(
           for: ContextualCorrectionRequest(
             sentence: sentence.text,
-            language: language
+            language: language,
+            scope: scope,
+            allowsSentenceRewrite: allowsSentenceRewrite
           )
         )
-        guard !Task.isCancelled, let candidate else {
+        guard !Task.isCancelled, let result else {
           return
         }
-        self?.applyContextualCandidate(
-          candidate,
+        self?.applyContextualResult(
+          result,
           to: sentence,
           language: language
         )
@@ -365,8 +382,8 @@ final class TypoverTextView: NSTextView {
     }
   }
 
-  private func applyContextualCandidate(
-    _ candidate: ContextualCorrectionCandidate,
+  private func applyContextualResult(
+    _ result: ContextualCorrectionResult,
     to capturedSentence: CompletedSentence,
     language: String?
   ) {
@@ -392,8 +409,8 @@ final class TypoverTextView: NSTextView {
       return
     }
     guard
-      let resolved = ContextualCorrectionResolver.resolve(
-        candidate,
+      let resolvedCorrections = ContextualCorrectionResolver.resolve(
+        result,
         in: capturedSentence,
         language: language
       )
@@ -405,30 +422,46 @@ final class TypoverTextView: NSTextView {
       return
     }
 
-    let proposal = resolved.proposal
-    let correction = proposal.correction
-    correctionsByID[correction.id] = correction
-    proposalsByID[correction.id] = proposal
-    ledger.record(correction)
-    let didApply = replaceCorrectionText(
-      correctionAfter: correction,
-      correctionForReverse: correction,
-      range: resolved.range,
-      expectedText: correction.original,
-      replacementText: correction.replacement,
-      annotateReplacement: true,
-      dispositionAfter: .applied,
-      undoAnnotatesReplacement: false,
-      undoDisposition: .restored,
-      actionName: String(
-        localized: "Correct in Context",
-        bundle: #bundle,
-        comment:
-          "Undo menu action name for an on-device contextual Typover correction."
-      )
+    let actionName = String(
+      localized: "Correct in Context",
+      bundle: #bundle,
+      comment:
+        "Undo menu action name for one or more on-device contextual Typover corrections."
     )
-    if didApply {
-      learningStore.recordApplied(proposal)
+    let shouldGroupUndo = resolvedCorrections.count > 1
+    if shouldGroupUndo {
+      undoManager?.beginUndoGrouping()
+    }
+    defer {
+      if shouldGroupUndo {
+        undoManager?.endUndoGrouping()
+        undoManager?.setActionName(actionName)
+      }
+    }
+
+    for resolved in resolvedCorrections.sorted(by: {
+      $0.range.location > $1.range.location
+    }) {
+      let proposal = resolved.proposal
+      let correction = proposal.correction
+      correctionsByID[correction.id] = correction
+      proposalsByID[correction.id] = proposal
+      ledger.record(correction)
+      let didApply = replaceCorrectionText(
+        correctionAfter: correction,
+        correctionForReverse: correction,
+        range: resolved.range,
+        expectedText: correction.original,
+        replacementText: correction.replacement,
+        annotateReplacement: true,
+        dispositionAfter: .applied,
+        undoAnnotatesReplacement: false,
+        undoDisposition: .restored,
+        actionName: actionName
+      )
+      if didApply {
+        learningStore.recordApplied(proposal)
+      }
     }
   }
 
@@ -532,10 +565,15 @@ final class TypoverTextView: NSTextView {
     )
 
     undoManager?.registerUndo(withTarget: self) { target in
+      let currentRange =
+        annotateReplacement
+        ? target.annotatedRanges(for: correctionAfter.id).first
+          ?? replacementRange
+        : replacementRange
       target.replaceCorrectionText(
         correctionAfter: correctionForReverse,
         correctionForReverse: correctionAfter,
-        range: replacementRange,
+        range: currentRange,
         expectedText: replacementText,
         replacementText: expectedText,
         annotateReplacement: undoAnnotatesReplacement,
@@ -917,7 +955,7 @@ final class TypoverTextView: NSTextView {
     case .none:
       return
     case .removePreference:
-      guard proposal.source != .appleIntelligence else {
+      guard !isContextualSource(proposal.source) else {
         return
       }
       learningStore.removePreference(
@@ -925,13 +963,13 @@ final class TypoverTextView: NSTextView {
         language: proposal.language
       )
     case .suppress:
-      if proposal.source == .appleIntelligence {
+      if isContextualSource(proposal.source) {
         learningStore.recordOutcome(.reverted, for: proposal)
       } else {
         learningStore.recordReverted(proposal)
       }
     case .prefer(let replacement, let outcome):
-      if proposal.source == .appleIntelligence {
+      if isContextualSource(proposal.source) {
         if let outcome {
           learningStore.recordOutcome(outcome, for: proposal)
         }
@@ -965,7 +1003,7 @@ final class TypoverTextView: NSTextView {
     _ replacement: String?,
     for proposal: CorrectionProposal
   ) {
-    if proposal.source == .appleIntelligence {
+    if isContextualSource(proposal.source) {
       learningStore.recordOutcome(.manuallyEdited, for: proposal)
     } else {
       learningStore.recordManualEdit(replacement, for: proposal)
@@ -976,7 +1014,7 @@ final class TypoverTextView: NSTextView {
     _ response: CorrectionUserResponse,
     for proposal: CorrectionProposal
   ) {
-    guard proposal.source != .appleIntelligence else {
+    guard !isContextualSource(proposal.source) else {
       return
     }
     correctionEngine.record(response, for: proposal)
@@ -993,6 +1031,13 @@ final class TypoverTextView: NSTextView {
         comment:
           "Disabled correction-menu label identifying Apple's local contextual model."
       )
+    case .appleIntelligenceRewrite:
+      return String(
+        localized: "Apple Intelligence Rewrite · On Device",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying an opt-in local sentence rewrite."
+      )
     case .rememberedPreference:
       return String(
         localized: "Remembered Preference · On Device",
@@ -1007,6 +1052,11 @@ final class TypoverTextView: NSTextView {
         comment: "Disabled correction-menu label identifying the local spelling source."
       )
     }
+  }
+
+  private func isContextualSource(_ source: CorrectionSource) -> Bool {
+    source == .appleIntelligence
+      || source == .appleIntelligenceRewrite
   }
 
   private func correctionID(from menuItem: NSMenuItem) -> Correction.ID? {

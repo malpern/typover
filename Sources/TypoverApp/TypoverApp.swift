@@ -4,6 +4,7 @@ import TypoverCore
 
 @main
 struct TypoverApp: App {
+  @State private var behaviorSettings = CorrectionBehaviorSettings()
   @State private var learningStore = CorrectionLearningStore()
 
   init() {
@@ -12,7 +13,10 @@ struct TypoverApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ContentView(learningStore: learningStore)
+      ContentView(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore
+      )
     }
     .defaultSize(width: 760, height: 540)
     .windowResizability(.contentMinSize)
@@ -27,7 +31,10 @@ struct TypoverApp: App {
     .windowResizability(.contentSize)
 
     Settings {
-      LearningSettingsView(learningStore: learningStore)
+      LearningSettingsView(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore
+      )
     }
   }
 }

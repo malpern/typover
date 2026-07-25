@@ -494,6 +494,111 @@ struct EditorStressTests {
     )
   }
 
+  @Test("Comprehensive contextual edits undo and redo as one transaction")
+  func comprehensiveEditsAreOneUndoTransaction() async {
+    let contextualEngine = ImmediateContextualResultEngine(
+      result: ContextualCorrectionResult(
+        candidates: [
+          ContextualCorrectionCandidate(
+            original: "Their",
+            replacement: "They're",
+            kind: .comprehensiveEdit
+          ),
+          ContextualCorrectionCandidate(
+            original: "its",
+            replacement: "it's",
+            kind: .comprehensiveEdit
+          ),
+        ]
+      )
+    )
+    let behaviorSettings = makeBehaviorSettings(
+      scope: .comprehensive
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine,
+      behaviorSettings: behaviorSettings
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going because its late")
+    fixture.editor.undoManager?.removeAllActions()
+    fixture.type(".")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == "They're going because it's late.")
+    #expect(fixture.appliedSnapshots.count == 2)
+
+    fixture.editor.undoManager?.undo()
+    #expect(fixture.editor.string == "Their going because its late.")
+
+    fixture.editor.undoManager?.redo()
+    #expect(fixture.editor.string == "They're going because it's late.")
+  }
+
+  @Test("An allowed sentence rewrite stays visible and reversible")
+  func sentenceRewriteIsVisibleAndReversible() async throws {
+    let original = "We go store now."
+    let replacement = "We are going to the store now."
+    let contextualEngine = ImmediateContextualResultEngine(
+      result: ContextualCorrectionResult(
+        candidates: [
+          ContextualCorrectionCandidate(
+            original: original,
+            replacement: replacement,
+            kind: .sentenceRewrite
+          )
+        ]
+      )
+    )
+    let behaviorSettings = makeBehaviorSettings(
+      scope: .comprehensive,
+      allowsSentenceRewrites: true
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine,
+      behaviorSettings: behaviorSettings
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("We go store now")
+    fixture.editor.undoManager?.removeAllActions()
+    fixture.type(".")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == replacement)
+    let snapshot = try #require(fixture.appliedSnapshots.first)
+    #expect(
+      snapshot.annotatedRanges == [
+        NSRange(location: 0, length: replacement.utf16.count)
+      ]
+    )
+    let menu = try #require(
+      fixture.editor.correctionMenu(for: snapshot.correction.id)
+    )
+    #expect(
+      menu.items.map(\.title).contains(
+        "Apple Intelligence Rewrite · On Device"
+      )
+    )
+    let request = try #require(await contextualEngine.lastRequest)
+    #expect(request.scope == .comprehensive)
+    #expect(request.allowsSentenceRewrite)
+
+    fixture.editor.undoManager?.undo()
+    #expect(fixture.editor.string == original)
+
+    fixture.editor.undoManager?.redo()
+    #expect(fixture.editor.string == replacement)
+
+    #expect(
+      fixture.editor.changeBack(
+        correctionID: snapshot.correction.id
+      )
+    )
+    #expect(fixture.editor.string == original)
+  }
+
   @Test("Pasted sentences never start contextual correction")
   func pastedSentenceDoesNotStartContextualCorrection() async {
     let contextualEngine = CountingContextualEngine()
@@ -524,7 +629,8 @@ private final class EditorFixture {
   init(
     initialText: String = "",
     contextualCorrectionEngine: any ContextualCorrectionEngine =
-      DisabledContextualCorrectionEngine()
+      DisabledContextualCorrectionEngine(),
+    behaviorSettings: CorrectionBehaviorSettings? = nil
   ) {
     engine = TestCorrectionEngine()
     editor = TypoverTextView(usingTextLayoutManager: true)
@@ -533,6 +639,9 @@ private final class EditorFixture {
     learningStore = CorrectionLearningStore(
       fileURL: learningDirectory.appendingPathComponent("learning.json")
     )
+    let testBehaviorSettings =
+      behaviorSettings
+      ?? makeBehaviorSettings(scope: .careful)
 
     editor.allowsUndo = true
     editor.isRichText = false
@@ -547,6 +656,7 @@ private final class EditorFixture {
     editor.configureForTesting(
       correctionEngine: engine,
       contextualCorrectionEngine: contextualCorrectionEngine,
+      behaviorSettings: testBehaviorSettings,
       learningStore: learningStore,
       undoManager: UndoManager()
     )
@@ -584,6 +694,28 @@ private final class EditorFixture {
   }
 }
 
+private actor ImmediateContextualResultEngine: ContextualCorrectionEngine {
+  let result: ContextualCorrectionResult?
+  private(set) var lastRequest: ContextualCorrectionRequest?
+
+  init(result: ContextualCorrectionResult?) {
+    self.result = result
+  }
+
+  func availability(
+    for _: String?
+  ) -> ContextualCorrectionAvailability {
+    .available
+  }
+
+  func proposal(
+    for request: ContextualCorrectionRequest
+  ) -> ContextualCorrectionResult? {
+    lastRequest = request
+    return result
+  }
+}
+
 private actor ImmediateContextualEngine: ContextualCorrectionEngine {
   let candidate: ContextualCorrectionCandidate?
 
@@ -599,8 +731,10 @@ private actor ImmediateContextualEngine: ContextualCorrectionEngine {
 
   func proposal(
     for _: ContextualCorrectionRequest
-  ) -> ContextualCorrectionCandidate? {
-    candidate
+  ) -> ContextualCorrectionResult? {
+    candidate.map {
+      ContextualCorrectionResult(candidates: [$0])
+    }
   }
 }
 
@@ -615,7 +749,7 @@ private actor CountingContextualEngine: ContextualCorrectionEngine {
 
   func proposal(
     for _: ContextualCorrectionRequest
-  ) -> ContextualCorrectionCandidate? {
+  ) -> ContextualCorrectionResult? {
     requestCount += 1
     return nil
   }
@@ -627,7 +761,7 @@ private actor SuspendedContextualEngine: ContextualCorrectionEngine {
   private var requestWaiters: [CheckedContinuation<Void, Never>] = []
   private var responseContinuation:
     CheckedContinuation<
-      ContextualCorrectionCandidate?, Never
+      ContextualCorrectionResult?, Never
     >?
 
   init(candidate: ContextualCorrectionCandidate?) {
@@ -642,7 +776,7 @@ private actor SuspendedContextualEngine: ContextualCorrectionEngine {
 
   func proposal(
     for _: ContextualCorrectionRequest
-  ) async -> ContextualCorrectionCandidate? {
+  ) async -> ContextualCorrectionResult? {
     requestWasReceived = true
     for waiter in requestWaiters {
       waiter.resume()
@@ -664,9 +798,27 @@ private actor SuspendedContextualEngine: ContextualCorrectionEngine {
   }
 
   func resume() {
-    responseContinuation?.resume(returning: candidate)
+    responseContinuation?.resume(
+      returning: candidate.map {
+        ContextualCorrectionResult(candidates: [$0])
+      }
+    )
     responseContinuation = nil
   }
+}
+
+@MainActor
+private func makeBehaviorSettings(
+  scope: ContextualCorrectionScope,
+  allowsSentenceRewrites: Bool = false
+) -> CorrectionBehaviorSettings {
+  let defaults = UserDefaults(
+    suiteName: "EditorStressTests.\(UUID().uuidString)"
+  )!
+  let settings = CorrectionBehaviorSettings(defaults: defaults)
+  settings.contextualScope = scope
+  settings.allowsSentenceRewrites = allowsSentenceRewrites
+  return settings
 }
 
 @MainActor

@@ -77,9 +77,17 @@ public struct ContextualEvaluationReport: Codable, Sendable {
 
 public struct ContextualCorrectionEvaluator {
   private let engine: any ContextualCorrectionEngine
+  private let scope: ContextualCorrectionScope
+  private let allowsSentenceRewrite: Bool
 
-  public init(engine: any ContextualCorrectionEngine) {
+  public init(
+    engine: any ContextualCorrectionEngine,
+    scope: ContextualCorrectionScope = .careful,
+    allowsSentenceRewrite: Bool = false
+  ) {
     self.engine = engine
+    self.scope = scope
+    self.allowsSentenceRewrite = allowsSentenceRewrite
   }
 
   public func evaluate(
@@ -107,25 +115,27 @@ public struct ContextualCorrectionEvaluator {
       do {
         let clock = ContinuousClock()
         let start = clock.now
-        let candidate = try await engine.proposal(
+        let proposal = try await engine.proposal(
           for: ContextualCorrectionRequest(
             sentence: testCase.sentence,
-            language: testCase.language
+            language: testCase.language,
+            scope: scope,
+            allowsSentenceRewrite: allowsSentenceRewrite
           )
         )
         let lookupDuration = start.duration(to: clock.now)
-        let effectiveCandidate = effectiveCandidate(
-          candidate,
+        let effectiveCandidates = effectiveCandidates(
+          proposal,
           for: testCase
         )
         results.append(
           result(
             for: testCase,
-            candidate: effectiveCandidate,
+            candidate: effectiveCandidates.first,
             lookupDuration: lookupDuration,
             outcome: outcome(
               for: testCase.expectation,
-              candidate: effectiveCandidate
+              candidates: effectiveCandidates
             )
           )
         )
@@ -147,14 +157,14 @@ public struct ContextualCorrectionEvaluator {
     )
   }
 
-  private func effectiveCandidate(
-    _ candidate: ContextualCorrectionCandidate?,
+  private func effectiveCandidates(
+    _ result: ContextualCorrectionResult?,
     for testCase: ContextualCorrectionCorpusCase
-  ) -> ContextualCorrectionCandidate? {
+  ) -> [ContextualCorrectionCandidate] {
     guard
-      let candidate,
+      let result,
       let resolved = ContextualCorrectionResolver.resolve(
-        candidate,
+        result,
         in: CompletedSentence(
           range: NSRange(
             location: 0,
@@ -165,21 +175,29 @@ public struct ContextualCorrectionEvaluator {
         language: testCase.language
       )
     else {
-      return nil
+      return []
     }
 
-    return ContextualCorrectionCandidate(
-      original: resolved.proposal.correction.original,
-      replacement: resolved.proposal.correction.replacement,
-      lookupDuration: candidate.lookupDuration
-    )
+    return resolved.map { effective in
+      let correction = effective.proposal.correction
+      let source = result.candidates.first {
+        $0.original == correction.original
+          && $0.replacement == correction.replacement
+      }
+      return ContextualCorrectionCandidate(
+        original: correction.original,
+        replacement: correction.replacement,
+        kind: source?.kind ?? .carefulEdit,
+        lookupDuration: source?.lookupDuration ?? .zero
+      )
+    }
   }
 
   private func outcome(
     for expectation: ContextualCorrectionExpectation,
-    candidate: ContextualCorrectionCandidate?
+    candidates: [ContextualCorrectionCandidate]
   ) -> ContextualEvaluationOutcome {
-    switch (expectation, candidate) {
+    switch (expectation, candidates.first) {
     case (.unchanged, nil):
       .passed
     case (.unchanged, .some):
@@ -190,7 +208,8 @@ public struct ContextualCorrectionEvaluator {
       .correction(let original, let replacement),
       .some(let candidate)
     ):
-      candidate.original == original
+      candidates.count == 1
+        && candidate.original == original
         && candidate.replacement == replacement
         ? .passed
         : .wrongCorrection

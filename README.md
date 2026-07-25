@@ -14,13 +14,15 @@ another suggestion.
 1. The writer completes a word or sentence.
 2. Typover evaluates only the nearby text needed for context.
 3. A correction that passes Typover’s explicit safety rules replaces the
-   smallest possible character range.
+   smallest possible character range. An explicitly enabled sentence rewrite
+   is the bounded exception.
 4. The corrected text retains a subtle, persistent mark.
 5. Clicking the mark offers the original text and alternative corrections.
 
 Typover must not replace an entire text field or document. Whole-field
 replacement disrupts selection, formatting, Undo, collaboration, and long-form
-writing.
+writing. An optional rewrite is limited to one newly completed sentence and
+remains visible and reversible as one transaction.
 
 ## Why this is an experiment
 
@@ -44,12 +46,14 @@ frameworks.
 
 Typover currently contains a SwiftUI product shell around a controlled AppKit
 and TextKit editor. It uses Apple’s on-device spelling service to propose
-corrections, then applies only those that pass a deliberately narrow binary
-policy. After a sentence is completed, Apple’s on-device system language model
-can also detect one contextual valid-word mistake. Type a typo followed by
-Space or sentence punctuation, then click its light-gray squiggle to change it
-back or choose another spelling. Corrections follow the active caret even when
-editing an earlier part of the document.
+corrections, then applies only those that pass explicit deterministic rules.
+After a sentence is completed, Apple’s on-device system language model can
+also detect contextual mistakes. Settings provide a conservative `Careful`
+scope, a broader `Comprehensive` scope for objective spelling, punctuation, and
+grammar, and a separate Comprehensive-only opt-in for one-sentence rewrites.
+Type a typo followed by Space or sentence punctuation, then click its
+light-gray squiggle to change it back or choose another spelling. Corrections
+follow the active caret even when editing an earlier part of the document.
 
 ```bash
 swift build
@@ -71,6 +75,7 @@ swift run TypoverEval
 swift run TypoverEval --json
 swift run TypoverEval --contextual
 swift run TypoverEval --contextual --json
+swift run TypoverEval --contextual --scope comprehensive
 swift run TypoverEval --contextual --all-prompt-profiles
 ```
 
@@ -97,8 +102,9 @@ The controlled editor’s correction rules are captured in
 ## Status
 
 Controlled-editor interaction prototype with Apple spelling candidates,
-bounded Apple Intelligence sentence analysis, binary automatic-correction
-policies, ranked spelling alternatives, Change Back, and Undo. Explicit
+bounded Apple Intelligence sentence analysis, user-selectable correction
+scope, optional sentence rewriting, ranked spelling alternatives, Change Back,
+and Undo. Explicit
 spelling alternatives, manual edits, and Change Back choices are learned
 locally, and aggregate correction outcomes are retained without document text.
 Contextual overrides are measured but do not create unsafe global rules for

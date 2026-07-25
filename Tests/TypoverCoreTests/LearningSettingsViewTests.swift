@@ -16,16 +16,27 @@ struct LearningSettingsViewTests {
     let store = CorrectionLearningStore(
       fileURL: directory.appendingPathComponent("learning.json")
     )
+    let defaultsName = "LearningSettingsViewTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: defaultsName))
+    defer { defaults.removePersistentDomain(forName: defaultsName) }
+    let behaviorSettings = CorrectionBehaviorSettings(
+      defaults: defaults
+    )
+    behaviorSettings.contextualScope = .comprehensive
+    behaviorSettings.allowsSentenceRewrites = true
     populate(store)
 
     let image = try render(
-      LearningSettingsView(learningStore: store)
-        .background(Color(nsColor: .windowBackgroundColor)),
-      size: NSSize(width: 640, height: 820)
+      LearningSettingsView(
+        behaviorSettings: behaviorSettings,
+        learningStore: store
+      )
+      .background(Color(nsColor: .windowBackgroundColor)),
+      size: NSSize(width: 640, height: 1_080)
     )
 
     #expect(image.size.width == 640)
-    #expect(image.size.height == 820)
+    #expect(image.size.height == 1_080)
 
     if let snapshotPath = ProcessInfo.processInfo.environment[
       "TYPOVER_SETTINGS_SNAPSHOT_PATH"
