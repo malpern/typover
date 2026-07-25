@@ -1,6 +1,6 @@
 # Remote sentence-rewrite model comparison
 
-- Status: Anthropic and OpenAI complete
+- Status: economical and smarter OpenAI/Anthropic tiers complete
 - Baseline date: 2026-07-25
 - Corpus: 35 approved synthetic cases
 - Prompt: `minimal-editorial-contract-v1`
@@ -19,6 +19,7 @@ Run one provider with:
 ```bash
 swift run TypoverEval --remote-rewrite --provider anthropic
 swift run TypoverEval --remote-rewrite --provider openai
+swift run TypoverEval --remote-rewrite --provider all --smarter-models
 ```
 
 The runner reads `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` from the process
@@ -55,6 +56,18 @@ Models are pinned for reproducibility:
   [`claude-haiku-4-5-20251001`](https://platform.claude.com/docs/en/about-claude/models/overview),
   priced at $1 per million input tokens and $5 per million output tokens at the
   baseline date.
+- OpenAI
+  [`gpt-5.6-terra`](https://developers.openai.com/api/docs/models/gpt-5.6-terra),
+  priced at $2.50 per million input tokens and $15 per million output tokens.
+- Anthropic
+  [`claude-sonnet-5`](https://platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5),
+  using its introductory $2 per million input tokens and $10 per million output
+  tokens through August 31, 2026.
+
+The smarter tier disables reasoning for both providers. GPT-5.6 Terra uses
+`reasoning_effort: none`; Claude Sonnet 5 uses disabled adaptive thinking and
+low effort. This keeps the comparison focused on base model behavior under the
+same editorial contract rather than giving one provider extra inference work.
 
 ## Anthropic results
 
@@ -119,6 +132,41 @@ poor sentence-rewrite baseline. Haiku produced substantially more useful
 candidates, while also demonstrating why deterministic and semantic safety
 checks remain necessary.
 
+## Smarter-model results
+
+Two paired runs of GPT-5.6 Terra and Claude Sonnet 5 produced identical quality
+counts. Three candidate sentences varied in harmless wording between repeats;
+all safety outcomes were stable.
+
+| Metric | GPT-5.6 Terra model only | Terra filtered | Sonnet 5 model only | Sonnet 5 filtered |
+| --- | ---: | ---: | ---: | ---: |
+| Unchanged controls preserved | 19/19 | 19/19 | 19/19 | 19/19 |
+| Intended cases with candidate rewrites | 16/16 | 14/16 | 15/16 | 13/16 |
+| Applied false positives | 0 | 0 | 0 | 0 |
+| Protected-fragment failures | 0 | 0 | 0 | 0 |
+| Model/API errors | 0 | 0 | 0 | 0 |
+| Median latency | 0.83-0.91 s | same proposals | 1.53-1.58 s | same proposals |
+| p95 latency | 1.52-1.62 s | same proposals | 2.15-2.34 s | same proposals |
+| Estimated API cost per 35 cases | $0.02216-$0.02218 | same requests | $0.06928-$0.06931 | same requests |
+
+Every smarter-model candidate preserved the sentence's core meaning and facts.
+Typover still rejected proposals that did not preserve tone or satisfy its
+narrower automatic eligibility contract:
+
+- Terra removed first-person or polite framing from the order-arrival and
+  office-closure sentences. Both edits were accurate, but Typover correctly
+  preserved the writer's tone rather than applying them automatically.
+- Sonnet retained “currently” in one sentence and retained first-person framing
+  in the order-arrival sentence. Those edits were safe, but they did not remove
+  enough of the concrete clarity signal to qualify for automatic application.
+  Sonnet also declined the office-closure case.
+
+Terra is the strongest remote reference tested so far. It matched the Apple
+baseline's 14 accepted rewrites with no detected safety failure, while running
+faster in this sample. That does not make it a production recommendation: the
+corpus is small and synthetic, and Terra requires sending writer text to a
+cloud service.
+
 ## Cross-model interpretation
 
 The Apple result uses Typover's fuller on-device prompt, so it is not a pure
@@ -130,11 +178,14 @@ models test whether a cheaper model can compensate for fewer prompt rules.
 | Apple on-device + Typover safety | 19/19 | 14/16 | 0 | 1.71 s |
 | Haiku + Typover safety | 19/19 | 12-13/16 | 1 | 0.69-0.73 s |
 | GPT-5 nano + Typover safety | 19/19 | 0-1/16 | 0-1 | 0.74 s |
+| GPT-5.6 Terra + Typover safety | 19/19 | 14/16 | 0 | 0.83-0.91 s |
+| Claude Sonnet 5 + Typover safety | 19/19 | 13/16 | 0 | 1.53-1.58 s |
 
-On this small corpus, the Apple path remains the strongest combination of
-coverage and safety. Haiku shows that fewer prompt rules can retain useful
-coverage, but not that deterministic safety can be removed. GPT-5 nano's lower
-price does not translate into usable rewrite quality.
+On this small corpus, Apple and Terra have the strongest combination of
+coverage and safety. Terra demonstrates that a smarter model can match the
+current Apple result with fewer prompt rules, but not that deterministic safety
+or the local-first privacy boundary should be removed. GPT-5 nano's lower price
+does not translate into usable rewrite quality.
 
 ## Is the corpus large enough?
 
@@ -163,6 +214,8 @@ multiple locales, natural consented writing, and every supported model version.
   check before relaxing rules.
 - Do not pursue GPT-5 nano for the rewrite path under the current prompt; its
   cost advantage does not compensate for near-zero useful coverage.
+- Retain GPT-5.6 Terra as the strongest cloud reference baseline, not as a
+  production dependency.
 - Expand to a 500-case benchmark before using model scores to choose an engine.
 - Use remote models only as comparison baselines unless the product explicitly
   adopts an opt-in cloud privacy boundary.

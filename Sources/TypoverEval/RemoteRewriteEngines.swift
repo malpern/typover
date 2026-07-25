@@ -71,13 +71,7 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
   }
 
   func usage() -> RemoteRewriteUsage {
-    let prices =
-      switch provider {
-      case .openAI:
-        (input: 0.05, output: 0.40)
-      case .anthropic:
-        (input: 1.00, output: 5.00)
-      }
+    let prices = pricesPerMillionTokens()
     let cost =
       (Double(inputTokens) * prices.input
         + Double(outputTokens) * prices.output) / 1_000_000
@@ -107,6 +101,7 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
       "required": ["rewrittenSentence"],
       "additionalProperties": false,
     ]
+    let reasoningEffort = model.hasPrefix("gpt-5.6-") ? "none" : "minimal"
     let body: [String: Any] = [
       "model": model,
       "messages": [
@@ -119,7 +114,7 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
           "content": "<sentence>\n\(sentence)\n</sentence>",
         ],
       ],
-      "reasoning_effort": "minimal",
+      "reasoning_effort": reasoningEffort,
       "max_completion_tokens": 512,
       "response_format": [
         "type": "json_schema",
@@ -171,10 +166,9 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
       "required": ["rewrittenSentence"],
       "additionalProperties": false,
     ]
-    let body: [String: Any] = [
+    var body: [String: Any] = [
       "model": model,
       "max_tokens": 512,
-      "temperature": 0,
       "system": Self.minimalEditorialContract,
       "messages": [
         [
@@ -195,6 +189,15 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
         "name": "submit_rewrite",
       ],
     ]
+    if model == "claude-sonnet-5" {
+      // Sonnet 5 rejects non-default sampling parameters. Disable adaptive
+      // thinking so the forced structured tool remains valid and comparable
+      // with the no-reasoning OpenAI run.
+      body["thinking"] = ["type": "disabled"]
+      body["output_config"] = ["effort": "low"]
+    } else {
+      body["temperature"] = 0
+    }
     var request = URLRequest(
       url: URL(string: "https://api.anthropic.com/v1/messages")!
     )
@@ -280,6 +283,26 @@ actor RemoteRewriteEngine: ContextualCorrectionEngine {
     requestCount += 1
     inputTokens += usage?[inputKey] as? Int ?? 0
     outputTokens += usage?[outputKey] as? Int ?? 0
+  }
+
+  private func pricesPerMillionTokens() -> (
+    input: Double,
+    output: Double
+  ) {
+    switch model {
+    case "gpt-5.6-terra":
+      (input: 2.50, output: 15.00)
+    case "claude-sonnet-5":
+      // Introductory pricing through August 31, 2026.
+      (input: 2.00, output: 10.00)
+    default:
+      switch provider {
+      case .openAI:
+        (input: 0.05, output: 0.40)
+      case .anthropic:
+        (input: 1.00, output: 5.00)
+      }
+    }
   }
 }
 

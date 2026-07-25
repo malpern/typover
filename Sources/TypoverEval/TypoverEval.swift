@@ -73,9 +73,13 @@ struct TypoverEvalCommand {
       let model =
         switch provider {
         case .openAI:
-          "gpt-5-nano-2025-08-07"
+          CommandLine.arguments.contains("--smarter-models")
+            ? "gpt-5.6-terra"
+            : "gpt-5-nano-2025-08-07"
         case .anthropic:
-          "claude-haiku-4-5-20251001"
+          CommandLine.arguments.contains("--smarter-models")
+            ? "claude-sonnet-5"
+            : "claude-haiku-4-5-20251001"
         }
       return (provider: provider, model: model, apiKey: apiKey)
     }

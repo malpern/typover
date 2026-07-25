@@ -223,7 +223,13 @@ false positive but did not catch the meaning change. Two GPT-5 nano runs
 preserved every control but produced only zero or one candidate out of 16
 intended rewrites; its sole proposal also lost a protected fact. The cheap
 OpenAI model is therefore not useful for this rewrite path under the shared
-minimal prompt. See the [remote-model comparison](../testing/remote-model-comparison.md).
+minimal prompt. The smarter tier was materially better: GPT-5.6 Terra matched
+the Apple baseline's 14 accepted rewrites with no detected safety failure, and
+Claude Sonnet 5 produced 13 accepted rewrites with no detected safety failure.
+Terra is now the strongest cloud reference, while Apple remains the product
+default because it is local and the corpus is still too small to justify a
+model-stack decision. See the
+[remote-model comparison](../testing/remote-model-comparison.md).
 
 ## Later comparison: open-source local models
 

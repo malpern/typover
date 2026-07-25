@@ -81,6 +81,7 @@ swift run TypoverEval --rewrite
 swift run TypoverEval --rewrite --json
 swift run TypoverEval --remote-rewrite --provider anthropic
 swift run TypoverEval --remote-rewrite --provider openai
+swift run TypoverEval --remote-rewrite --provider all --smarter-models
 ```
 
 Reviewed spelling cases gate the test suite. Provisional names, technical
