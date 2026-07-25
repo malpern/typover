@@ -538,8 +538,8 @@ struct EditorStressTests {
 
   @Test("An allowed sentence rewrite stays visible and reversible")
   func sentenceRewriteIsVisibleAndReversible() async throws {
-    let original = "We go store now."
-    let replacement = "We are going to the store now."
+    let original = "Due to the fact that we need food, we go to the store now."
+    let replacement = "We need food, so we are going to the store now."
     let contextualEngine = ImmediateContextualResultEngine(
       result: ContextualCorrectionResult(
         candidates: [
@@ -561,7 +561,7 @@ struct EditorStressTests {
     )
     defer { fixture.removeLearningStore() }
 
-    fixture.type("We go store now")
+    fixture.type("Due to the fact that we need food, we go to the store now")
     fixture.editor.undoManager?.removeAllActions()
     fixture.type(".")
     await fixture.editor.waitForContextualCorrectionForTesting()

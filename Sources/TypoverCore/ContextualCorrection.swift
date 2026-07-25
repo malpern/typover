@@ -171,6 +171,12 @@ public enum ContextualCorrectionResolver {
       isSafeTarget(candidate.original),
       isSafeReplacement(candidate.replacement),
       candidate.original != candidate.replacement,
+      candidate.kind != .comprehensiveEdit
+        || (isSafeComprehensiveEdit(
+          original: candidate.original,
+          replacement: candidate.replacement,
+          language: language
+        ) && isSafeComprehensiveContext(sentence.text)),
       candidate.kind == .comprehensiveEdit
         || isPlausiblyRelated(
           candidate.original,
@@ -208,6 +214,13 @@ public enum ContextualCorrectionResolver {
         replacing: firstRange,
         language: language
       )
+        || changesBritishCollectiveAgreement(
+          original: candidate.original,
+          replacement: candidate.replacement,
+          in: sentenceText,
+          replacing: firstRange,
+          language: language
+        )
     {
       return nil
     }
@@ -253,6 +266,62 @@ public enum ContextualCorrectionResolver {
       && text.trimmingCharacters(in: .whitespaces) == text
   }
 
+  private static func isSafeComprehensiveEdit(
+    original: String,
+    replacement: String,
+    language: String?
+  ) -> Bool {
+    let forbiddenCharacters = CharacterSet(
+      charactersIn: "()[]{}`"
+    )
+    guard
+      original.rangeOfCharacter(from: forbiddenCharacters) == nil,
+      replacement.rangeOfCharacter(from: forbiddenCharacters) == nil,
+      !original.contains("://"),
+      !replacement.contains("://")
+    else {
+      return false
+    }
+
+    let locale = language.map(Locale.init(identifier:)) ?? .current
+    return (words(in: original) + words(in: replacement)).allSatisfy {
+      isOrdinaryCasePattern($0, locale: locale)
+    }
+  }
+
+  private static func isSafeComprehensiveContext(_ sentence: String) -> Bool {
+    let quoteCharacters = CharacterSet(
+      charactersIn: "\"“”„‟«»"
+    )
+    guard sentence.rangeOfCharacter(from: quoteCharacters) == nil else {
+      return false
+    }
+
+    let normalized = sentence.lowercased()
+    let promptLikePhrases = [
+      "ignore previous instructions",
+      "ignore the instructions",
+      "rewrite this sentence",
+      "replace every word",
+      "system prompt",
+    ]
+    return !promptLikePhrases.contains(where: normalized.contains)
+  }
+
+  private static func isOrdinaryCasePattern(
+    _ word: String,
+    locale: Locale
+  ) -> Bool {
+    let lowercase = word.lowercased(with: locale)
+    let uppercase = word.uppercased(with: locale)
+    guard lowercase != uppercase else { return true }
+    if word == lowercase || word == uppercase {
+      return true
+    }
+    guard let first = lowercase.first else { return true }
+    return word == String(first).uppercased(with: locale) + lowercase.dropFirst()
+  }
+
   private static func resolveSentenceRewrite(
     _ candidate: ContextualCorrectionCandidate,
     in sentence: CompletedSentence,
@@ -261,6 +330,19 @@ public enum ContextualCorrectionResolver {
     guard
       candidate.original == sentence.text,
       candidate.replacement != sentence.text,
+      isEligibleForSentenceRewrite(sentence.text),
+      addressesConcreteRewriteSignal(
+        from: sentence.text,
+        in: candidate.replacement
+      ),
+      preservesRewriteToneMarkers(
+        from: sentence.text,
+        in: candidate.replacement
+      ),
+      preservesPrecisionTokens(
+        from: sentence.text,
+        in: candidate.replacement
+      ),
       (1...maximumRewriteUTF16Length).contains(
         candidate.replacement.utf16.count
       ),
@@ -288,6 +370,169 @@ public enum ContextualCorrectionResolver {
         lookupDuration: candidate.lookupDuration
       )
     )
+  }
+
+  public static func isEligibleForSentenceRewrite(
+    _ sentence: String
+  ) -> Bool {
+    let quoteCharacters = CharacterSet(
+      charactersIn: "\"“”„‟«»"
+    )
+    guard
+      sentence.rangeOfCharacter(from: quoteCharacters) == nil,
+      !sentence.contains("—"),
+      !sentence.contains("://"),
+      !sentence.contains("()")
+    else {
+      return false
+    }
+
+    let normalized = sentence.lowercased()
+    let protectedPhrases = [
+      "ignore previous instructions",
+      "ignore the instructions",
+      "rewrite this sentence",
+      "system prompt",
+    ]
+    guard
+      !protectedPhrases.contains(where: normalized.contains),
+      !normalized.contains("n't"),
+      !normalized.contains("n’t")
+    else {
+      return false
+    }
+
+    let protectedWords: Set<String> = [
+      "if", "unless", "not", "never", "may", "might", "could", "should",
+    ]
+    return protectedWords.isDisjoint(with: Set(words(in: normalized)))
+      && hasConcreteRewriteSignal(normalized)
+  }
+
+  private static func hasConcreteRewriteSignal(_ sentence: String) -> Bool {
+    if rewriteClaritySignals.contains(where: sentence.contains) {
+      return true
+    }
+    return repeatedRewriteWords(in: sentence).isEmpty == false
+  }
+
+  private static let rewriteClaritySignals = [
+    "due to the fact",
+    "later point in time",
+    "at this point in time",
+    "currently waiting",
+    "respond back",
+    "conducted an analysis",
+    "in order to",
+    "is one that",
+    "make updates",
+    "made a decision",
+    "wanted to reach out",
+    "let you know that",
+    "despite the fact",
+    "in the amount of",
+    "within a period of",
+    "please be advised",
+    "the reason ",
+    "decision was made",
+    "what you need to do",
+    "after that",
+    "utilize",
+    "for the purpose of",
+    "can then proceed",
+    "in length",
+    "in duration",
+  ]
+
+  private static func repeatedRewriteWords(
+    in sentence: String
+  ) -> [String: Int] {
+    let ignoredWords: Set<String> = [
+      "about", "after", "again", "before", "their", "there", "these",
+      "those", "which", "would",
+    ]
+    var counts: [String: Int] = [:]
+    for word in words(in: sentence)
+    where word.count >= 4 && !ignoredWords.contains(word) {
+      counts[word, default: 0] += 1
+    }
+    return counts.filter { $0.value >= 2 }
+  }
+
+  private static func addressesConcreteRewriteSignal(
+    from original: String,
+    in replacement: String
+  ) -> Bool {
+    let normalizedOriginal = original.lowercased()
+    let normalizedReplacement = replacement.lowercased()
+    let originalSignals = rewriteClaritySignals.filter(
+      normalizedOriginal.contains
+    )
+    if !originalSignals.isEmpty {
+      return originalSignals.allSatisfy {
+        !normalizedReplacement.contains($0)
+      }
+    }
+
+    let originalRepeatedWords = repeatedRewriteWords(
+      in: normalizedOriginal
+    )
+    let replacementCounts = Dictionary(
+      grouping: words(in: normalizedReplacement),
+      by: { $0 }
+    ).mapValues(\.count)
+    return originalRepeatedWords.contains { word, count in
+      replacementCounts[word, default: 0] < count
+    }
+  }
+
+  private static func preservesRewriteToneMarkers(
+    from original: String,
+    in replacement: String
+  ) -> Bool {
+    let normalizedOriginal = original.lowercased()
+    let normalizedReplacement = replacement.lowercased()
+    let originalWords = words(in: normalizedOriginal)
+    let replacementWords = words(in: normalizedReplacement)
+
+    if originalWords.first == "please",
+      !replacementWords.contains("please")
+    {
+      return false
+    }
+    if originalWords.first == "i",
+      !replacementWords.contains("i")
+    {
+      return false
+    }
+    if normalizedOriginal.contains("you can"),
+      !normalizedReplacement.contains("you can")
+    {
+      return false
+    }
+    return true
+  }
+
+  private static func preservesPrecisionTokens(
+    from original: String,
+    in replacement: String
+  ) -> Bool {
+    precisionTokens(in: original).allSatisfy {
+      replacement.contains($0)
+    }
+  }
+
+  private static func precisionTokens(in text: String) -> [String] {
+    let boundaryCharacters = CharacterSet(
+      charactersIn: ".,;:!?()[]{}\"“”"
+    )
+    return text.components(separatedBy: .whitespacesAndNewlines)
+      .map { $0.trimmingCharacters(in: boundaryCharacters) }
+      .filter { token in
+        token.contains(where: \.isNumber)
+          || token.hasPrefix("$")
+          || token.hasPrefix("#")
+      }
   }
 
   private static func isPlausiblyRelated(
@@ -332,11 +577,15 @@ public enum ContextualCorrectionResolver {
       return false
     }
 
-    if let previousWord = words(in: prefix).last,
-      previousWord.lowercased(with: locale)
-        == replacementFirst.lowercased(with: locale)
-    {
-      return true
+    if let previousWord = words(in: prefix).last {
+      let normalizedPrevious = previousWord.lowercased(with: locale)
+      let normalizedFirst = replacementFirst.lowercased(with: locale)
+      if normalizedPrevious == normalizedFirst
+        || (normalizedPrevious.hasSuffix("ing")
+          && normalizedFirst.hasSuffix("ing"))
+      {
+        return true
+      }
     }
     if let nextWord = words(in: suffix).first,
       nextWord.lowercased(with: locale)
@@ -345,6 +594,33 @@ public enum ContextualCorrectionResolver {
       return true
     }
     return false
+  }
+
+  private static func changesBritishCollectiveAgreement(
+    original: String,
+    replacement: String,
+    in sentence: NSString,
+    replacing range: NSRange,
+    language: String?
+  ) -> Bool {
+    guard
+      language?.lowercased().hasPrefix("en_gb") == true,
+      original.lowercased() == "are",
+      replacement.lowercased() == "is"
+    else {
+      return false
+    }
+
+    let prefix = sentence.substring(
+      with: NSRange(location: 0, length: range.location)
+    )
+    guard let previousWord = words(in: prefix).last?.lowercased() else {
+      return false
+    }
+    let collectiveNouns: Set<String> = [
+      "committee", "family", "government", "staff", "team",
+    ]
+    return collectiveNouns.contains(previousWord)
   }
 
   private static func words(in text: String) -> [String] {

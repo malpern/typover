@@ -181,23 +181,37 @@ guarantees because Apple can update the system model with OS releases.
 - [x] Keep all model inference on device with no network fallback.
 
 On the macOS 27 development machine, the Careful scope passed 40 of 48 cases
-with eight safe misses, while Comprehensive passed 41 of 48 with seven safe
-misses. Both had zero false positives, wrong applied corrections, or model
-errors after deterministic safety validation. Comprehensive median latency was
-about 2.32 seconds and p95 was about 3.75 seconds in the final validation run.
+with eight safe misses. After the rewrite-safety work, Comprehensive passed 43
+of 48 with five safe misses and no false positives, wrong applied corrections,
+or model errors. Its final median latency was about 1.93 seconds and p95 was
+about 3.05 seconds.
 
-Sentence rewriting is intentionally not scored with the minimal-edit
-contextual corpus. A separate rewrite corpus must evaluate whether a rewrite
-was warranted and whether it preserved meaning, facts, intent, and tone.
+### Rewrite quality and operating cost
 
-## Next milestone: contextual quality and operating cost
+- [x] Add a separate safety-weighted sentence-rewrite corpus.
+- [x] Define automatic acceptance criteria for unwarranted changes, protected
+      facts, concrete clarity signals, and tone markers.
+- [x] Keep variable but structurally valid rewrites in a human-review queue.
+- [x] Measure first-request and warm latency, process-attributed energy,
+      memory, neural footprint, and wakeups.
+- [x] Reject unsafe comprehensive fallbacks involving code identifiers,
+      quoted commands, prompt-like text, duplicate words, adjacent gerunds,
+      and regional collective-noun agreement.
 
-- Add more synthetic and consented, de-identified natural writing samples that
-  contain no private text.
-- Add the separate sentence-rewrite corpus and acceptance criteria.
-- Measure cold start, warm latency, memory, and energy separately.
-- Test the prompt and corpus against every macOS system-model version Typover
-  supports.
+The 35-case baseline has 16 intended rewrite cases and 19 unchanged controls.
+All controls remained unchanged, 14 intended cases produced candidates, both
+misses were safe tone-preservation rejections, and all 14 candidates passed
+human review. The final run had no preservation failures or model errors.
+Warm median latency was 1.71 seconds and p95 was 2.88 seconds. Detailed scope,
+results, and operating-cost caveats are in the
+[sentence-rewrite benchmark](../testing/sentence-rewrite-benchmark.md).
+
+## Next milestone: natural-writing and cross-version validation
+
+- Add consented, de-identified natural writing samples that contain no private
+  text.
+- Test the correction and rewrite corpora against every macOS system-model
+  version Typover supports.
 - Keep false-positive avoidance ahead of raw correction coverage.
 
 ## Later comparison: open-source local models
@@ -217,7 +231,7 @@ Begin the Bear compatibility spike after:
 - the reference behavior is documented well enough to identify which
   compromises come from Accessibility or Bear rather than from Typover itself.
 
-The local-model foundation now satisfies the reference-behavior portion of this
-gate. Finish operating-cost measurements and one more review of the expanded
-corpus before starting the Bear spike; do not wait for a polished open-source
-runtime.
+The local-model foundation, operating-cost snapshot, expanded corpus, and
+candidate review now satisfy this gate. The Bear compatibility spike is the
+next implementation milestone. Natural-writing expansion, cross-version
+validation, and open-source comparison can continue without blocking it.

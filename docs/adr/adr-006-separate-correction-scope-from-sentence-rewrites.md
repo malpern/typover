@@ -46,6 +46,12 @@ rewritten version of the completed sentence. A rewrite must:
   within 600 UTF-16 code units;
 - apply only when the captured original sentence still matches exactly.
 
+Model output is necessary but not sufficient. Typover also requires a concrete
+clarity signal, verifies that the rewrite removes that signal, preserves
+numeric and symbolic tokens, and protects explicit tone markers. Quoted,
+conditional, negative, qualified, prompt-like, code, URL, and
+parenthetical-emphasis contexts are ineligible for automatic rewriting.
+
 An accepted rewrite replaces that sentence as one transaction and annotates
 the complete replacement with the light-gray squiggle. Its menu can restore the
 exact original sentence, and normal Undo and Redo operate on the rewrite.
@@ -73,7 +79,9 @@ not create global word-level learning rules.
   Careful mode.
 - A whole-sentence annotation is visually stronger than a word annotation.
 - Rewrite quality cannot be graded fairly with the minimal-edit contextual
-  corpus. It requires a separate corpus that evaluates meaning preservation,
-  factual fidelity, tone, and whether a rewrite was warranted.
+  corpus. The separate rewrite corpus combines deterministic safety checks with
+  human review of meaning preservation, factual fidelity, tone, and whether a
+  rewrite was warranted. See
+  [the sentence-rewrite benchmark](../testing/sentence-rewrite-benchmark.md).
 - The model may change across macOS releases, so both comprehensive correction
   and rewrite behavior require continuing benchmarks.

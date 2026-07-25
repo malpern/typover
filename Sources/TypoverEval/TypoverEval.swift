@@ -9,6 +9,13 @@ import TypoverEvaluation
 struct TypoverEvalCommand {
   @MainActor
   static func main() async throws {
+    if CommandLine.arguments.contains("--rewrite") {
+      try await runSentenceRewriteEvaluation(
+        profile: try contextualPromptProfile()
+      )
+      return
+    }
+
     if CommandLine.arguments.contains("--contextual") {
       if CommandLine.arguments.contains("--all-prompt-profiles") {
         for profile in AppleContextualPromptProfile.allCases {
@@ -40,6 +47,44 @@ struct TypoverEvalCommand {
 
     if report.approvedFailureCount > 0 {
       exit(EXIT_FAILURE)
+    }
+  }
+
+  private static func runSentenceRewriteEvaluation(
+    profile: AppleContextualPromptProfile
+  ) async throws {
+    let corpus = try SentenceRewriteCorpusLoader.loadBundled()
+    let evaluator = SentenceRewriteEvaluator(
+      engine: AppleContextualCorrectionEngine(
+        promptProfile: profile
+      )
+    )
+    let resourceStart = ProcessResourceSnapshot.current()
+    let report = await evaluator.evaluate(corpus)
+    let operatingCost = resourceStart.flatMap { start in
+      ProcessResourceSnapshot.current().map {
+        start.cost(to: $0)
+      }
+    }
+
+    if CommandLine.arguments.contains("--json") {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      let data = try encoder.encode(
+        SentenceRewriteBenchmarkOutput(
+          promptProfile: profile.rawValue,
+          report: report,
+          operatingCost: operatingCost
+        )
+      )
+      FileHandle.standardOutput.write(data)
+      FileHandle.standardOutput.write(Data("\n".utf8))
+    } else {
+      print("Prompt profile: \(profile.rawValue)")
+      printSentenceRewriteReport(
+        report,
+        operatingCost: operatingCost
+      )
     }
   }
 
@@ -230,12 +275,190 @@ struct TypoverEvalCommand {
     }
   }
 
+  private static func printSentenceRewriteReport(
+    _ report: SentenceRewriteEvaluationReport,
+    operatingCost: ProcessOperatingCost?
+  ) {
+    print("Typover sentence-rewrite corpus v\(report.schemaVersion)")
+    print("Apple on-device model: \(report.availability)")
+    print(
+      "Cases: \(report.totalCount), "
+        + "\(report.passedUnchangedCount) unchanged controls passed, "
+        + "\(report.candidateRewriteCount) candidate rewrites, "
+        + "\(report.falsePositiveCount) false positives"
+    )
+    print(
+      "Rewrite misses: \(report.missedRewriteCount), "
+        + "returned edits: \(report.returnedEditsCount), "
+        + "preservation failures: \(report.preservationFailureCount), "
+        + "safety rejections: \(report.rejectedProposalCount), "
+        + "errors: \(report.errorCount)"
+    )
+    print(
+      "Rates: "
+        + "\(formatPercentage(report.unwarrantedRewriteRate)) unwarranted, "
+        + "\(formatPercentage(report.rewriteCandidateRate)) rewrite candidate"
+    )
+    print(
+      "Latency: first \(format(report.firstLookupMilliseconds)) ms, "
+        + "warm median \(format(report.warmMedianLookupMilliseconds)) ms, "
+        + "p95 \(format(report.p95LookupMilliseconds)) ms"
+    )
+
+    if let operatingCost {
+      print(
+        "Process cost: "
+          + "\(format(operatingCost.userCPUMilliseconds)) ms user CPU, "
+          + "\(format(operatingCost.systemCPUMilliseconds)) ms system CPU, "
+          + "\(format(operatingCost.energyMillijoules)) mJ attributed energy"
+      )
+      print(
+        "Memory: \(format(operatingCost.physicalFootprintMegabytes)) MB footprint, "
+          + "\(format(operatingCost.peakPhysicalFootprintMegabytes)) MB peak, "
+          + "\(format(operatingCost.neuralFootprintMegabytes)) MB neural footprint"
+      )
+      print(
+        "Wakeups: \(operatingCost.interruptWakeups) interrupt, "
+          + "\(operatingCost.packageIdleWakeups) package-idle"
+      )
+    }
+
+    let candidates = report.results.filter {
+      $0.outcome == .candidateRewrite
+    }
+    if !candidates.isEmpty {
+      print("\nCandidate rewrites requiring human review:")
+      for result in candidates {
+        print("- \(result.caseID)")
+        print("  Original: \(result.inputSentence)")
+        print("  Rewrite:  \(result.actualReplacement ?? "")")
+      }
+    }
+
+    let failures = report.results.filter {
+      ![.passed, .candidateRewrite].contains($0.outcome)
+    }
+    if !failures.isEmpty {
+      print("\nOther outcomes:")
+      for result in failures {
+        print("- \(result.caseID): \(result.outcome.rawValue)")
+        if let replacement = result.actualReplacement {
+          print("  Proposed: \(replacement)")
+        }
+        if !result.failedProtectedFragments.isEmpty {
+          print(
+            "  Lost: \(result.failedProtectedFragments.joined(separator: ", "))"
+          )
+        }
+        if !result.presentForbiddenFragments.isEmpty {
+          print(
+            "  Forbidden: \(result.presentForbiddenFragments.joined(separator: ", "))"
+          )
+        }
+        if let errorDescription = result.errorDescription {
+          print("  Error: \(errorDescription)")
+        }
+      }
+    }
+  }
+
   private static func format(_ value: Double) -> String {
     value.formatted(.number.precision(.fractionLength(2)))
   }
 
   private static func formatPercentage(_ value: Double) -> String {
     value.formatted(.percent.precision(.fractionLength(2)))
+  }
+}
+
+private struct SentenceRewriteBenchmarkOutput: Codable {
+  let promptProfile: String
+  let report: SentenceRewriteEvaluationReport
+  let operatingCost: ProcessOperatingCost?
+}
+
+private struct ProcessOperatingCost: Codable {
+  let userCPUMilliseconds: Double
+  let systemCPUMilliseconds: Double
+  let energyMillijoules: Double
+  let physicalFootprintMegabytes: Double
+  let peakPhysicalFootprintMegabytes: Double
+  let neuralFootprintMegabytes: Double
+  let interruptWakeups: UInt64
+  let packageIdleWakeups: UInt64
+}
+
+private struct ProcessResourceSnapshot {
+  let userTimeNanoseconds: UInt64
+  let systemTimeNanoseconds: UInt64
+  let energyNanojoules: UInt64
+  let physicalFootprintBytes: UInt64
+  let peakPhysicalFootprintBytes: UInt64
+  let neuralFootprintBytes: UInt64
+  let interruptWakeups: UInt64
+  let packageIdleWakeups: UInt64
+
+  static func current() -> ProcessResourceSnapshot? {
+    var info = rusage_info_v6()
+    let status = withUnsafeMutablePointer(to: &info) { pointer in
+      pointer.withMemoryRebound(
+        to: rusage_info_t?.self,
+        capacity: 1
+      ) {
+        proc_pid_rusage(getpid(), RUSAGE_INFO_V6, $0)
+      }
+    }
+    guard status == 0 else { return nil }
+
+    return ProcessResourceSnapshot(
+      userTimeNanoseconds: info.ri_user_time,
+      systemTimeNanoseconds: info.ri_system_time,
+      energyNanojoules: info.ri_energy_nj,
+      physicalFootprintBytes: info.ri_phys_footprint,
+      peakPhysicalFootprintBytes: info.ri_lifetime_max_phys_footprint,
+      neuralFootprintBytes: info.ri_neural_footprint,
+      interruptWakeups: info.ri_interrupt_wkups,
+      packageIdleWakeups: info.ri_pkg_idle_wkups
+    )
+  }
+
+  func cost(to end: ProcessResourceSnapshot) -> ProcessOperatingCost {
+    ProcessOperatingCost(
+      userCPUMilliseconds: Double(
+        delta(userTimeNanoseconds, end.userTimeNanoseconds)
+      ) / 1_000_000,
+      systemCPUMilliseconds: Double(
+        delta(systemTimeNanoseconds, end.systemTimeNanoseconds)
+      ) / 1_000_000,
+      energyMillijoules: Double(
+        delta(energyNanojoules, end.energyNanojoules)
+      ) / 1_000_000,
+      physicalFootprintMegabytes: megabytes(
+        end.physicalFootprintBytes
+      ),
+      peakPhysicalFootprintMegabytes: megabytes(
+        end.peakPhysicalFootprintBytes
+      ),
+      neuralFootprintMegabytes: megabytes(
+        end.neuralFootprintBytes
+      ),
+      interruptWakeups: delta(
+        interruptWakeups,
+        end.interruptWakeups
+      ),
+      packageIdleWakeups: delta(
+        packageIdleWakeups,
+        end.packageIdleWakeups
+      )
+    )
+  }
+
+  private func delta(_ start: UInt64, _ end: UInt64) -> UInt64 {
+    end >= start ? end - start : 0
+  }
+
+  private func megabytes(_ bytes: UInt64) -> Double {
+    Double(bytes) / 1_048_576
   }
 }
 

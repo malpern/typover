@@ -89,6 +89,19 @@ punctuation, and remains within 600 UTF-16 code units. An accepted rewrite is
 underlined across the replacement sentence and can restore the exact original
 sentence through Change Back or Undo.
 
+The model must also identify writing with a concrete clarity signal, such as
+obvious filler, conspicuous repetition, or an unnecessarily indirect
+construction. Typover verifies that the replacement removes that signal and
+preserves numeric and symbolic tokens plus explicit politeness, first-person,
+and permission markers. It does not automatically rewrite quotations,
+conditions, negation, qualified claims, prompt-like text, code, URLs, or
+parenthetical emphasis. These rules intentionally turn uncertain proposals
+into safe misses.
+
+Comprehensive range edits use related protections: code identifiers, quoted
+commands, prompt-like instructions, duplicate neighboring words, and adjacent
+gerunds are rejected before application.
+
 Editing inside the captured sentence makes the result stale and it is
 discarded. Pasted text and active marked-text composition do not trigger
 contextual analysis.

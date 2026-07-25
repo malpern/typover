@@ -77,12 +77,16 @@ swift run TypoverEval --contextual
 swift run TypoverEval --contextual --json
 swift run TypoverEval --contextual --scope comprehensive
 swift run TypoverEval --contextual --all-prompt-profiles
+swift run TypoverEval --rewrite
+swift run TypoverEval --rewrite --json
 ```
 
 Reviewed spelling cases gate the test suite. Provisional names, technical
 vocabulary, and multilingual examples are reported separately until their
 expectations receive human review. The contextual corpus is a benchmark rather
 than a deterministic gate because Apple can update the system model with macOS.
+The rewrite corpus separately measures unwarranted rewrites, fact preservation,
+human-reviewed quality, latency, and process-attributed operating cost.
 
 ## Architecture
 
