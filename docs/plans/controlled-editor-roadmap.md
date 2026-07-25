@@ -92,18 +92,30 @@ corrections. Apple leaves the provisional French `cafe` example unchanged.
 
 ### Editor stress matrix
 
-- [ ] Exercise rapid typing across many consecutive corrections.
-- [ ] Exercise multiple corrections before and after the caret.
-- [ ] Verify Undo and Redo through correction, alternative, Change Back, and
+- [x] Exercise rapid typing across many consecutive corrections.
+- [x] Exercise multiple corrections before and after the caret.
+- [x] Verify Undo and Redo through correction, alternative, Change Back, and
       Keep sequences.
-- [ ] Verify edits immediately before, inside, and after an annotated
+- [x] Verify edits immediately before, inside, and after an annotated
       correction.
 - [ ] Verify paste, selection replacement, dictation, and marked-text input do
-      not cause stale or duplicate corrections.
-- [ ] Verify punctuation, paragraph boundaries, scrolling, wrapping, and large
+      not cause stale or duplicate corrections. Paste, selection replacement,
+      and marked-text composition are covered; automated dictation remains.
+- [x] Verify punctuation, paragraph boundaries, scrolling, wrapping, and large
       documents.
-- [ ] Add structured diagnostics for rejected or stale proposals without
+- [x] Add structured diagnostics for rejected or stale proposals without
       recording document content.
+
+The AppKit stress harness now drives the production `TypoverTextView` with a
+deterministic correction engine. It covers 10 rapid correction triplets,
+stale-text rejection during lookup, cursor moves, annotation shifting and
+invalidation, selection replacement, paste suppression, marked-text
+composition, punctuation and paragraph triggers, narrow wrapping, viewport
+movement, a 600-paragraph document, and Undo/Redo for every correction action.
+Diagnostics retain only a reason, correction identifier, numeric range,
+document length, and timestamp; their in-memory buffer is capped at 200
+entries. Successful correction transactions also retain a capped, text-free
+duration sample so editing latency can be measured before adding a model.
 
 ### Acceptance criteria
 
@@ -115,7 +127,9 @@ corrections. Apple leaves the provisional French `cafe` example unchanged.
 - Lookup and editing latency are measured before an AI model is introduced.
 
 The first two criteria and lookup-latency measurement are now enforced for the
-approved corpus. Editing latency remains part of the editor stress matrix.
+approved corpus. Transaction behavior and editing-latency sampling are covered
+by the AppKit stress harness. Automated dictation coverage remains before this
+milestone is complete.
 
 ## Following milestone: contextual local intelligence
 

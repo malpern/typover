@@ -21,6 +21,10 @@ automatic edit. Completion boundaries currently include:
 Typover does not correct the word while it is being composed or while AppKit has
 active marked text from an input method.
 
+Pasted text is treated as existing text rather than newly typed text, so a paste
+never triggers automatic correction. Replacing a selection by typing still
+uses the normal newly completed-word rule.
+
 The initial word policy:
 
 - accepts Unicode letters and combining accent marks;
@@ -60,6 +64,11 @@ that correction, removes its mark, and records the user response as an edit.
 
 Every successful automatic correction retains the original word and exposes
 Change Back, alternatives, Keep, and normal Undo.
+
+Rejected transactions and invalidated annotations produce structured,
+text-free diagnostics containing only a reason, correction identifier, numeric
+range, document length, and timestamp. Successful transactions record a
+text-free duration sample. Both in-memory buffers are capped at 200 entries.
 
 ## Remembered preferences
 

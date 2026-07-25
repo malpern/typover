@@ -44,6 +44,7 @@ let package = Package(
     .testTarget(
       name: "TypoverCoreTests",
       dependencies: [
+        "TypoverApp",
         "TypoverAppleSpell",
         "TypoverCore",
         "TypoverEvaluation",

@@ -65,7 +65,7 @@ extension NSAttributedString.Key {
 }
 
 @MainActor
-private final class TypoverTextView: NSTextView {
+final class TypoverTextView: NSTextView {
   private enum LearningEffect {
     case none
     case removePreference
@@ -89,16 +89,56 @@ private final class TypoverTextView: NSTextView {
     }
   }
 
-  private let correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
-  private let learningStore = CorrectionLearningStore()
+  private var correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
+  private var learningStore = CorrectionLearningStore()
 
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
+  private var isPerformingPaste = false
   private var ledger = CorrectionLedger()
   private var pendingManualCorrections: [Correction.ID: PendingManualCorrection] =
     [:]
   private var proposalsByID: [Correction.ID: CorrectionProposal] = [:]
+  private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
+  private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
+  private(set) var correctionTransactionSamples: [
+    CorrectionTransactionSample
+  ] = []
+
+  struct CorrectionSnapshot: Equatable {
+    let correction: Correction
+    let disposition: CorrectionDisposition
+    let annotatedRanges: [NSRange]
+  }
+
+  var correctionSnapshots: [CorrectionSnapshot] {
+    correctionsByID.values.compactMap { correction in
+      guard let record = ledger.record(for: correction.id) else {
+        return nil
+      }
+      return CorrectionSnapshot(
+        correction: correction,
+        disposition: record.disposition,
+        annotatedRanges: annotatedRanges(for: correction.id)
+      )
+    }
+    .sorted { $0.correction.createdAt < $1.correction.createdAt }
+  }
+
+  func configureForTesting(
+    correctionEngine: any CorrectionEngine,
+    learningStore: CorrectionLearningStore,
+    undoManager: UndoManager
+  ) {
+    self.correctionEngine = correctionEngine
+    self.learningStore = learningStore
+    testingUndoManager = undoManager
+  }
+
+  override var undoManager: UndoManager? {
+    testingUndoManager ?? super.undoManager
+  }
 
   override func shouldChangeText(
     in affectedCharRange: NSRange,
@@ -131,6 +171,26 @@ private final class TypoverTextView: NSTextView {
     }
 
     reconcileAnnotations()
+    guard !isPerformingPaste else {
+      recordDiagnostic(.pasteSkipped)
+      return
+    }
+    applyCorrectionBeforeTypedBoundary()
+  }
+
+  override func paste(_ sender: Any?) {
+    isPerformingPaste = true
+    defer { isPerformingPaste = false }
+    super.paste(sender)
+  }
+
+  func insertPastedTextForTesting(_ text: String) {
+    performPaste {
+      insertText(text, replacementRange: selectedRange())
+    }
+  }
+
+  func applyPendingCorrectionForTesting() {
     applyCorrectionBeforeTypedBoundary()
   }
 
@@ -239,18 +299,40 @@ private final class TypoverTextView: NSTextView {
     reverseLearningEffect: LearningEffect = .none,
     actionName: String
   ) -> Bool {
+    guard let textStorage else {
+      return false
+    }
+    guard NSMaxRange(range) <= textStorage.length else {
+      recordDiagnostic(
+        .staleRange,
+        correctionID: correctionAfter.id,
+        range: range
+      )
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
+    }
     guard
-      let textStorage,
-      NSMaxRange(range) <= textStorage.length,
       (textStorage.string as NSString).substring(with: range) == expectedText
     else {
+      recordDiagnostic(
+        .staleText,
+        correctionID: correctionAfter.id,
+        range: range
+      )
       ledger.transition(correctionAfter.id, to: .invalidated)
       return false
     }
 
+    let clock = ContinuousClock()
+    let transactionStart = clock.now
     isPerformingCorrection = true
     guard shouldChangeText(in: range, replacementString: replacementText) else {
       isPerformingCorrection = false
+      recordDiagnostic(
+        .editRejected,
+        correctionID: correctionAfter.id,
+        range: range
+      )
       ledger.transition(correctionAfter.id, to: .invalidated)
       return false
     }
@@ -285,6 +367,10 @@ private final class TypoverTextView: NSTextView {
     )
     didChangeText()
     isPerformingCorrection = false
+    recordTransactionSample(
+      correctionID: correctionAfter.id,
+      elapsed: transactionStart.duration(to: clock.now)
+    )
 
     correctionsByID[correctionAfter.id] = correctionAfter
     ledger.record(correctionAfter)
@@ -342,6 +428,11 @@ private final class TypoverTextView: NSTextView {
       for range in ranges {
         textStorage.removeAttribute(.typoverCorrectionID, range: range)
       }
+      recordDiagnostic(
+        .annotationInvalidated,
+        correctionID: id,
+        range: ranges.first
+      )
       ledger.transition(id, to: .invalidated)
       if let proposal = proposalsByID[id] {
         correctionEngine.record(.edited, for: proposal)
@@ -565,12 +656,19 @@ private final class TypoverTextView: NSTextView {
 
   @objc
   private func changeBack(_ sender: NSMenuItem) {
+    guard let id = correctionID(from: sender) else {
+      return
+    }
+    changeBack(correctionID: id)
+  }
+
+  @discardableResult
+  func changeBack(correctionID id: Correction.ID) -> Bool {
     guard
-      let id = correctionID(from: sender),
       let correction = correctionsByID[id],
       let range = annotatedRanges(for: id).first
     else {
-      return
+      return false
     }
 
     let didReplace = replaceCorrectionText(
@@ -597,22 +695,35 @@ private final class TypoverTextView: NSTextView {
     if didReplace, let proposal = proposalsByID[id] {
       correctionEngine.record(.reverted, for: proposal)
     }
+    return didReplace
   }
 
   @objc
   private func useAlternative(_ sender: NSMenuItem) {
-    guard
-      let selection = sender.representedObject as? AlternativeSelection,
-      let correction = correctionsByID[selection.correctionID],
-      let range = annotatedRanges(for: selection.correctionID).first
-    else {
+    guard let selection = sender.representedObject as? AlternativeSelection else {
       return
     }
+    useAlternative(
+      correctionID: selection.correctionID,
+      replacement: selection.replacement
+    )
+  }
 
+  @discardableResult
+  func useAlternative(
+    correctionID: Correction.ID,
+    replacement: String
+  ) -> Bool {
+    guard
+      let correction = correctionsByID[correctionID],
+      let range = annotatedRanges(for: correctionID).first
+    else {
+      return false
+    }
     let alternative = Correction(
       id: correction.id,
       original: correction.original,
-      replacement: selection.replacement,
+      replacement: replacement,
       createdAt: correction.createdAt
     )
     let didReplace = replaceCorrectionText(
@@ -642,25 +753,91 @@ private final class TypoverTextView: NSTextView {
     if didReplace, let proposal = proposalsByID[correction.id] {
       correctionEngine.record(.edited, for: proposal)
     }
+    return didReplace
   }
 
   @objc
   private func keepCorrection(_ sender: NSMenuItem) {
-    guard
-      let id = correctionID(from: sender),
-      let textStorage
-    else {
+    guard let id = correctionID(from: sender) else {
       return
     }
+    keepCorrection(correctionID: id)
+  }
 
-    for range in annotatedRanges(for: id) {
+  @discardableResult
+  func keepCorrection(
+    correctionID id: Correction.ID,
+    recordsResponse: Bool = true
+  ) -> Bool {
+    guard
+      let textStorage,
+      ledger.record(for: id)?.disposition == .applied
+    else {
+      return false
+    }
+    let ranges = annotatedRanges(for: id)
+    guard ranges.count == 1 else {
+      return false
+    }
+    for range in ranges {
       textStorage.removeAttribute(.typoverCorrectionID, range: range)
     }
     ledger.transition(id, to: .kept)
-    if let proposal = proposalsByID[id] {
+    if recordsResponse, let proposal = proposalsByID[id] {
       correctionEngine.record(.accepted, for: proposal)
       learningStore.recordKept(proposal)
     }
+    let actionName = String(
+      localized: "Keep Correction",
+      bundle: #bundle,
+      comment: "Undo menu action name after accepting an automatic correction."
+    )
+    undoManager?.registerUndo(withTarget: self) { target in
+      target.restoreKeptCorrection(
+        correctionID: id,
+        ranges: ranges,
+        actionName: actionName
+      )
+    }
+    undoManager?.setActionName(actionName)
+    return true
+  }
+
+  @discardableResult
+  private func restoreKeptCorrection(
+    correctionID id: Correction.ID,
+    ranges: [NSRange],
+    actionName: String
+  ) -> Bool {
+    guard
+      let textStorage,
+      let correction = correctionsByID[id],
+      ranges.count == 1,
+      NSMaxRange(ranges[0]) <= textStorage.length,
+      (textStorage.string as NSString).substring(with: ranges[0])
+      == correction.replacement
+    else {
+      recordDiagnostic(
+        .staleText,
+        correctionID: id,
+        range: ranges.first
+      )
+      ledger.transition(id, to: .invalidated)
+      return false
+    }
+
+    textStorage.addAttribute(
+      .typoverCorrectionID,
+      value: id.uuidString,
+      range: ranges[0]
+    )
+    ledger.transition(id, to: .applied)
+    undoManager?.registerUndo(withTarget: self) { target in
+      target.keepCorrection(correctionID: id, recordsResponse: false)
+    }
+    undoManager?.setActionName(actionName)
+    needsDisplay = true
+    return true
   }
 
   private func applyLearningEffect(
@@ -733,6 +910,52 @@ private final class TypoverTextView: NSTextView {
       return nil
     }
     return Correction.ID(uuidString: rawID)
+  }
+
+  private func performPaste(_ edit: () -> Void) {
+    isPerformingPaste = true
+    defer { isPerformingPaste = false }
+    edit()
+  }
+
+  private func recordDiagnostic(
+    _ kind: CorrectionDiagnosticKind,
+    correctionID: Correction.ID? = nil,
+    range: NSRange? = nil
+  ) {
+    correctionDiagnostics.append(
+      CorrectionDiagnostic(
+        kind: kind,
+        correctionID: correctionID,
+        range: range,
+        documentUTF16Length: textStorage?.length ?? 0
+      )
+    )
+    let maximumDiagnostics = 200
+    if correctionDiagnostics.count > maximumDiagnostics {
+      correctionDiagnostics.removeFirst(
+        correctionDiagnostics.count - maximumDiagnostics
+      )
+    }
+  }
+
+  private func recordTransactionSample(
+    correctionID: Correction.ID,
+    elapsed: Duration
+  ) {
+    correctionTransactionSamples.append(
+      CorrectionTransactionSample(
+        correctionID: correctionID,
+        elapsed: elapsed,
+        documentUTF16Length: textStorage?.length ?? 0
+      )
+    )
+    let maximumSamples = 200
+    if correctionTransactionSamples.count > maximumSamples {
+      correctionTransactionSamples.removeFirst(
+        correctionTransactionSamples.count - maximumSamples
+      )
+    }
   }
 
   private func textSegmentRects(for characterRange: NSRange) -> [NSRect] {
