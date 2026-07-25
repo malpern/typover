@@ -160,6 +160,326 @@
       "language": "en_US",
       "reviewStatus": "approved",
       "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "contraction-your-youre",
+      "category": "apostrophe",
+      "sentence": "Your going to enjoy the concert.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "Your",
+        "replacement": "You're"
+      }
+    },
+    {
+      "id": "homophone-to-too",
+      "category": "homophone",
+      "sentence": "The television is to loud.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "to",
+        "replacement": "too"
+      }
+    },
+    {
+      "id": "homophone-too-to",
+      "category": "homophone",
+      "sentence": "I plan too leave before noon.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "too",
+        "replacement": "to"
+      }
+    },
+    {
+      "id": "comparison-then-than",
+      "category": "valid-word-substitution",
+      "sentence": "She is taller then her brother.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "then",
+        "replacement": "than"
+      }
+    },
+    {
+      "id": "sequence-than-then",
+      "category": "valid-word-substitution",
+      "sentence": "Finish your work, than call me.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "than",
+        "replacement": "then"
+      }
+    },
+    {
+      "id": "verb-loose-lose",
+      "category": "valid-word-substitution",
+      "sentence": "Don't loose your ticket.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "loose",
+        "replacement": "lose"
+      }
+    },
+    {
+      "id": "homophone-brake-break",
+      "category": "homophone",
+      "sentence": "Please take a brake after lunch.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "brake",
+        "replacement": "break"
+      }
+    },
+    {
+      "id": "homophone-piece-peace",
+      "category": "homophone",
+      "sentence": "The neighbors finally made piece.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "piece",
+        "replacement": "peace"
+      }
+    },
+    {
+      "id": "principle-principal",
+      "category": "valid-word-substitution",
+      "sentence": "Honesty is a guiding principal.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "principal",
+        "replacement": "principle"
+      }
+    },
+    {
+      "id": "whether-weather",
+      "category": "homophone",
+      "sentence": "I wonder weather the store is open.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "weather",
+        "replacement": "whether"
+      }
+    },
+    {
+      "id": "passed-past",
+      "category": "homophone",
+      "sentence": "She past the test yesterday.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "past",
+        "replacement": "passed"
+      }
+    },
+    {
+      "id": "complement-compliment",
+      "category": "valid-word-substitution",
+      "sentence": "The sauce will compliment the meal.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "compliment",
+        "replacement": "complement"
+      }
+    },
+    {
+      "id": "aloud-allowed",
+      "category": "homophone",
+      "sentence": "He read the letter allowed.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "allowed",
+        "replacement": "aloud"
+      }
+    },
+    {
+      "id": "aisle-isle",
+      "category": "homophone",
+      "sentence": "The cereal is in isle five.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "isle",
+        "replacement": "aisle"
+      }
+    },
+    {
+      "id": "affect-effect",
+      "category": "valid-word-substitution",
+      "sentence": "The delay will effect our schedule.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "effect",
+        "replacement": "affect"
+      }
+    },
+    {
+      "id": "except-accept",
+      "category": "valid-word-substitution",
+      "sentence": "Everyone is coming accept Mia.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": {
+        "kind": "correction",
+        "original": "accept",
+        "replacement": "except"
+      }
+    },
+    {
+      "id": "unchanged-your",
+      "category": "unchanged",
+      "sentence": "Your coat is hanging by the door.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-youre",
+      "category": "unchanged",
+      "sentence": "You're welcome to join us.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-too",
+      "category": "unchanged",
+      "sentence": "The television is too loud.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-to",
+      "category": "unchanged",
+      "sentence": "I plan to leave before noon.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-than",
+      "category": "unchanged",
+      "sentence": "She is taller than her brother.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-lose",
+      "category": "unchanged",
+      "sentence": "Don't lose your ticket.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-break",
+      "category": "unchanged",
+      "sentence": "Please take a break after lunch.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-peace",
+      "category": "unchanged",
+      "sentence": "The neighbors finally made peace.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-principle",
+      "category": "unchanged",
+      "sentence": "Honesty is a guiding principle.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-whether",
+      "category": "unchanged",
+      "sentence": "I wonder whether the store is open.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-passed",
+      "category": "unchanged",
+      "sentence": "She passed the test yesterday.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-complement",
+      "category": "unchanged",
+      "sentence": "The sauce will complement the meal.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-aloud",
+      "category": "unchanged",
+      "sentence": "He read the letter aloud.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-aisle",
+      "category": "unchanged",
+      "sentence": "The cereal is in aisle five.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-affect-second",
+      "category": "unchanged",
+      "sentence": "The delay will affect our schedule.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "unchanged-except",
+      "category": "unchanged",
+      "sentence": "Everyone is coming except Mia.",
+      "language": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
     }
   ]
 }

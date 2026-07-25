@@ -28,10 +28,14 @@ Typover will use `SystemLanguageModel.default` behind the replaceable
   400 UTF-16 code units.
 - The model may propose at most one objective correction and must return
   structured original and replacement text.
-- If the model returns a corrected full sentence, Typover deterministically
-  reduces the pair to the smallest changed whole word or phrase.
+- Typover deterministically reduces every returned original/replacement pair
+  to the smallest changed whole word or phrase.
 - The proposal must identify one unique exact substring in the captured
   sentence. Broad, punctuated, ambiguous, empty, or stale targets are rejected.
+- Single-word substitutions must remain within a small lexical edit distance.
+  A narrow reviewed exception permits `of` to `have` for the common
+  `should of` error. This rejects unrelated model output even when its target
+  happens to be an exact substring.
 - Typing may continue after the sentence while inference runs. Any change
   inside the captured sentence invalidates the result.
 - Accepted contextual corrections use the same light-gray squiggle,
@@ -58,5 +62,9 @@ Typover will use `SystemLanguageModel.default` behind the replaceable
   not a permanently deterministic gate.
 - Conservative rejection and no confidence score mean some contextual errors
   remain unchanged.
+- Prompt profiles are benchmark inputs, not product settings. A more explicit
+  focused-grammar prompt was slower and less accurate than the conservative
+  prompt on the 48-case corpus, so the conservative profile remains the
+  default.
 - Context-aware preference learning is deferred rather than applying unsafe
   global rules to otherwise valid words.

@@ -9,7 +9,7 @@ struct ContextualCorrectionEvaluatorTests {
     let corpus = try ContextualCorrectionCorpusLoader.loadBundled()
 
     #expect(corpus.schemaVersion == 1)
-    #expect(corpus.cases.count == 16)
+    #expect(corpus.cases.count == 48)
     #expect(
       corpus.cases.allSatisfy {
         $0.reviewStatus == .approved
@@ -18,7 +18,7 @@ struct ContextualCorrectionEvaluatorTests {
     #expect(
       corpus.cases.count(where: {
         $0.expectation == .unchanged
-      }) == 8
+      }) == 24
     )
   }
 

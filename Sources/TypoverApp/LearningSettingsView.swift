@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import TypoverAppleIntelligence
 import TypoverCore
 
 struct LearningSettingsView: View {
@@ -11,8 +13,14 @@ struct LearningSettingsView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         LearningSettingsHeader()
+        ContextualModelStatusSection(
+          availability: AppleContextualModelAvailability.current(
+            for: NSSpellChecker.shared.userPreferredLanguages.first
+          )
+        )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
+          sourceStatistics: learningStore.statisticsBySource(),
           onReset: {
             isConfirmingStatisticsReset = true
           }
@@ -50,7 +58,8 @@ struct LearningSettingsView: View {
           comment: "Confirmation button that clears Typover correction statistics."
         )
       }
-      Button(role: .cancel) {} label: {
+      Button(role: .cancel) {
+      } label: {
         Text(
           "Cancel",
           bundle: #bundle,
@@ -85,7 +94,8 @@ struct LearningSettingsView: View {
             "Confirmation button that clears all Typover correction preferences and statistics."
         )
       }
-      Button(role: .cancel) {} label: {
+      Button(role: .cancel) {
+      } label: {
         Text(
           "Cancel",
           bundle: #bundle,
@@ -99,6 +109,98 @@ struct LearningSettingsView: View {
         comment:
           "Explanation of the data removed by resetting all Typover learning."
       )
+    }
+  }
+}
+
+private struct ContextualModelStatusSection: View {
+  let availability: ContextualCorrectionAvailability
+
+  var body: some View {
+    GroupBox {
+      HStack(alignment: .top, spacing: 12) {
+        Image(systemName: availability.systemImage)
+          .font(.title2)
+          .foregroundStyle(availability.tint)
+          .frame(width: 28)
+
+        VStack(alignment: .leading, spacing: 4) {
+          Text(availability.title)
+            .font(.headline)
+
+          Text(availability.explanation)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+        }
+
+        Spacer()
+      }
+      .padding(4)
+    } label: {
+      Label {
+        Text(
+          "Context-aware corrections",
+          bundle: #bundle,
+          comment:
+            "Heading for the availability of Typover contextual corrections."
+        )
+      } icon: {
+        Image(systemName: "apple.intelligence")
+      }
+    }
+  }
+}
+
+extension ContextualCorrectionAvailability {
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .available:
+      "Ready on this Mac"
+    case .unavailable(.appleIntelligenceNotEnabled):
+      "Apple Intelligence is turned off"
+    case .unavailable(.deviceNotEligible):
+      "Unavailable on this Mac"
+    case .unavailable(.modelNotReady):
+      "The on-device model is preparing"
+    case .unavailable(.unsupportedLanguage):
+      "The current language is unsupported"
+    }
+  }
+
+  fileprivate var explanation: LocalizedStringResource {
+    switch self {
+    case .available:
+      "Completed sentences can be checked privately with Apple’s on-device model. Text is not sent to the cloud."
+    case .unavailable(.appleIntelligenceNotEnabled):
+      "Turn on Apple Intelligence in System Settings to check context-dependent word choices."
+    case .unavailable(.deviceNotEligible):
+      "Typover will continue using Apple’s spelling checker without contextual model corrections."
+    case .unavailable(.modelNotReady):
+      "Typover will use the model automatically after macOS finishes making it available."
+    case .unavailable(.unsupportedLanguage):
+      "Typover will continue using Apple’s spelling checker for the current language."
+    }
+  }
+
+  fileprivate var systemImage: String {
+    switch self {
+    case .available:
+      "checkmark.circle.fill"
+    case .unavailable(.modelNotReady):
+      "clock.fill"
+    case .unavailable:
+      "exclamationmark.circle.fill"
+    }
+  }
+
+  fileprivate var tint: Color {
+    switch self {
+    case .available:
+      .green
+    case .unavailable(.modelNotReady):
+      .orange
+    case .unavailable:
+      .secondary
     }
   }
 }
@@ -127,6 +229,7 @@ private struct LearningSettingsHeader: View {
 
 private struct CorrectionStatisticsSection: View {
   let statistics: CorrectionStatistics
+  let sourceStatistics: [CorrectionSourceStatistics]
   let onReset: () -> Void
 
   var body: some View {
@@ -155,12 +258,20 @@ private struct CorrectionStatisticsSection: View {
             )
             StatisticCard(
               title: "Other choices",
-              value: (
-                statistics.alternativesChosen
-                + statistics.manuallyEdited
-              ).formatted(),
+              value: (statistics.alternativesChosen
+                + statistics.manuallyEdited).formatted(),
               systemImage: "slider.horizontal.3"
             )
+          }
+        }
+
+        if !sourceStatistics.isEmpty {
+          Divider()
+
+          VStack(spacing: 8) {
+            ForEach(sourceStatistics) { source in
+              CorrectionSourceStatisticsRow(statistics: source)
+            }
           }
         }
 
@@ -196,6 +307,84 @@ private struct CorrectionStatisticsSection: View {
       } icon: {
         Image(systemName: "chart.bar.xaxis")
       }
+    }
+  }
+}
+
+private struct CorrectionSourceStatisticsRow: View {
+  let statistics: CorrectionSourceStatistics
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Label(statistics.source.title, systemImage: statistics.source.systemImage)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      Text(
+        "\(statistics.correctionsApplied.formatted()) corrections"
+      )
+      .foregroundStyle(.secondary)
+
+      Text(
+        statistics.overrideRate.formatted(
+          .percent.precision(.fractionLength(0))
+        )
+      )
+      .monospacedDigit()
+      .frame(width: 42, alignment: .trailing)
+      .help(
+        Text(
+          "Percentage changed back or overridden",
+          bundle: #bundle,
+          comment:
+            "Tooltip explaining a source-specific Typover override percentage."
+        )
+      )
+
+      if statistics.medianLookupMilliseconds > 0 {
+        Text(
+          "\(statistics.medianLookupMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms"
+        )
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .frame(width: 66, alignment: .trailing)
+        .help(
+          Text(
+            "Typical correction time",
+            bundle: #bundle,
+            comment:
+              "Tooltip explaining source-specific Typover correction latency."
+          )
+        )
+      }
+    }
+    .font(.callout)
+  }
+}
+
+extension CorrectionSource {
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .demo:
+      "Demo"
+    case .appleIntelligence:
+      "Apple Intelligence"
+    case .appleSpelling:
+      "Apple Spelling"
+    case .rememberedPreference:
+      "Remembered choice"
+    }
+  }
+
+  fileprivate var systemImage: String {
+    switch self {
+    case .demo:
+      "hammer"
+    case .appleIntelligence:
+      "apple.intelligence"
+    case .appleSpelling:
+      "character.book.closed"
+    case .rememberedPreference:
+      "brain"
     }
   }
 }

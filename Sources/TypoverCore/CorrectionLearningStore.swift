@@ -82,6 +82,39 @@ public struct CorrectionStatistics: Equatable, Sendable {
   }
 }
 
+public struct CorrectionSourceStatistics: Equatable, Identifiable, Sendable {
+  public var id: CorrectionSource {
+    source
+  }
+
+  public let source: CorrectionSource
+  public let correctionsApplied: Int
+  public let overriddenCorrections: Int
+  public let medianLookupMilliseconds: Double
+  public let p95LookupMilliseconds: Double
+
+  public init(
+    source: CorrectionSource,
+    correctionsApplied: Int,
+    overriddenCorrections: Int,
+    medianLookupMilliseconds: Double,
+    p95LookupMilliseconds: Double
+  ) {
+    self.source = source
+    self.correctionsApplied = correctionsApplied
+    self.overriddenCorrections = overriddenCorrections
+    self.medianLookupMilliseconds = medianLookupMilliseconds
+    self.p95LookupMilliseconds = p95LookupMilliseconds
+  }
+
+  public var overrideRate: Double {
+    guard correctionsApplied > 0 else {
+      return 0
+    }
+    return Double(overriddenCorrections) / Double(correctionsApplied)
+  }
+}
+
 @MainActor
 @Observable
 public final class CorrectionLearningStore {
@@ -99,6 +132,8 @@ public final class CorrectionLearningStore {
   private struct Activity: Codable, Equatable {
     let correctionID: UUID
     let appliedAt: Date
+    let source: CorrectionSource?
+    let lookupMilliseconds: Double?
     var outcomes: Set<CorrectionOutcome>
   }
 
@@ -178,6 +213,10 @@ public final class CorrectionLearningStore {
       Activity(
         correctionID: proposal.correction.id,
         appliedAt: proposal.correction.createdAt,
+        source: proposal.source,
+        lookupMilliseconds: Self.milliseconds(
+          proposal.lookupDuration
+        ),
         outcomes: []
       )
     )
@@ -301,7 +340,7 @@ public final class CorrectionLearningStore {
   public func resetAllLearning() {
     guard
       !state.preferences.isEmpty
-      || !state.activities.isEmpty
+        || !state.activities.isEmpty
     else {
       return
     }
@@ -336,6 +375,42 @@ public final class CorrectionLearningStore {
     )
   }
 
+  public func statisticsBySource(
+    since startDate: Date? = nil
+  ) -> [CorrectionSourceStatistics] {
+    let activities = state.activities.filter { activity in
+      startDate.map({ activity.appliedAt >= $0 }) ?? true
+    }
+    let overrideOutcomes: Set<CorrectionOutcome> = [
+      .reverted,
+      .alternativeChosen,
+      .manuallyEdited,
+    ]
+
+    return CorrectionSource.allCases.compactMap { source in
+      let matching = activities.filter { $0.source == source }
+      guard !matching.isEmpty else {
+        return nil
+      }
+      let lookupValues = matching.compactMap(\.lookupMilliseconds).sorted()
+      return CorrectionSourceStatistics(
+        source: source,
+        correctionsApplied: matching.count,
+        overriddenCorrections: matching.count(where: {
+          !$0.outcomes.isDisjoint(with: overrideOutcomes)
+        }),
+        medianLookupMilliseconds: Self.percentile(
+          0.5,
+          values: lookupValues
+        ),
+        p95LookupMilliseconds: Self.percentile(
+          0.95,
+          values: lookupValues
+        )
+      )
+    }
+  }
+
   private static func defaultFileURL() -> URL {
     if let overridePath = ProcessInfo.processInfo.environment[
       "TYPOVER_LEARNING_STORE_PATH"
@@ -357,6 +432,25 @@ public final class CorrectionLearningStore {
   private static func loadState(from fileURL: URL) throws -> PersistedState {
     let data = try Data(contentsOf: fileURL)
     return try JSONDecoder().decode(PersistedState.self, from: data)
+  }
+
+  private static func milliseconds(_ duration: Duration) -> Double {
+    let components = duration.components
+    return Double(components.seconds) * 1_000
+      + Double(components.attoseconds) / 1_000_000_000_000_000
+  }
+
+  private static func percentile(
+    _ percentile: Double,
+    values: [Double]
+  ) -> Double {
+    guard !values.isEmpty else {
+      return 0
+    }
+    let index = Int(
+      (Double(values.count - 1) * percentile).rounded(.up)
+    )
+    return values[index]
   }
 
   private func preferenceKey(

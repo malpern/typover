@@ -173,4 +173,42 @@ struct ContextualCorrectionTests {
       ) == nil
     )
   }
+
+  @Test("An unrelated replacement is rejected even when its target is exact")
+  func rejectsUnrelatedReplacement() {
+    let sentence = CompletedSentence(
+      range: NSRange(location: 0, length: 30),
+      text: "Everyone is coming accept Mia."
+    )
+
+    #expect(
+      ContextualCorrectionResolver.resolve(
+        ContextualCorrectionCandidate(
+          original: "accept",
+          replacement: "to"
+        ),
+        in: sentence,
+        language: "en_US"
+      ) == nil
+    )
+  }
+
+  @Test("The reviewed should-of repair remains eligible")
+  func allowsReviewedPhraseRepair() {
+    let sentence = CompletedSentence(
+      range: NSRange(location: 0, length: 26),
+      text: "We should of left earlier."
+    )
+
+    #expect(
+      ContextualCorrectionResolver.resolve(
+        ContextualCorrectionCandidate(
+          original: "of",
+          replacement: "have"
+        ),
+        in: sentence,
+        language: "en_US"
+      ) != nil
+    )
+  }
 }

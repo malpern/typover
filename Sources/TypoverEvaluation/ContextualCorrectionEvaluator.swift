@@ -114,14 +114,18 @@ public struct ContextualCorrectionEvaluator {
           )
         )
         let lookupDuration = start.duration(to: clock.now)
+        let effectiveCandidate = effectiveCandidate(
+          candidate,
+          for: testCase
+        )
         results.append(
           result(
             for: testCase,
-            candidate: candidate,
+            candidate: effectiveCandidate,
             lookupDuration: lookupDuration,
             outcome: outcome(
               for: testCase.expectation,
-              candidate: candidate
+              candidate: effectiveCandidate
             )
           )
         )
@@ -140,6 +144,34 @@ public struct ContextualCorrectionEvaluator {
       schemaVersion: corpus.schemaVersion,
       availability: availabilityName,
       results: results
+    )
+  }
+
+  private func effectiveCandidate(
+    _ candidate: ContextualCorrectionCandidate?,
+    for testCase: ContextualCorrectionCorpusCase
+  ) -> ContextualCorrectionCandidate? {
+    guard
+      let candidate,
+      let resolved = ContextualCorrectionResolver.resolve(
+        candidate,
+        in: CompletedSentence(
+          range: NSRange(
+            location: 0,
+            length: testCase.sentence.utf16.count
+          ),
+          text: testCase.sentence
+        ),
+        language: testCase.language
+      )
+    else {
+      return nil
+    }
+
+    return ContextualCorrectionCandidate(
+      original: resolved.proposal.correction.original,
+      replacement: resolved.proposal.correction.replacement,
+      lookupDuration: candidate.lookupDuration
     )
   }
 

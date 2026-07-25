@@ -62,8 +62,10 @@ captured sentence while the model runs. Typover applies a result only when:
 - the model’s original substring occurs exactly once in that sentence;
 - the target and replacement are nonempty, bounded, and contain no sentence
   punctuation or newline;
-- a full-sentence model answer can be reduced deterministically to one smallest
-  changed word or phrase.
+- the model answer can be reduced deterministically to one smallest changed
+  word or phrase;
+- a single-word replacement is lexically related to its original, apart from a
+  narrow reviewed grammar exception.
 
 Editing inside the captured sentence makes the result stale and it is
 discarded. Pasted text and active marked-text composition do not trigger

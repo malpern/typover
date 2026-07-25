@@ -100,6 +100,75 @@ struct CorrectionLearningStoreTests {
     #expect(statistics.overrideRate == 2.0 / 3.0)
   }
 
+  @Test("Statistics separate private activity by correction source")
+  func calculatesSourceStatistics() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let spelling = makeProposal(
+      original: "teh",
+      replacement: "the",
+      source: .appleSpelling,
+      lookupDuration: .milliseconds(8)
+    )
+    let contextual = makeProposal(
+      original: "Their",
+      replacement: "They're",
+      source: .appleIntelligence,
+      lookupDuration: .milliseconds(1_250)
+    )
+
+    store.recordApplied(spelling)
+    store.recordApplied(contextual)
+    store.recordReverted(contextual)
+
+    let sources = store.statisticsBySource()
+    let spellingStatistics = try #require(
+      sources.first(where: { $0.source == .appleSpelling })
+    )
+    let contextualStatistics = try #require(
+      sources.first(where: { $0.source == .appleIntelligence })
+    )
+
+    #expect(spellingStatistics.correctionsApplied == 1)
+    #expect(spellingStatistics.overriddenCorrections == 0)
+    #expect(spellingStatistics.medianLookupMilliseconds == 8)
+    #expect(contextualStatistics.correctionsApplied == 1)
+    #expect(contextualStatistics.overriddenCorrections == 1)
+    #expect(contextualStatistics.overrideRate == 1)
+    #expect(contextualStatistics.p95LookupMilliseconds == 1_250)
+  }
+
+  @Test("Learning files from before source statistics still load")
+  func migratesLegacyActivity() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    try FileManager.default.createDirectory(
+      at: fixture.directory,
+      withIntermediateDirectories: true
+    )
+    let legacyState = LegacyPersistedState(
+      preferences: [],
+      activities: [
+        LegacyActivity(
+          correctionID: UUID(),
+          appliedAt: Date(),
+          outcomes: [.kept]
+        )
+      ]
+    )
+    try JSONEncoder().encode(legacyState).write(
+      to: fixture.fileURL,
+      options: .atomic
+    )
+
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+
+    #expect(store.statistics().correctionsApplied == 1)
+    #expect(store.statistics().kept == 1)
+    #expect(store.statisticsBySource().isEmpty)
+  }
+
   @Test("Preferences and statistics survive a store relaunch")
   func persistsLearning() throws {
     let fixture = makeFixture()
@@ -214,7 +283,9 @@ struct CorrectionLearningStoreTests {
   private func makeProposal(
     original: String,
     replacement: String,
-    language: String = "en_US"
+    language: String = "en_US",
+    source: CorrectionSource = .appleSpelling,
+    lookupDuration: Duration = .zero
   ) -> CorrectionProposal {
     CorrectionProposal(
       correction: Correction(
@@ -222,9 +293,9 @@ struct CorrectionLearningStoreTests {
         replacement: replacement
       ),
       alternatives: [],
-      source: .appleSpelling,
+      source: source,
       language: language,
-      lookupDuration: .zero
+      lookupDuration: lookupDuration
     )
   }
 
@@ -236,6 +307,19 @@ struct CorrectionLearningStoreTests {
       fileURL: directory.appendingPathComponent("learning.json")
     )
   }
+}
+
+private struct LegacyPersistedState: Codable {
+  let preferences: [LegacyPreference]
+  let activities: [LegacyActivity]
+}
+
+private struct LegacyPreference: Codable {}
+
+private struct LegacyActivity: Codable {
+  let correctionID: UUID
+  let appliedAt: Date
+  let outcomes: Set<CorrectionOutcome>
 }
 
 private struct StoreFixture {

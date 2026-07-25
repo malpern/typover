@@ -71,6 +71,7 @@ swift run TypoverEval
 swift run TypoverEval --json
 swift run TypoverEval --contextual
 swift run TypoverEval --contextual --json
+swift run TypoverEval --contextual --all-prompt-profiles
 ```
 
 Reviewed spelling cases gate the test suite. Provisional names, technical

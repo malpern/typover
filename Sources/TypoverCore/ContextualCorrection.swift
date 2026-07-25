@@ -76,6 +76,7 @@ public struct ResolvedContextualCorrection: Equatable, Sendable {
 
 public enum ContextualCorrectionResolver {
   public static let maximumTargetUTF16Length = 64
+  public static let maximumLexicalEditDistance = 3
 
   public static func resolve(
     _ candidate: ContextualCorrectionCandidate,
@@ -85,7 +86,12 @@ public enum ContextualCorrectionResolver {
     guard
       isSafeTarget(candidate.original),
       isSafeReplacement(candidate.replacement),
-      candidate.original != candidate.replacement
+      candidate.original != candidate.replacement,
+      isPlausiblyRelated(
+        candidate.original,
+        candidate.replacement,
+        language: language
+      )
     else {
       return nil
     }
@@ -150,5 +156,23 @@ public enum ContextualCorrectionResolver {
         from: CharacterSet(charactersIn: ".!?…")
       ) == nil
       && text.trimmingCharacters(in: .whitespaces) == text
+  }
+
+  private static func isPlausiblyRelated(
+    _ original: String,
+    _ replacement: String,
+    language: String?
+  ) -> Bool {
+    let locale = language.map(Locale.init(identifier:)) ?? .current
+    let normalizedOriginal = original.lowercased(with: locale)
+    let normalizedReplacement = replacement.lowercased(with: locale)
+    if normalizedOriginal == "of", normalizedReplacement == "have" {
+      return true
+    }
+
+    return AutomaticCorrectionPolicy().optimalStringAlignmentDistance(
+      from: normalizedOriginal,
+      to: normalizedReplacement
+    ) <= maximumLexicalEditDistance
   }
 }

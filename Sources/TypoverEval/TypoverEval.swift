@@ -9,7 +9,15 @@ struct TypoverEvalCommand {
   @MainActor
   static func main() async throws {
     if CommandLine.arguments.contains("--contextual") {
-      try await runContextualEvaluation()
+      if CommandLine.arguments.contains("--all-prompt-profiles") {
+        for profile in AppleContextualPromptProfile.allCases {
+          try await runContextualEvaluation(profile: profile)
+        }
+      } else {
+        try await runContextualEvaluation(
+          profile: try contextualPromptProfile()
+        )
+      }
       return
     }
 
@@ -34,10 +42,14 @@ struct TypoverEvalCommand {
     }
   }
 
-  private static func runContextualEvaluation() async throws {
+  private static func runContextualEvaluation(
+    profile: AppleContextualPromptProfile
+  ) async throws {
     let corpus = try ContextualCorrectionCorpusLoader.loadBundled()
     let evaluator = ContextualCorrectionEvaluator(
-      engine: AppleContextualCorrectionEngine()
+      engine: AppleContextualCorrectionEngine(
+        promptProfile: profile
+      )
     )
     let report = await evaluator.evaluate(corpus)
 
@@ -48,8 +60,46 @@ struct TypoverEvalCommand {
       FileHandle.standardOutput.write(data)
       FileHandle.standardOutput.write(Data("\n".utf8))
     } else {
+      print("Prompt profile: \(profile.rawValue)")
       printContextualReport(report)
     }
+  }
+
+  private static func contextualPromptProfile()
+    throws -> AppleContextualPromptProfile
+  {
+    let arguments = CommandLine.arguments
+    if let index = arguments.firstIndex(of: "--prompt-profile") {
+      guard arguments.indices.contains(index + 1) else {
+        throw TypoverEvalError.missingPromptProfile
+      }
+      guard
+        let profile = AppleContextualPromptProfile(
+          rawValue: arguments[index + 1]
+        )
+      else {
+        throw TypoverEvalError.unknownPromptProfile(
+          arguments[index + 1]
+        )
+      }
+      return profile
+    }
+
+    if let argument = arguments.first(where: {
+      $0.hasPrefix("--prompt-profile=")
+    }) {
+      let rawValue = String(
+        argument.dropFirst("--prompt-profile=".count)
+      )
+      guard
+        let profile = AppleContextualPromptProfile(rawValue: rawValue)
+      else {
+        throw TypoverEvalError.unknownPromptProfile(rawValue)
+      }
+      return profile
+    }
+
+    return .conservative
   }
 
   private static func printHumanReport(
@@ -139,5 +189,19 @@ struct TypoverEvalCommand {
 
   private static func formatPercentage(_ value: Double) -> String {
     value.formatted(.percent.precision(.fractionLength(2)))
+  }
+}
+
+private enum TypoverEvalError: Error, CustomStringConvertible {
+  case missingPromptProfile
+  case unknownPromptProfile(String)
+
+  var description: String {
+    switch self {
+    case .missingPromptProfile:
+      "Expected conservative or focused-grammar after --prompt-profile."
+    case .unknownPromptProfile(let profile):
+      "Unknown prompt profile “\(profile)”; use conservative or focused-grammar."
+    }
   }
 }

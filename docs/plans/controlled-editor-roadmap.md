@@ -144,33 +144,45 @@ such as valid-word substitutions.
 - [x] Apply the same light-gray annotation, Change Back, and Undo transaction.
 - [x] Check model and locale availability and never use a network or Private
       Cloud Compute fallback.
-- [x] Add a separate 16-case contextual corpus and benchmark command.
+- [x] Add a separate balanced contextual corpus and benchmark command.
+- [x] Expand the corpus to 48 reviewed cases: 24 corrections and 24 unchanged
+      controls.
+- [x] Compare conservative and focused-grammar prompt profiles.
+- [x] Surface current on-device model availability and per-source private
+      activity statistics.
+- [x] Verify contextual Undo/Redo and correction at an earlier cursor position
+      in a long document.
 
 Run `swift run TypoverEval --contextual` for the contextual benchmark. On the
-macOS 27 development machine, the first checked-in corpus run passed 14 of 16
-cases with no false positives, two missed corrections, no wrong corrections,
-and no errors. Median lookup latency was about 1.47 seconds and p95 was about
-2.68 seconds. This result is a development snapshot rather than a permanent
-quality guarantee because Apple can update the system model with OS releases.
+macOS 27 development machine, the conservative prompt passed 40 of 48 cases
+with no false positives, wrong applied corrections, or model errors. It
+produced eight safe misses. Median lookup latency was about 1.39 seconds and
+p95 was about 3.31 seconds. An intermediate raw-model run proposed one
+unrelated substitution; the deterministic lexical-safety gate rejected it, and
+the evaluator now reports the same effective behavior the editor would apply.
 
-The two current misses are `Their` → `They're` and `here` → `hear`. They remain
-unchanged rather than being guessed.
+The focused-grammar prompt was less accurate and slower in the comparison, so
+it is retained only as a benchmark profile. Run
+`swift run TypoverEval --contextual --all-prompt-profiles` to compare both.
+These results are development snapshots rather than permanent quality
+guarantees because Apple can update the system model with OS releases.
 
 ## Next milestone: contextual quality and operating cost
 
-- Expand the corpus with natural writing samples that contain no private text.
+- Add more synthetic and consented, de-identified natural writing samples that
+  contain no private text.
 - Measure cold start, warm latency, memory, and energy separately.
 - Test the prompt and corpus against every macOS system-model version Typover
   supports.
-- Benchmark selected open-source local models through the same
-  `ContextualCorrectionEngine` protocol.
 - Keep false-positive avoidance ahead of raw correction coverage.
 
 ## Later comparison: open-source local models
 
 Use the same corpus, metrics, and engine boundary to benchmark selected
 open-source models running locally. Do not change the editor interaction to
-accommodate a particular model.
+accommodate a particular model. This comparison is useful before committing to
+a long-term model stack, but it does not block the initial Bear compatibility
+spike.
 
 ## Bear gate
 
@@ -180,3 +192,8 @@ Begin the Bear compatibility spike after:
 - the correction transaction has stable diagnostics;
 - the reference behavior is documented well enough to identify which
   compromises come from Accessibility or Bear rather than from Typover itself.
+
+The local-model foundation now satisfies the reference-behavior portion of this
+gate. Finish operating-cost measurements and one more review of the expanded
+corpus before starting the Bear spike; do not wait for a polished open-source
+runtime.

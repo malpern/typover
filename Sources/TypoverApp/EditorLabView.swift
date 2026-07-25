@@ -474,7 +474,9 @@ final class TypoverTextView: NSTextView {
     let clock = ContinuousClock()
     let transactionStart = clock.now
     isPerformingCorrection = true
+    undoManager?.disableUndoRegistration()
     guard shouldChangeText(in: range, replacementString: replacementText) else {
+      undoManager?.enableUndoRegistration()
       isPerformingCorrection = false
       recordDiagnostic(
         .editRejected,
@@ -514,6 +516,7 @@ final class TypoverTextView: NSTextView {
       )
     )
     didChangeText()
+    undoManager?.enableUndoRegistration()
     isPerformingCorrection = false
     recordTransactionSample(
       correctionID: correctionAfter.id,

@@ -1,6 +1,8 @@
 import Foundation
 
-public enum CorrectionSource: Equatable, Sendable {
+public enum CorrectionSource: String, Codable, CaseIterable, Equatable, Hashable,
+  Sendable
+{
   case demo
   case appleIntelligence
   case appleSpelling

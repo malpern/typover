@@ -13,7 +13,7 @@ struct EditorStressTests {
     let fixture = EditorFixture()
     defer { fixture.removeLearningStore() }
 
-    for _ in 0 ..< 10 {
+    for _ in 0..<10 {
       fixture.type("teh recieve speling ")
     }
 
@@ -191,7 +191,7 @@ struct EditorStressTests {
 
   @Test("An earlier-page correction leaves a large document unchanged elsewhere")
   func earlierPageInLargeDocument() {
-    let paragraphs = (0 ..< 600)
+    let paragraphs = (0..<600)
       .map { "Paragraph \($0) remains exactly as written." }
     let document = paragraphs.joined(separator: "\n")
     let insertionMarker = "Paragraph 120"
@@ -428,6 +428,70 @@ struct EditorStressTests {
     #expect(fixture.learningStore.rememberedRules.isEmpty)
     #expect(fixture.learningStore.statistics().correctionsApplied == 1)
     #expect(fixture.learningStore.statistics().reverted == 1)
+  }
+
+  @Test("Undo and redo treat a contextual correction as one transaction")
+  func undoRedoContextualCorrection() async {
+    let contextualEngine = ImmediateContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home")
+    fixture.editor.undoManager?.removeAllActions()
+    fixture.type(".")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+    #expect(fixture.editor.string == "They're going home.")
+
+    fixture.editor.undoManager?.undo()
+    #expect(fixture.editor.string == "Their going home.")
+    #expect(fixture.editor.correctionSnapshots.first?.disposition == .restored)
+
+    fixture.editor.undoManager?.redo()
+    #expect(fixture.editor.string == "They're going home.")
+    #expect(fixture.editor.correctionSnapshots.first?.disposition == .applied)
+  }
+
+  @Test("Contextual correction works at an earlier position in a long document")
+  func contextualCorrectionAtEarlierCursorPosition() async throws {
+    let contextualEngine = ImmediateContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let prefix = String(
+      repeating: "Earlier material stays unchanged. ",
+      count: 40
+    )
+    let target = "Their going home"
+    let suffix = " Later material also stays unchanged."
+    let fixture = EditorFixture(
+      initialText: prefix + target + suffix,
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+    fixture.moveCaret(to: prefix.utf16.count + target.utf16.count)
+
+    fixture.type(".")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(
+      fixture.editor.string
+        == prefix + "They're going home." + suffix
+    )
+    let correction = try #require(fixture.appliedSnapshots.first)
+    #expect(
+      correction.annotatedRanges == [
+        NSRange(location: prefix.utf16.count, length: "They're".utf16.count)
+      ]
+    )
   }
 
   @Test("Pasted sentences never start contextual correction")
