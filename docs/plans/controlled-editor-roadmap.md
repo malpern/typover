@@ -219,9 +219,11 @@ results, and operating-cost caveats are in the
 The first cloud reference run used a deliberately shorter prompt. Claude Haiku
 4.5 was faster than the Apple baseline but introduced one regional false
 positive and one meaning-preservation failure. Typover's rules removed the
-false positive but did not catch the meaning change. The OpenAI run remains
-pending because the existing API account had no available quota. See the
-[remote-model comparison](../testing/remote-model-comparison.md).
+false positive but did not catch the meaning change. Two GPT-5 nano runs
+preserved every control but produced only zero or one candidate out of 16
+intended rewrites; its sole proposal also lost a protected fact. The cheap
+OpenAI model is therefore not useful for this rewrite path under the shared
+minimal prompt. See the [remote-model comparison](../testing/remote-model-comparison.md).
 
 ## Later comparison: open-source local models
 

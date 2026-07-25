@@ -1,6 +1,6 @@
 # Remote sentence-rewrite model comparison
 
-- Status: Anthropic complete; OpenAI blocked by account quota
+- Status: Anthropic and OpenAI complete
 - Baseline date: 2026-07-25
 - Corpus: 35 approved synthetic cases
 - Prompt: `minimal-editorial-contract-v1`
@@ -90,12 +90,51 @@ removing deterministic safety. It does show that exact phrase-removal rules can
 occasionally reject a useful rewrite and that the resolver needs broader
 meaning-preservation evidence, not simply more phrase lists.
 
-## OpenAI status
+## OpenAI results
 
-The existing OpenAI credential returned `insufficient_quota` before inference,
-so no OpenAI quality, latency, token, or cost result is reported. Treat this as
-an account/billing blocker, not a model result. Re-run the pinned GPT-5 nano
-command after API quota is available.
+Two independent GPT-5 nano runs preserved every unchanged control but produced
+almost no useful rewrite coverage. The first run proposed one rewrite; the
+repeat proposed none.
+
+| Metric | Model only | Typover filtered |
+| --- | ---: | ---: |
+| Unchanged controls preserved | 19/19 | 19/19 |
+| Intended cases with candidate rewrites | 0-1/16 | 0-1/16 |
+| Applied false positives | 0 | 0 |
+| Protected-fragment failures | 0-1 | 0-1 |
+| Model/API errors | 0 | 0 |
+| Median latency | 0.74 s | same proposals |
+| p95 latency | 1.10-1.73 s | same proposals |
+| Estimated API cost per 35 cases | $0.00052-$0.00053 | same requests |
+
+The only proposal changed “Due to the fact that the meeting was canceled, we
+will reschedule it at a later point in time” to “We will reschedule the meeting
+for a later date.” That is fluent and concise, but it removes the protected
+fact that the meeting was canceled. The corpus assertion caught the loss; the
+production rewrite resolver did not reject the proposal.
+
+GPT-5 nano therefore does not score better with the shorter, less constrained
+prompt. It is cheaper than Haiku, but its 0-1 of 16 rewrite coverage makes it a
+poor sentence-rewrite baseline. Haiku produced substantially more useful
+candidates, while also demonstrating why deterministic and semantic safety
+checks remain necessary.
+
+## Cross-model interpretation
+
+The Apple result uses Typover's fuller on-device prompt, so it is not a pure
+model-only comparison. It is the relevant product baseline, while the remote
+models test whether a cheaper model can compensate for fewer prompt rules.
+
+| Product-facing result | Controls preserved | Intended candidates | Protected failures | Median latency |
+| --- | ---: | ---: | ---: | ---: |
+| Apple on-device + Typover safety | 19/19 | 14/16 | 0 | 1.71 s |
+| Haiku + Typover safety | 19/19 | 12-13/16 | 1 | 0.69-0.73 s |
+| GPT-5 nano + Typover safety | 19/19 | 0-1/16 | 0-1 | 0.74 s |
+
+On this small corpus, the Apple path remains the strongest combination of
+coverage and safety. Haiku shows that fewer prompt rules can retain useful
+coverage, but not that deterministic safety can be removed. GPT-5 nano's lower
+price does not translate into usable rewrite quality.
 
 ## Is the corpus large enough?
 
@@ -122,6 +161,8 @@ multiple locales, natural consented writing, and every supported model version.
 - Keep deterministic safety, but avoid growing a corpus-specific phrase maze.
 - Add semantic-fidelity cases and a second independent meaning-preservation
   check before relaxing rules.
+- Do not pursue GPT-5 nano for the rewrite path under the current prompt; its
+  cost advantage does not compensate for near-zero useful coverage.
 - Expand to a 500-case benchmark before using model scores to choose an engine.
 - Use remote models only as comparison baselines unless the product explicitly
   adopts an opt-in cloud privacy boundary.
