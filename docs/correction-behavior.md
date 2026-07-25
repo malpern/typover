@@ -50,16 +50,23 @@ automatic replacement.
 - Text elsewhere in the document remains untouched.
 
 After the writer types `.`, `!`, `?`, or `…`, Typover may also analyze the most
-recently completed sentence with Apple’s on-device system language model. This
-sentence is capped at 400 UTF-16 code units. A contextual proposal may target a
-word or short phrase earlier in that sentence, which allows valid-word errors
-to be corrected after they have already been written.
+recently completed sentence with the selected contextual model. Apple’s
+on-device system language model is the default. The writer may explicitly
+choose GPT-5.6 Terra or Claude Sonnet 5 in Settings after configuring that
+provider through Add Secret. There is no automatic cloud fallback. The sentence
+is capped at 400 UTF-16 code units. A contextual proposal may target a word or
+short phrase earlier in that sentence, which allows valid-word errors to be
+corrected after they have already been written.
 
 Contextual work is asynchronous. The writer can continue typing after the
 captured sentence while the model runs.
 
 The Settings window separates two decisions:
 
+- **Writing model** chooses Apple, OpenAI, or Anthropic. Apple is the default.
+  Choosing a cloud provider displays the sentence-sharing and possible-cost
+  boundary before use. Only the model choice is stored in preferences; keys
+  remain in Add Secret's encrypted store.
 - **Careful** is the default. It may apply one conservative objective
   contextual correction.
 - **Comprehensive** may apply up to three non-overlapping objective spelling,

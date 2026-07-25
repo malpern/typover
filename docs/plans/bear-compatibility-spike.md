@@ -46,10 +46,10 @@ The controlled editor is the reference implementation. Bear compatibility is
 evaluated against it rather than defining the interaction while platform
 uncertainties remain.
 
-The prerequisite gate is complete. Apple remains Typover's product model for
-now because it keeps private writing on device and performed competitively in
-the reviewed rewrite benchmark. Phase 1 is intentionally read-only and does
-not depend on a cloud model or a Bear API token.
+The prerequisite gate is complete. Apple remains Typover's default model
+because it keeps private writing on device and performed competitively in the
+reviewed rewrite benchmark. Phase 1 is intentionally read-only and does not
+invoke any model or depend on a Bear API token.
 
 The first controlled-editor milestone was completed on 2026-07-25 with a
 deterministic `teh` → `the` rule. The second milestone replaced that demo rule
@@ -95,7 +95,8 @@ note ID, but it is too coarse and expensive for per-word correction.
 
 - Use a dedicated disposable Bear note during development.
 - Never run mutation experiments against an existing user note.
-- Keep correction context on-device.
+- Keep all Phase 1 probe context on-device; the probe does not invoke the
+  optional cloud model path.
 - Read only the smallest useful range around the insertion point.
 - Never log note text, selected text, or correction context.
 - Logs may contain application identity, attribute availability, ranges,

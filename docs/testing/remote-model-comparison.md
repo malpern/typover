@@ -214,8 +214,8 @@ multiple locales, natural consented writing, and every supported model version.
   check before relaxing rules.
 - Do not pursue GPT-5 nano for the rewrite path under the current prompt; its
   cost advantage does not compensate for near-zero useful coverage.
-- Retain GPT-5.6 Terra as the strongest cloud reference baseline, not as a
-  production dependency.
+- Retain GPT-5.6 Terra as the strongest cloud reference baseline and expose it
+  only through an explicit provider setting, never an automatic dependency.
 - Expand to a 500-case benchmark before using model scores to choose an engine.
-- Use remote models only as comparison baselines unless the product explicitly
-  adopts an opt-in cloud privacy boundary.
+- [x] Adopt an explicit opt-in cloud privacy boundary while keeping Apple as
+  the default.

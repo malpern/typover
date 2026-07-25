@@ -193,6 +193,14 @@ public struct CorrectionCorpusEvaluator {
       "demo"
     case .appleSpelling:
       "apple_spelling"
+    case .openAI:
+      "openai"
+    case .openAIRewrite:
+      "openai_rewrite"
+    case .anthropic:
+      "anthropic"
+    case .anthropicRewrite:
+      "anthropic_rewrite"
     case .rememberedPreference:
       "remembered_preference"
     }

@@ -8,12 +8,21 @@ public enum ContextualCorrectionScope: String, Codable, CaseIterable, Equatable,
   case comprehensive
 }
 
+public enum ContextualCorrectionModel: String, Codable, CaseIterable, Equatable,
+  Sendable
+{
+  case apple
+  case openAI = "openai"
+  case anthropic
+}
+
 @MainActor
 @Observable
 public final class CorrectionBehaviorSettings {
   private enum Key {
     static let contextualScope = "contextual-correction-scope"
     static let allowsSentenceRewrites = "allows-sentence-rewrites"
+    static let contextualModel = "contextual-correction-model"
   }
 
   private let defaults: UserDefaults
@@ -33,6 +42,12 @@ public final class CorrectionBehaviorSettings {
     }
   }
 
+  public var contextualModel: ContextualCorrectionModel {
+    didSet {
+      defaults.set(contextualModel.rawValue, forKey: Key.contextualModel)
+    }
+  }
+
   public convenience init() {
     self.init(defaults: .standard)
   }
@@ -46,5 +61,9 @@ public final class CorrectionBehaviorSettings {
     self.allowsSentenceRewrites = defaults.bool(
       forKey: Key.allowsSentenceRewrites
     )
+    self.contextualModel =
+      defaults.string(forKey: Key.contextualModel)
+      .flatMap(ContextualCorrectionModel.init(rawValue:))
+      ?? .apple
   }
 }

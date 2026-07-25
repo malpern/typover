@@ -58,9 +58,12 @@ exact original sentence, and normal Undo and Redo operate on the rewrite.
 Typover will not rewrite paragraphs, selections, or documents through this
 automatic path.
 
-Both modes use Apple's on-device system model. There is no network fallback.
-Rewrite activity has its own correction source in local statistics and does
-not create global word-level learning rules.
+Both modes use the explicitly selected contextual model. Apple’s on-device
+system model is the default, and there is no automatic network fallback. An
+explicit cloud selection follows the credential and privacy boundary in
+[ADR-007](adr-007-user-selectable-contextual-models.md). Rewrite activity has
+its own provider-specific correction source in local statistics and does not
+create global word-level learning rules.
 
 ## Consequences
 

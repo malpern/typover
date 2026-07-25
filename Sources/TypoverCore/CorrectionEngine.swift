@@ -7,7 +7,11 @@ public enum CorrectionSource: String, Codable, CaseIterable, Equatable, Hashable
   case appleIntelligence
   case appleIntelligenceRewrite
   case appleSpelling
+  case anthropic
+  case anthropicRewrite
   case rememberedPreference
+  case openAI
+  case openAIRewrite
 }
 
 public enum CorrectionUserResponse: Equatable, Sendable {

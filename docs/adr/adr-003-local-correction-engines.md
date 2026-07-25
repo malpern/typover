@@ -1,4 +1,4 @@
-# ADR-003: Use local correction engines behind a binary policy
+# ADR-003: Use correction engines behind a binary policy
 
 - Status: Accepted
 - Date: 2026-07-25
@@ -15,9 +15,11 @@ calibrated probability that a candidate is correct. Adding a made-up numeric
 confidence value would make the prototype appear more certain than its evidence
 supports.
 
-Contextual engines may use Apple-provided on-device language models or
-open-source models running locally. Those engines must not require changes to
-the editor, annotation, restoration, or Undo behavior.
+Contextual engines may use Apple-provided on-device language models,
+open-source models running locally, or an explicitly selected cloud provider.
+Those engines must not require changes to the editor, annotation, restoration,
+or Undo behavior. The cloud credential and privacy boundary is defined in
+[ADR-007](adr-007-user-selectable-contextual-models.md).
 
 ## Decision
 
@@ -40,8 +42,8 @@ Typover will separate candidate generation from the decision to edit text.
   uses the writer’s Apple spelling resources, and receives accepted, reverted,
   and edited feedback.
 - The correction model and UI contain no numeric confidence score.
-- Typover will not send writing to a network service or silently fall back to a
-  cloud model.
+- Typover will not silently fall back to a cloud model. A network service must
+  be explicitly selected and disclose the bounded text it receives.
 
 ## Contextual model evaluation
 

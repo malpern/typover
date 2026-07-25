@@ -178,7 +178,8 @@ guarantees because Apple can update the system model with OS releases.
       sentence to be rewritten for clarity.
 - [x] Preserve the original sentence, annotate the rewrite, and support Change
       Back plus one-step Undo and Redo.
-- [x] Keep all model inference on device with no network fallback.
+- [x] Keep the Apple model path entirely on device with no automatic network
+      fallback.
 
 On the macOS 27 development machine, the Careful scope passed 40 of 48 cases
 with eight safe misses. After the rewrite-safety work, Comprehensive passed 43
@@ -212,15 +213,18 @@ results, and operating-cost caveats are in the
       corpus.
 - [x] Benchmark stronger OpenAI and Anthropic models against the same rewrite
       corpus.
-- [x] Keep Apple's on-device system model as Typover's product model for now.
-- [x] Keep GPT-5.6 Terra as a remote quality reference, not a product
-      dependency.
+- [x] Keep Apple's on-device system model as Typover's default product model.
+- [x] Add an explicit Preferences switch for Apple, GPT-5.6 Terra, and Claude
+      Sonnet 5 without introducing automatic cloud fallback.
+- [x] Keep cloud credentials in Add Secret's encrypted store rather than
+      Typover preferences.
 
-Apple remains the current product choice. GPT-5.6 Terra matched the Apple
+Apple remains the default product choice. GPT-5.6 Terra matched the Apple
 baseline on the small reviewed corpus, which shows that stronger cloud models
-are worth retaining as evaluation references. It does not justify moving
-private writing off device or adding network latency and provider dependencies
-to the product. Typover therefore has no remote-model runtime dependency.
+are useful evaluation references. A writer can now explicitly select Terra or
+Claude Sonnet 5 in Preferences, with a clear network and cost disclosure. That
+choice is never an automatic fallback, and API keys remain in Add Secret's
+encrypted store rather than Typover settings.
 
 ## Parallel validation track: natural-writing and cross-version validation
 

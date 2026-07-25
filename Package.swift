@@ -15,6 +15,10 @@ let package = Package(
       name: "TypoverAppleIntelligence",
       targets: ["TypoverAppleIntelligence"]
     ),
+    .library(
+      name: "TypoverRemoteIntelligence",
+      targets: ["TypoverRemoteIntelligence"]
+    ),
     .library(name: "TypoverAppleSpell", targets: ["TypoverAppleSpell"]),
   ],
   targets: [
@@ -25,6 +29,10 @@ let package = Package(
     ),
     .target(
       name: "TypoverAppleSpell",
+      dependencies: ["TypoverCore"]
+    ),
+    .target(
+      name: "TypoverRemoteIntelligence",
       dependencies: ["TypoverCore"]
     ),
     .target(
@@ -49,6 +57,7 @@ let package = Package(
         "TypoverAppleIntelligence",
         "TypoverAppleSpell",
         "TypoverCore",
+        "TypoverRemoteIntelligence",
       ],
       resources: [
         .process("Resources")
@@ -62,6 +71,7 @@ let package = Package(
         "TypoverAppleSpell",
         "TypoverCore",
         "TypoverEvaluation",
+        "TypoverRemoteIntelligence",
       ]
     ),
   ]

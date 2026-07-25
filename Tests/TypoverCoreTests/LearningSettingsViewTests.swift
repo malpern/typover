@@ -24,12 +24,24 @@ struct LearningSettingsViewTests {
     )
     behaviorSettings.contextualScope = .comprehensive
     behaviorSettings.allowsSentenceRewrites = true
+    if let rawModel = ProcessInfo.processInfo.environment[
+      "TYPOVER_SETTINGS_MODEL"
+    ], let model = ContextualCorrectionModel(rawValue: rawModel) {
+      behaviorSettings.contextualModel = model
+    }
     populate(store)
+    let credentialStore = SecretsAppCredentialStore(
+      environment: [
+        "OPENAI_API_KEY": "test-credential",
+        "ANTHROPIC_API_KEY": "test-credential",
+      ]
+    )
 
     let image = try render(
       LearningSettingsView(
         behaviorSettings: behaviorSettings,
-        learningStore: store
+        learningStore: store,
+        credentialStore: credentialStore
       )
       .background(Color(nsColor: .windowBackgroundColor)),
       size: NSSize(width: 640, height: 1_080)

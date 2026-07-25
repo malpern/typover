@@ -16,6 +16,7 @@ struct CorrectionBehaviorSettingsTests {
 
     #expect(settings.contextualScope == .careful)
     #expect(!settings.allowsSentenceRewrites)
+    #expect(settings.contextualModel == .apple)
   }
 
   @Test("Correction scope and sentence rewrite permission persist")
@@ -27,6 +28,7 @@ struct CorrectionBehaviorSettingsTests {
     )
     settings.contextualScope = .comprehensive
     settings.allowsSentenceRewrites = true
+    settings.contextualModel = .anthropic
 
     let relaunched = CorrectionBehaviorSettings(
       defaults: fixture.defaults
@@ -34,6 +36,7 @@ struct CorrectionBehaviorSettingsTests {
 
     #expect(relaunched.contextualScope == .comprehensive)
     #expect(relaunched.allowsSentenceRewrites)
+    #expect(relaunched.contextualModel == .anthropic)
   }
 }
 

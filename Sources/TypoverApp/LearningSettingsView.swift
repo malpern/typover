@@ -2,22 +2,33 @@ import AppKit
 import SwiftUI
 import TypoverAppleIntelligence
 import TypoverCore
+import TypoverRemoteIntelligence
 
 struct LearningSettingsView: View {
   let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
+  let credentialStore: SecretsAppCredentialStore
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
+
+  init(
+    behaviorSettings: CorrectionBehaviorSettings,
+    learningStore: CorrectionLearningStore,
+    credentialStore: SecretsAppCredentialStore = SecretsAppCredentialStore()
+  ) {
+    self.behaviorSettings = behaviorSettings
+    self.learningStore = learningStore
+    self.credentialStore = credentialStore
+  }
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         LearningSettingsHeader()
-        ContextualModelStatusSection(
-          availability: AppleContextualModelAvailability.current(
-            for: NSSpellChecker.shared.userPreferredLanguages.first
-          )
+        ContextualModelSection(
+          behaviorSettings: behaviorSettings,
+          credentialStore: credentialStore
         )
         CorrectionBehaviorSection(
           behaviorSettings: behaviorSettings
@@ -178,7 +189,7 @@ private struct CorrectionBehaviorSection: View {
               "Allow sentence rewrites",
               bundle: #bundle,
               comment:
-                "Setting that permits Typover's local model to rephrase a completed sentence."
+                "Setting that permits Typover's selected model to rephrase a completed sentence."
             )
           }
           .disabled(
@@ -190,7 +201,7 @@ private struct CorrectionBehaviorSection: View {
 
           if behaviorSettings.contextualScope == .comprehensive {
             Text(
-              "The on-device model may rephrase one completed sentence for clarity while preserving its meaning and tone. The rewrite remains visible, reversible, and undoable.",
+              "The selected model may rephrase one completed sentence for clarity while preserving its meaning and tone. The rewrite remains visible, reversible, and undoable.",
               bundle: #bundle,
               comment:
                 "Explanation below the enabled sentence-rewrite setting."
@@ -240,40 +251,301 @@ extension ContextualCorrectionScope {
   }
 }
 
-private struct ContextualModelStatusSection: View {
+private enum ProviderCredentialStatus: Equatable {
+  case checking
+  case available
+  case missing
+}
+
+private struct ContextualModelSection: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let credentialStore: SecretsAppCredentialStore
+
+  @State private var credentialStatus = ProviderCredentialStatus.checking
+  @State private var didFailToOpenSecretsApp = false
+
+  var body: some View {
+    @Bindable var behaviorSettings = behaviorSettings
+
+    GroupBox {
+      VStack(alignment: .leading, spacing: 14) {
+        LabeledContent {
+          Picker(
+            String(
+              localized: "Writing model",
+              bundle: #bundle,
+              comment:
+                "Accessibility label for the Typover contextual-model picker."
+            ),
+            selection: $behaviorSettings.contextualModel
+          ) {
+            ForEach(ContextualCorrectionModel.allCases, id: \.self) { model in
+              Text(model.title)
+                .tag(model)
+            }
+          }
+          .labelsHidden()
+          .pickerStyle(.menu)
+          .accessibilityIdentifier("typover.settings.contextual-model")
+        } label: {
+          Text(
+            "Model",
+            bundle: #bundle,
+            comment: "Label beside Typover's contextual writing-model picker."
+          )
+        }
+
+        Divider()
+
+        if behaviorSettings.contextualModel == .apple {
+          AppleModelStatus(
+            availability: AppleContextualModelAvailability.current(
+              for: NSSpellChecker.shared.userPreferredLanguages.first
+            )
+          )
+        } else {
+          RemoteModelStatus(
+            model: behaviorSettings.contextualModel,
+            credentialStatus: credentialStatus,
+            didFailToOpenSecretsApp: didFailToOpenSecretsApp,
+            onManageCredential: manageCredential,
+            onRefresh: {
+              Task {
+                await refreshCredentialStatus()
+              }
+            }
+          )
+        }
+      }
+      .padding(4)
+    } label: {
+      Label {
+        Text(
+          "Writing model",
+          bundle: #bundle,
+          comment:
+            "Heading for Typover's contextual writing-model settings."
+        )
+      } icon: {
+        Image(systemName: "cpu")
+      }
+    }
+    .task(id: behaviorSettings.contextualModel) {
+      await refreshCredentialStatus()
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: NSApplication.didBecomeActiveNotification
+      )
+    ) { _ in
+      Task {
+        await refreshCredentialStatus()
+      }
+    }
+  }
+
+  private func manageCredential() {
+    didFailToOpenSecretsApp = false
+    SecretsAppLauncher.open(for: behaviorSettings.contextualModel) { error in
+      didFailToOpenSecretsApp = error != nil
+    }
+  }
+
+  private func refreshCredentialStatus() async {
+    let model = behaviorSettings.contextualModel
+    guard model != .apple else {
+      credentialStatus = .checking
+      return
+    }
+    credentialStatus = .checking
+    let isAvailable = await credentialStore.hasCredential(
+      named: model.credentialName
+    )
+    guard model == behaviorSettings.contextualModel else {
+      return
+    }
+    credentialStatus = isAvailable ? .available : .missing
+  }
+}
+
+private struct AppleModelStatus: View {
   let availability: ContextualCorrectionAvailability
 
   var body: some View {
-    GroupBox {
+    HStack(alignment: .top, spacing: 12) {
+      Image(systemName: availability.systemImage)
+        .font(.title2)
+        .foregroundStyle(availability.tint)
+        .frame(width: 28)
+
+      VStack(alignment: .leading, spacing: 4) {
+        Text(availability.title)
+          .font(.headline)
+
+        Text(availability.explanation)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+      }
+
+      Spacer()
+    }
+  }
+}
+
+private struct RemoteModelStatus: View {
+  let model: ContextualCorrectionModel
+  let credentialStatus: ProviderCredentialStatus
+  let didFailToOpenSecretsApp: Bool
+  let onManageCredential: () -> Void
+  let onRefresh: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top, spacing: 12) {
-        Image(systemName: availability.systemImage)
+        Image(systemName: credentialStatus.systemImage)
           .font(.title2)
-          .foregroundStyle(availability.tint)
+          .foregroundStyle(credentialStatus.tint)
           .frame(width: 28)
 
         VStack(alignment: .leading, spacing: 4) {
-          Text(availability.title)
+          Text(credentialStatus.title)
             .font(.headline)
 
-          Text(availability.explanation)
+          Text(model.remoteExplanation)
             .font(.callout)
             .foregroundStyle(.secondary)
         }
 
         Spacer()
       }
-      .padding(4)
-    } label: {
-      Label {
+
+      HStack {
+        Button(action: onManageCredential) {
+          Text(
+            credentialStatus == .available
+              ? "Replace API Key…"
+              : "Add API Key…",
+            bundle: #bundle,
+            comment:
+              "Button that opens Add Secret to configure the selected cloud model credential."
+          )
+        }
+        .accessibilityIdentifier("typover.settings.model.manage-key")
+
+        Button(action: onRefresh) {
+          Text(
+            "Refresh",
+            bundle: #bundle,
+            comment:
+              "Button that refreshes the selected cloud model credential status."
+          )
+        }
+        .accessibilityIdentifier("typover.settings.model.refresh-key")
+
+        Spacer()
+
         Text(
-          "Context-aware corrections",
+          "Managed by Add Secret",
           bundle: #bundle,
           comment:
-            "Heading for the availability of Typover contextual corrections."
+            "Note explaining which app securely manages cloud provider credentials."
         )
-      } icon: {
-        Image(systemName: "apple.intelligence")
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
+
+      Label {
+        Text(model.privacyNotice)
+      } icon: {
+        Image(systemName: "network")
+      }
+      .font(.callout)
+      .foregroundStyle(.orange)
+
+      if didFailToOpenSecretsApp {
+        Label {
+          Text(
+            "Add Secret could not be opened. Make sure it is installed in Applications.",
+            bundle: #bundle,
+            comment:
+              "Error shown when Typover cannot launch Add Secret for a provider key."
+          )
+        } icon: {
+          Image(systemName: "exclamationmark.triangle.fill")
+        }
+        .font(.callout)
+        .foregroundStyle(.red)
+      }
+    }
+  }
+}
+
+extension ContextualCorrectionModel {
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .apple:
+      "Apple Intelligence (On Device)"
+    case .openAI:
+      "GPT-5.6 Terra (OpenAI)"
+    case .anthropic:
+      "Claude Sonnet 5 (Anthropic)"
+    }
+  }
+
+  fileprivate var remoteExplanation: LocalizedStringResource {
+    switch self {
+    case .apple:
+      ""
+    case .openAI:
+      "Uses GPT-5.6 Terra for contextual corrections and optional sentence rewrites. An OpenAI API key is required."
+    case .anthropic:
+      "Uses Claude Sonnet 5 for contextual corrections and optional sentence rewrites. An Anthropic API key is required."
+    }
+  }
+
+  fileprivate var privacyNotice: LocalizedStringResource {
+    switch self {
+    case .apple:
+      ""
+    case .openAI:
+      "Completed sentences are sent to OpenAI when context checking runs. Provider charges may apply."
+    case .anthropic:
+      "Completed sentences are sent to Anthropic when context checking runs. Provider charges may apply."
+    }
+  }
+}
+
+extension ProviderCredentialStatus {
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .checking:
+      "Checking API key…"
+    case .available:
+      "API key available"
+    case .missing:
+      "API key required"
+    }
+  }
+
+  fileprivate var systemImage: String {
+    switch self {
+    case .checking:
+      "clock.fill"
+    case .available:
+      "checkmark.circle.fill"
+    case .missing:
+      "exclamationmark.circle.fill"
+    }
+  }
+
+  fileprivate var tint: Color {
+    switch self {
+    case .checking:
+      .orange
+    case .available:
+      .green
+    case .missing:
+      .secondary
     }
   }
 }
@@ -499,6 +771,14 @@ extension CorrectionSource {
       "Apple Intelligence Rewrite"
     case .appleSpelling:
       "Apple Spelling"
+    case .openAI:
+      "OpenAI"
+    case .openAIRewrite:
+      "OpenAI Rewrite"
+    case .anthropic:
+      "Anthropic"
+    case .anthropicRewrite:
+      "Anthropic Rewrite"
     case .rememberedPreference:
       "Remembered choice"
     }
@@ -514,6 +794,14 @@ extension CorrectionSource {
       "wand.and.sparkles"
     case .appleSpelling:
       "character.book.closed"
+    case .openAI:
+      "cloud"
+    case .openAIRewrite:
+      "wand.and.sparkles"
+    case .anthropic:
+      "cloud"
+    case .anthropicRewrite:
+      "wand.and.sparkles"
     case .rememberedPreference:
       "brain"
     }
@@ -687,7 +975,7 @@ private struct LearningPrivacySection: View {
     HStack(alignment: .center, spacing: 12) {
       Label {
         Text(
-          "Preferences and statistics stay on this Mac.",
+          "Learning preferences and statistics stay on this Mac.",
           bundle: #bundle,
           comment: "Privacy assurance in the Typover learning settings window."
         )

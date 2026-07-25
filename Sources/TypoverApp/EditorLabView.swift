@@ -3,6 +3,7 @@ import SwiftUI
 import TypoverAppleIntelligence
 import TypoverAppleSpell
 import TypoverCore
+import TypoverRemoteIntelligence
 
 struct EditorLabView: NSViewRepresentable {
   let behaviorSettings: CorrectionBehaviorSettings
@@ -100,8 +101,20 @@ final class TypoverTextView: NSTextView {
   }
 
   private var correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
-  private var contextualCorrectionEngine: any ContextualCorrectionEngine =
+  private var contextualCorrectionEngineOverride: (any ContextualCorrectionEngine)?
+  private let appleContextualCorrectionEngine =
     AppleContextualCorrectionEngine()
+  private let credentialStore = SecretsAppCredentialStore()
+  private lazy var openAIContextualCorrectionEngine =
+    RemoteContextualCorrectionEngine(
+      model: .openAI,
+      credentialProvider: credentialStore
+    )
+  private lazy var anthropicContextualCorrectionEngine =
+    RemoteContextualCorrectionEngine(
+      model: .anthropic,
+      credentialProvider: credentialStore
+    )
   private var behaviorSettings = CorrectionBehaviorSettings()
   private var learningStore = CorrectionLearningStore()
 
@@ -148,7 +161,7 @@ final class TypoverTextView: NSTextView {
     undoManager: UndoManager
   ) {
     self.correctionEngine = correctionEngine
-    self.contextualCorrectionEngine = contextualCorrectionEngine
+    self.contextualCorrectionEngineOverride = contextualCorrectionEngine
     if let behaviorSettings {
       self.behaviorSettings = behaviorSettings
     }
@@ -343,7 +356,9 @@ final class TypoverTextView: NSTextView {
     }
 
     contextualCorrectionTask?.cancel()
-    let engine = contextualCorrectionEngine
+    let engine =
+      contextualCorrectionEngineOverride
+      ?? contextualCorrectionEngine(for: behaviorSettings.contextualModel)
     let language = NSSpellChecker.shared.userPreferredLanguages.first
     let scope = behaviorSettings.contextualScope
     let allowsSentenceRewrite =
@@ -426,7 +441,7 @@ final class TypoverTextView: NSTextView {
       localized: "Correct in Context",
       bundle: #bundle,
       comment:
-        "Undo menu action name for one or more on-device contextual Typover corrections."
+        "Undo menu action name for one or more contextual Typover corrections."
     )
     let shouldGroupUndo = resolvedCorrections.count > 1
     if shouldGroupUndo {
@@ -1033,6 +1048,34 @@ final class TypoverTextView: NSTextView {
         comment:
           "Disabled correction-menu label identifying an opt-in local sentence rewrite."
       )
+    case .openAI:
+      return String(
+        localized: "OpenAI",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying the selected OpenAI contextual model."
+      )
+    case .openAIRewrite:
+      return String(
+        localized: "OpenAI Rewrite",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a sentence rewrite from OpenAI."
+      )
+    case .anthropic:
+      return String(
+        localized: "Anthropic",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying the selected Anthropic contextual model."
+      )
+    case .anthropicRewrite:
+      return String(
+        localized: "Anthropic Rewrite",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a sentence rewrite from Anthropic."
+      )
     case .rememberedPreference:
       return String(
         localized: "Remembered Preference",
@@ -1052,6 +1095,23 @@ final class TypoverTextView: NSTextView {
   private func isContextualSource(_ source: CorrectionSource) -> Bool {
     source == .appleIntelligence
       || source == .appleIntelligenceRewrite
+      || source == .openAI
+      || source == .openAIRewrite
+      || source == .anthropic
+      || source == .anthropicRewrite
+  }
+
+  private func contextualCorrectionEngine(
+    for model: ContextualCorrectionModel
+  ) -> any ContextualCorrectionEngine {
+    switch model {
+    case .apple:
+      appleContextualCorrectionEngine
+    case .openAI:
+      openAIContextualCorrectionEngine
+    case .anthropic:
+      anthropicContextualCorrectionEngine
+    }
   }
 
   private func correctionID(from menuItem: NSMenuItem) -> Correction.ID? {

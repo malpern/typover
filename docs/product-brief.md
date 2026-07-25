@@ -20,7 +20,7 @@ A corrected word receives a persistent light-gray squiggle. Selecting it shows:
 
 - the original typed word;
 - other likely corrections;
-- the on-device source that proposed the correction.
+- the source that proposed the correction.
 
 ## Behavioral principles
 
@@ -53,8 +53,8 @@ Automatic changes remain quietly visible. The mark should communicate
 
 ### Private
 
-The preferred design runs on-device. Any prototype that sends text elsewhere
-must be opt-in and state exactly what text is transmitted.
+The preferred default runs on-device. Any model that sends text elsewhere must
+be explicitly selected and state exactly what text is transmitted.
 
 ## Technical hypotheses
 

@@ -43,17 +43,20 @@ public struct ContextualCorrectionCandidate: Equatable, Sendable {
   public let replacement: String
   public let kind: ContextualCorrectionKind
   public let lookupDuration: Duration
+  public let source: CorrectionSource
 
   public init(
     original: String,
     replacement: String,
     kind: ContextualCorrectionKind = .carefulEdit,
-    lookupDuration: Duration = .zero
+    lookupDuration: Duration = .zero,
+    source: CorrectionSource = .appleIntelligence
   ) {
     self.original = original
     self.replacement = replacement
     self.kind = kind
     self.lookupDuration = lookupDuration
+    self.source = source
   }
 }
 
@@ -237,7 +240,7 @@ public enum ContextualCorrectionResolver {
       range: documentRange,
       proposal: CorrectionProposal(
         correction: correction,
-        source: .appleIntelligence,
+        source: editSource(for: candidate.source),
         language: language,
         lookupDuration: candidate.lookupDuration
       )
@@ -365,11 +368,41 @@ public enum ContextualCorrectionResolver {
       range: sentence.range,
       proposal: CorrectionProposal(
         correction: correction,
-        source: .appleIntelligenceRewrite,
+        source: rewriteSource(for: candidate.source),
         language: language,
         lookupDuration: candidate.lookupDuration
       )
     )
+  }
+
+  private static func editSource(
+    for source: CorrectionSource
+  ) -> CorrectionSource {
+    switch source {
+    case .appleIntelligenceRewrite:
+      .appleIntelligence
+    case .openAIRewrite:
+      .openAI
+    case .anthropicRewrite:
+      .anthropic
+    default:
+      source
+    }
+  }
+
+  private static func rewriteSource(
+    for source: CorrectionSource
+  ) -> CorrectionSource {
+    switch source {
+    case .appleIntelligence, .appleIntelligenceRewrite:
+      .appleIntelligenceRewrite
+    case .openAI, .openAIRewrite:
+      .openAIRewrite
+    case .anthropic, .anthropicRewrite:
+      .anthropicRewrite
+    default:
+      source
+    }
   }
 
   public static func isEligibleForSentenceRewrite(

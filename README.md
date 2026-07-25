@@ -51,6 +51,10 @@ After a sentence is completed, Apple’s on-device system language model can
 also detect contextual mistakes. Settings provide a conservative `Careful`
 scope, a broader `Comprehensive` scope for objective spelling, punctuation, and
 grammar, and a separate Comprehensive-only opt-in for one-sentence rewrites.
+Apple Intelligence is the default contextual model. An advanced model picker
+can instead use GPT-5.6 Terra or Claude Sonnet 5 after an API key is configured
+through Add Secret. Cloud selection is explicit and sends only the newly
+completed sentence to that provider; it is never an automatic fallback.
 Type a typo followed by Space or sentence punctuation, then click its
 light-gray squiggle to change it back or choose another spelling. Corrections
 follow the active caret even when editing an earlier part of the document.
@@ -92,7 +96,8 @@ The rewrite corpus separately measures unwarranted rewrites, fact preservation,
 human-reviewed quality, latency, and process-attributed operating cost.
 Remote-model commands send only the checked-in synthetic rewrite corpus to the
 selected provider and require that provider's API credential in the process
-environment. They are evaluation tools, not production Typover engines.
+environment. The app can also resolve those same named credentials from Add
+Secret's encrypted store without copying them into Typover preferences.
 
 ## Architecture
 
@@ -112,9 +117,10 @@ The controlled editor’s correction rules are captured in
 ## Status
 
 Controlled-editor interaction prototype with Apple spelling candidates,
-bounded Apple Intelligence sentence analysis, user-selectable correction
-scope, optional sentence rewriting, ranked spelling alternatives, Change Back,
-and Undo. Explicit
+bounded user-selectable contextual sentence analysis, user-selectable
+correction scope, optional sentence rewriting, ranked spelling alternatives,
+Change Back, and Undo. Apple Intelligence remains the default; OpenAI and
+Anthropic are explicit cloud options. Explicit
 spelling alternatives, manual edits, and Change Back choices are learned
 locally, and aggregate correction outcomes are retained without document text.
 Contextual overrides are measured but do not create unsafe global rules for

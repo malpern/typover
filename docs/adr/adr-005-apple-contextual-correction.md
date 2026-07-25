@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-25
+- Scope: Apple engine; optional user-selected providers are defined by ADR-007
 
 ## Context
 
