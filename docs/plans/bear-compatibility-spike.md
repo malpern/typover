@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Ready — Phase 1 is the next implementation milestone
+- Status: In progress — Phase 1 capability probe implemented
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -149,6 +149,34 @@ Record:
   changes.
 
 Do not print or persist the editor’s text.
+
+### Live result: 2026-07-25
+
+The first content-free run against Bear 2.8.1 (14428) on macOS 27 found the
+current window's sole `AXTextArea` by role traversal. The search deliberately
+does not descend through the note-list table, so a large library cannot crowd
+the editor out of a bounded traversal. It does not use a UI-element index.
+
+The run confirmed:
+
+- `AXSelectedText`, `AXSelectedTextRange`, `AXVisibleCharacterRange`, and
+  `AXValue` are writable; `AXNumberOfCharacters` is readable;
+- both string-for-range readers and `AXBoundsForRange` are available;
+- a bounded 42-UTF-16-unit context was read and immediately reduced to its
+  length; the probe emitted no note text in its structured report;
+- caret/selection range, visible range, character count, and range geometry
+  were returned;
+- registration succeeded for selection, value, layout, focused-element, and
+  focused-window notifications.
+
+The note list held keyboard focus during this run. The report distinguishes
+that state from a focused editor instead of treating the window's only text
+area as focused. Notification emission and caret movement while the editor
+actually holds focus remain the last read-only Phase 1 observation.
+
+Decision: **provisional go** for exact selected-range replacement and external
+overlay geometry. Do not begin mutation testing until the focused-editor event
+observation passes in a dedicated disposable note.
 
 ### Acceptance criteria
 

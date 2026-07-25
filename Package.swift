@@ -19,10 +19,15 @@ let package = Package(
       name: "TypoverRemoteIntelligence",
       targets: ["TypoverRemoteIntelligence"]
     ),
+    .library(
+      name: "TypoverAccessibility",
+      targets: ["TypoverAccessibility"]
+    ),
     .library(name: "TypoverAppleSpell", targets: ["TypoverAppleSpell"]),
   ],
   targets: [
     .target(name: "TypoverCore"),
+    .target(name: "TypoverAccessibility"),
     .target(
       name: "TypoverAppleIntelligence",
       dependencies: ["TypoverCore"]
@@ -56,6 +61,7 @@ let package = Package(
       dependencies: [
         "TypoverAppleIntelligence",
         "TypoverAppleSpell",
+        "TypoverAccessibility",
         "TypoverCore",
         "TypoverRemoteIntelligence",
       ],
@@ -69,6 +75,7 @@ let package = Package(
         "TypoverApp",
         "TypoverAppleIntelligence",
         "TypoverAppleSpell",
+        "TypoverAccessibility",
         "TypoverCore",
         "TypoverEvaluation",
         "TypoverRemoteIntelligence",

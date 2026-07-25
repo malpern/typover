@@ -14,6 +14,24 @@ This is a cloud reference benchmark, not a production-engine proposal. It sends
 only the checked-in synthetic corpus to the selected provider. Typover's product
 path remains local-first and does not send a writer's text to these services.
 
+## Production-adapter smoke check
+
+An opt-in smoke test exercises the production remote adapters with one fixed,
+synthetic sentence. It runs only when `TYPOVER_RUN_LIVE_MODEL_TESTS=1`, never
+uses document text, and keeps the provider checks independent so one provider
+cannot hide the other's result.
+
+On 2026-07-25:
+
+- the Claude Sonnet 5 production path completed successfully end to end;
+- the GPT-5.6 Terra path reached OpenAI but returned
+  `insufficient_quota`, so its adapter is wired but could not be live-verified
+  under the current project billing state.
+
+The quota result does not change the model decision or the prior completed
+benchmark. Apple remains the default, and the OpenAI option should be treated
+as unavailable until its API project has usable quota.
+
 Run one provider with:
 
 ```bash

@@ -278,15 +278,18 @@ validation, and open-source comparison can continue without blocking it.
 Build the read-only Accessibility capability probe described in the
 [Bear compatibility spike](bear-compatibility-spike.md).
 
-- [ ] Add the `TypoverAccessibility` boundary and structured capability model.
-- [ ] Reliably locate Bear's focused `AXTextArea` without a fragile element
-      index.
-- [ ] Report required attributes, writability, parameterized range geometry,
-      and relevant Accessibility notifications.
-- [ ] Read the caret and a tightly bounded context without printing or
+- [x] Add the `TypoverAccessibility` boundary and structured capability model.
+- [x] Locate the current Bear window's sole `AXTextArea` by role traversal,
+      without a fragile element index, and report whether it actually holds
+      keyboard focus.
+- [x] Report required attributes, writability, parameterized range geometry,
+      and relevant Accessibility notification registrations.
+- [x] Read the caret and a tightly bounded context without printing or
       persisting document text.
-- [ ] Record a go/no-go decision for exact-range replacement and overlay
+- [x] Record a provisional go decision for exact-range replacement and overlay
       geometry.
+- [ ] Observe selection, value, focus, window, and layout events while the Bear
+      editor actually holds focus in a disposable note.
 
 Phase 1 is diagnostic only: it does not modify a Bear note, draw an overlay, or
 request a Bear API token.

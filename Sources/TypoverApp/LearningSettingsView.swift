@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TypoverAccessibility
 import TypoverAppleIntelligence
 import TypoverCore
 import TypoverRemoteIntelligence
@@ -8,18 +9,23 @@ struct LearningSettingsView: View {
   let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
   let credentialStore: SecretsAppCredentialStore
+  let bearProbe: any BearAccessibilityProbing
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
+  @State private var bearAccessibilityReport: BearAccessibilityReport?
+  @State private var isCheckingBear = false
 
   init(
     behaviorSettings: CorrectionBehaviorSettings,
     learningStore: CorrectionLearningStore,
-    credentialStore: SecretsAppCredentialStore = SecretsAppCredentialStore()
+    credentialStore: SecretsAppCredentialStore = SecretsAppCredentialStore(),
+    bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe()
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
     self.credentialStore = credentialStore
+    self.bearProbe = bearProbe
   }
 
   var body: some View {
@@ -32,6 +38,11 @@ struct LearningSettingsView: View {
         )
         CorrectionBehaviorSection(
           behaviorSettings: behaviorSettings
+        )
+        BearCompatibilitySection(
+          report: bearAccessibilityReport,
+          isChecking: isCheckingBear,
+          onCheck: checkBearCompatibility
         )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
@@ -124,6 +135,27 @@ struct LearningSettingsView: View {
         comment:
           "Explanation of the data removed by resetting all Typover learning."
       )
+    }
+  }
+
+  private func checkBearCompatibility() {
+    isCheckingBear = true
+    let returnApplication = NSRunningApplication.current
+    let bearApplication = NSRunningApplication.runningApplications(
+      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    ).first
+    bearApplication?.activate(options: [.activateAllWindows])
+
+    Task {
+      if bearApplication != nil {
+        try? await Task.sleep(for: .milliseconds(500))
+      }
+      let report = await Task.detached(priority: .userInitiated) {
+        bearProbe.run()
+      }.value
+      returnApplication.activate(options: [.activateAllWindows])
+      bearAccessibilityReport = report
+      isCheckingBear = false
     }
   }
 }
