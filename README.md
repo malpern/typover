@@ -60,6 +60,20 @@ Requires macOS 27 or later and Swift 6.4 or later. The research build uses
 TextKit 2 and the viewport-layout hooks introduced for `NSTextView` in macOS
 27.
 
+## Evaluate corrections
+
+The checked-in synthetic corpus measures Typover's Apple spelling baseline
+without reading or recording personal document text:
+
+```bash
+swift run TypoverEval
+swift run TypoverEval --json
+```
+
+Reviewed cases gate the test suite. Provisional names, technical vocabulary,
+and multilingual examples are reported separately until their expectations
+receive human review.
+
 ## Architecture
 
 Architecture decisions are recorded in [docs/adr](docs/adr/README.md). Typover

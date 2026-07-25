@@ -71,17 +71,24 @@ Apple spelling baseline.
 
 ### Correction corpus
 
-- [ ] Create a checked-in corpus of expected corrections and expected
+- [x] Create a checked-in corpus of expected corrections and expected
       unchanged words.
-- [ ] Include insertions, deletions, substitutions, transpositions,
+- [x] Include insertions, deletions, substitutions, transpositions,
       capitalization, apostrophes, accented words, mixed-case names, technical
       vocabulary, and multilingual examples.
-- [ ] Record candidate source, selected replacement, alternatives, language,
+- [x] Record candidate source, selected replacement, alternatives, language,
       and lookup duration without logging private user text.
-- [ ] Report false-positive rate, missed-correction rate, and median/tail
+- [x] Report false-positive rate, missed-correction rate, and median/tail
       latency.
-- [ ] Keep numeric confidence out of the product unless later calibration
+- [x] Keep numeric confidence out of the product unless later calibration
       proves it useful.
+
+Corpus v1 contains 131 synthetic cases. Its 106 reviewed cases gate the test
+suite; 25 names, technical terms, and multilingual expectations remain
+provisional until human review. Run `swift run TypoverEval` for a readable
+report or `swift run TypoverEval --json` for structured per-case output. The
+initial macOS 27 baseline has no approved false positives or missed
+corrections. Apple leaves the provisional French `cafe` example unchanged.
 
 ### Editor stress matrix
 
@@ -106,6 +113,9 @@ Apple spelling baseline.
 - Undo and Redo preserve understandable correction state.
 - Existing annotations remain aligned or are explicitly invalidated.
 - Lookup and editing latency are measured before an AI model is introduced.
+
+The first two criteria and lookup-latency measurement are now enforced for the
+approved corpus. Editing latency remains part of the editor stress matrix.
 
 ## Following milestone: contextual local intelligence
 
