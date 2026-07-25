@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: In progress — Phase 1 capability probe implemented
+- Status: Phase 1 complete — exact-range replacement is next
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -169,14 +169,26 @@ The run confirmed:
 - registration succeeded for selection, value, layout, focused-element, and
   focused-window notifications.
 
-The note list held keyboard focus during this run. The report distinguishes
-that state from a focused editor instead of treating the window's only text
-area as focused. Notification emission and caret movement while the editor
-actually holds focus remain the last read-only Phase 1 observation.
+The note list held keyboard focus during this first run. The report
+distinguishes that state from a focused editor instead of treating the
+window's only text area as focused.
 
-Decision: **provisional go** for exact selected-range replacement and external
-overlay geometry. Do not begin mutation testing until the focused-editor event
-observation passes in a dedicated disposable note.
+A second content-free run used the dedicated
+`Typover Disposable Lab — 2026-07-25` note with Bear's editor focused. Bear
+accepted registrations for selection, value, layout, focused-element,
+focused-window, moved-window, and resized-window notifications. Six
+navigation-key actions changed only the caret and produced four
+`AXSelectedTextChanged` notifications. The monitor recorded notification names
+and counts only.
+
+`AXValueChanged` was registered but deliberately not triggered: doing so would
+require a text mutation, which belongs to Phase 2. Window, focus, and layout
+registrations are available for later overlay tracking; Phase 1 does not need
+to force every notification merely to prove that caret-relative work can begin.
+
+Decision: **go** for exact selected-range replacement and external overlay
+geometry. The first mutation test must remain in the dedicated disposable note
+and must not fall back to whole-value replacement.
 
 ### Acceptance criteria
 
@@ -185,6 +197,8 @@ observation passes in a dedicated disposable note.
 - It can read the caret range and a bounded context around it.
 - The probe reports a structured capability result when an attribute is
   missing or unsupported.
+- With the editor focused, caret movement produces a content-free selection
+  notification that Typover can use to invalidate or refresh scoped state.
 
 ## Phase 2: Exact range replacement
 

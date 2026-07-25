@@ -13,6 +13,10 @@ public protocol BearAccessibilityProbing: Sendable {
   func run() -> BearAccessibilityReport
 }
 
+public protocol BearAccessibilityEventMonitoring: Sendable {
+  func observe(for duration: TimeInterval) -> BearAccessibilityEventReport
+}
+
 public enum AccessibilityCapabilityState: String, Codable, Equatable, Sendable {
   case available
   case unsupported
@@ -117,5 +121,45 @@ public struct BearAccessibilityReport: Codable, Equatable, Sendable {
     self.attributes = attributes
     self.parameterizedAttributes = parameterizedAttributes
     self.notificationRegistrations = notificationRegistrations
+  }
+}
+
+public struct AccessibilityEventObservation:
+  Codable, Equatable, Sendable, Identifiable
+{
+  public let name: String
+  public let count: Int
+
+  public var id: String {
+    name
+  }
+
+  public init(name: String, count: Int) {
+    self.name = name
+    self.count = count
+  }
+}
+
+public struct BearAccessibilityEventReport:
+  Codable, Equatable, Sendable
+{
+  public let status: BearAccessibilityProbeStatus
+  public let editorWasFocused: Bool
+  public let durationMilliseconds: Int
+  public let registrations: [AccessibilityCapability]
+  public let observations: [AccessibilityEventObservation]
+
+  public init(
+    status: BearAccessibilityProbeStatus,
+    editorWasFocused: Bool,
+    durationMilliseconds: Int,
+    registrations: [AccessibilityCapability],
+    observations: [AccessibilityEventObservation]
+  ) {
+    self.status = status
+    self.editorWasFocused = editorWasFocused
+    self.durationMilliseconds = durationMilliseconds
+    self.registrations = registrations
+    self.observations = observations
   }
 }

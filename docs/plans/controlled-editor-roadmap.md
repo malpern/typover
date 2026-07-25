@@ -273,7 +273,7 @@ candidate review now satisfy this gate. The Bear compatibility spike is the
 next implementation milestone. Natural-writing expansion, cross-version
 validation, and open-source comparison can continue without blocking it.
 
-## Next implementation milestone: Bear Phase 1
+## Completed implementation milestone: Bear Phase 1
 
 Build the read-only Accessibility capability probe described in the
 [Bear compatibility spike](bear-compatibility-spike.md).
@@ -288,8 +288,22 @@ Build the read-only Accessibility capability probe described in the
       persisting document text.
 - [x] Record a provisional go decision for exact-range replacement and overlay
       geometry.
-- [ ] Observe selection, value, focus, window, and layout events while the Bear
-      editor actually holds focus in a disposable note.
+- [x] Register selection, value, focus, window, and layout observers while the
+      Bear editor actually holds focus in a disposable note.
+- [x] Confirm that read-only caret movement emits `AXSelectedTextChanged`
+      without capturing note text.
 
 Phase 1 is diagnostic only: it does not modify a Bear note, draw an overlay, or
 request a Bear API token.
+
+## Next implementation milestone: Bear Phase 2
+
+Implement and verify one exact selected-range replacement in the dedicated
+disposable note:
+
+- capture and verify the expected target range;
+- replace only `AXSelectedText`, never the complete `AXValue`;
+- restore the caret relative to the inserted text;
+- verify a tightly bounded local result;
+- create a correction record only after verification succeeds;
+- measure Bear's native Undo result before expanding the experiment.

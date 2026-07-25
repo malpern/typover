@@ -82,6 +82,36 @@ struct BearAccessibilityProbeTests {
     #expect(!json.contains("valueText"))
   }
 
+  @Test("Event reports contain names and counts without document text")
+  func eventReportEncodingIsContentFree() throws {
+    let report = BearAccessibilityEventReport(
+      status: .ready,
+      editorWasFocused: true,
+      durationMilliseconds: 5_000,
+      registrations: [
+        AccessibilityCapability(
+          name: "AXSelectedTextChanged",
+          state: .available
+        )
+      ],
+      observations: [
+        AccessibilityEventObservation(
+          name: "AXSelectedTextChanged",
+          count: 2
+        )
+      ]
+    )
+
+    let encoded = try JSONEncoder().encode(report)
+    let json = try #require(String(data: encoded, encoding: .utf8))
+
+    #expect(json.contains("AXSelectedTextChanged"))
+    #expect(!json.contains("documentText"))
+    #expect(!json.contains("selectedText"))
+    #expect(!json.contains("contextText"))
+    #expect(!json.contains("valueText"))
+  }
+
   @Test(
     "Live Bear probe returns a structured, content-free report",
     .enabled(
@@ -122,5 +152,43 @@ struct BearAccessibilityProbeTests {
         capability.state == .available
       }
     )
+  }
+
+  @Test(
+    "Live Bear monitor records content-free Accessibility events",
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "TYPOVER_RUN_LIVE_BEAR_EVENT_MONITOR"
+      ] == "1"
+    )
+  )
+  func liveBearEventMonitor() async throws {
+    let report = await Task.detached {
+      BearAccessibilityEventMonitor().observe(for: 8)
+    }.value
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    let encoded = try encoder.encode(report)
+    let json = try #require(String(data: encoded, encoding: .utf8))
+
+    print(json)
+    #expect(report.status != .accessibilityPermissionRequired)
+
+    guard
+      ProcessInfo.processInfo.environment[
+        "TYPOVER_REQUIRE_BEAR_EVENTS"
+      ] == "1"
+    else {
+      return
+    }
+
+    #expect(report.status == .ready)
+    #expect(report.editorWasFocused)
+    #expect(
+      report.registrations.allSatisfy { capability in
+        capability.state == .available
+      }
+    )
+    #expect(!report.observations.isEmpty)
   }
 }

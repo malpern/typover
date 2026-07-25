@@ -455,6 +455,210 @@ extension BearAccessibilityProbe {
   }
 }
 
+public struct BearAccessibilityEventMonitor:
+  BearAccessibilityEventMonitoring, Sendable
+{
+  public init() {}
+
+  public func observe(
+    for duration: TimeInterval = 5
+  ) -> BearAccessibilityEventReport {
+    let observationDuration = min(max(duration, 0.25), 30)
+    let durationMilliseconds = Int(
+      (observationDuration * 1_000).rounded()
+    )
+
+    guard AXIsProcessTrusted() else {
+      return BearAccessibilityEventReport(
+        status: .accessibilityPermissionRequired,
+        editorWasFocused: false,
+        durationMilliseconds: durationMilliseconds,
+        registrations: [],
+        observations: []
+      )
+    }
+
+    guard
+      let runningApplication = NSRunningApplication.runningApplications(
+        withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+      ).first
+    else {
+      return BearAccessibilityEventReport(
+        status: .bearNotRunning,
+        editorWasFocused: false,
+        durationMilliseconds: durationMilliseconds,
+        registrations: [],
+        observations: []
+      )
+    }
+
+    let applicationElement = AXUIElementCreateApplication(
+      runningApplication.processIdentifier
+    )
+    guard
+      let focusedElement = copyElementAttribute(
+        applicationElement,
+        kAXFocusedUIElementAttribute as CFString
+      )
+    else {
+      return BearAccessibilityEventReport(
+        status: .focusedEditorUnavailable,
+        editorWasFocused: false,
+        durationMilliseconds: durationMilliseconds,
+        registrations: [],
+        observations: []
+      )
+    }
+
+    let probe = BearAccessibilityProbe()
+    let focusedEditor = probe.nearestTextArea(startingAt: focusedElement)
+    let focusedWindow = copyElementAttribute(
+      applicationElement,
+      kAXFocusedWindowAttribute as CFString
+    )
+    let candidates = focusedWindow.map(probe.textAreas(in:)) ?? []
+    let editorElement =
+      focusedEditor
+      ?? (candidates.count == 1 ? candidates.first : nil)
+    guard let editorElement else {
+      return BearAccessibilityEventReport(
+        status: .focusedElementIsNotTextArea,
+        editorWasFocused: false,
+        durationMilliseconds: durationMilliseconds,
+        registrations: [],
+        observations: []
+      )
+    }
+
+    let status: BearAccessibilityProbeStatus =
+      focusedEditor == nil ? .editorAvailableButNotFocused : .ready
+    let windowElement =
+      copyElementAttribute(
+        editorElement,
+        kAXWindowAttribute as CFString
+      ) ?? focusedWindow
+
+    var observer: AXObserver?
+    let observerError = AXObserverCreate(
+      runningApplication.processIdentifier,
+      bearAccessibilityEventCallback,
+      &observer
+    )
+    guard observerError == .success, let observer else {
+      return BearAccessibilityEventReport(
+        status: status,
+        editorWasFocused: focusedEditor != nil,
+        durationMilliseconds: durationMilliseconds,
+        registrations: [
+          AccessibilityCapability(
+            name: "AXObserver",
+            state: .failed,
+            errorCode: observerError.rawValue
+          )
+        ],
+        observations: []
+      )
+    }
+
+    let collector = BearAccessibilityEventCollector()
+    let collectorPointer = Unmanaged.passUnretained(collector).toOpaque()
+    var targets: [(name: String, element: AXUIElement)] = [
+      (kAXSelectedTextChangedNotification as String, editorElement),
+      (kAXValueChangedNotification as String, editorElement),
+      (kAXLayoutChangedNotification as String, editorElement),
+      (kAXFocusedUIElementChangedNotification as String, applicationElement),
+      (kAXFocusedWindowChangedNotification as String, applicationElement),
+    ]
+    if let windowElement {
+      targets.append(
+        (kAXWindowMovedNotification as String, windowElement)
+      )
+      targets.append(
+        (kAXWindowResizedNotification as String, windowElement)
+      )
+    }
+
+    let registrations = targets.map { target in
+      let error = AXObserverAddNotification(
+        observer,
+        target.element,
+        target.name as CFString,
+        collectorPointer
+      )
+      return AccessibilityCapability(
+        name: target.name,
+        state: probe.notificationState(for: error),
+        errorCode: error == .success ? nil : error.rawValue
+      )
+    }
+
+    let runLoop = CFRunLoopGetCurrent()
+    let source = AXObserverGetRunLoopSource(observer)
+    CFRunLoopAddSource(runLoop, source, .defaultMode)
+
+    let deadline = CFAbsoluteTimeGetCurrent() + observationDuration
+    while CFAbsoluteTimeGetCurrent() < deadline {
+      let remaining = deadline - CFAbsoluteTimeGetCurrent()
+      CFRunLoopRunInMode(.defaultMode, min(0.1, remaining), true)
+    }
+
+    CFRunLoopRemoveSource(runLoop, source, .defaultMode)
+    for target in targets {
+      AXObserverRemoveNotification(
+        observer,
+        target.element,
+        target.name as CFString
+      )
+    }
+
+    return BearAccessibilityEventReport(
+      status: status,
+      editorWasFocused: focusedEditor != nil,
+      durationMilliseconds: durationMilliseconds,
+      registrations: registrations,
+      observations: collector.snapshot()
+    )
+  }
+}
+
+private final class BearAccessibilityEventCollector: @unchecked Sendable {
+  private let lock = NSLock()
+  private var counts: [String: Int] = [:]
+
+  func record(_ name: String) {
+    lock.lock()
+    counts[name, default: 0] += 1
+    lock.unlock()
+  }
+
+  func snapshot() -> [AccessibilityEventObservation] {
+    lock.lock()
+    let snapshot = counts
+    lock.unlock()
+    return snapshot.keys.sorted().map { name in
+      AccessibilityEventObservation(
+        name: name,
+        count: snapshot[name, default: 0]
+      )
+    }
+  }
+}
+
+private func bearAccessibilityEventCallback(
+  _: AXObserver,
+  _: AXUIElement,
+  notification: CFString,
+  refcon: UnsafeMutableRawPointer?
+) {
+  guard let refcon else {
+    return
+  }
+  let collector = Unmanaged<BearAccessibilityEventCollector>
+    .fromOpaque(refcon)
+    .takeUnretainedValue()
+  collector.record(notification as String)
+}
+
 private func bearAccessibilityObserverCallback(
   _: AXObserver,
   _: AXUIElement,

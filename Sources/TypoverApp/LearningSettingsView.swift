@@ -10,22 +10,28 @@ struct LearningSettingsView: View {
   let learningStore: CorrectionLearningStore
   let credentialStore: SecretsAppCredentialStore
   let bearProbe: any BearAccessibilityProbing
+  let bearEventMonitor: any BearAccessibilityEventMonitoring
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
   @State private var bearAccessibilityReport: BearAccessibilityReport?
+  @State private var bearEventReport: BearAccessibilityEventReport?
   @State private var isCheckingBear = false
+  @State private var isObservingBear = false
 
   init(
     behaviorSettings: CorrectionBehaviorSettings,
     learningStore: CorrectionLearningStore,
     credentialStore: SecretsAppCredentialStore = SecretsAppCredentialStore(),
-    bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe()
+    bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe(),
+    bearEventMonitor: any BearAccessibilityEventMonitoring =
+      BearAccessibilityEventMonitor()
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
     self.credentialStore = credentialStore
     self.bearProbe = bearProbe
+    self.bearEventMonitor = bearEventMonitor
   }
 
   var body: some View {
@@ -41,8 +47,11 @@ struct LearningSettingsView: View {
         )
         BearCompatibilitySection(
           report: bearAccessibilityReport,
+          eventReport: bearEventReport,
           isChecking: isCheckingBear,
-          onCheck: checkBearCompatibility
+          isObserving: isObservingBear,
+          onCheck: checkBearCompatibility,
+          onObserve: observeBearEvents
         )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
@@ -156,6 +165,28 @@ struct LearningSettingsView: View {
       returnApplication.activate(options: [.activateAllWindows])
       bearAccessibilityReport = report
       isCheckingBear = false
+    }
+  }
+
+  private func observeBearEvents() {
+    isObservingBear = true
+    bearEventReport = nil
+    let returnApplication = NSRunningApplication.current
+    let bearApplication = NSRunningApplication.runningApplications(
+      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    ).first
+    bearApplication?.activate(options: [.activateAllWindows])
+
+    Task {
+      if bearApplication != nil {
+        try? await Task.sleep(for: .milliseconds(500))
+      }
+      let report = await Task.detached(priority: .userInitiated) {
+        bearEventMonitor.observe(for: 5)
+      }.value
+      returnApplication.activate(options: [.activateAllWindows])
+      bearEventReport = report
+      isObservingBear = false
     }
   }
 }

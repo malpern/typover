@@ -3,8 +3,11 @@ import TypoverAccessibility
 
 struct BearCompatibilitySection: View {
   let report: BearAccessibilityReport?
+  let eventReport: BearAccessibilityEventReport?
   let isChecking: Bool
+  let isObserving: Bool
   let onCheck: () -> Void
+  let onObserve: () -> Void
 
   var body: some View {
     GroupBox {
@@ -42,7 +45,7 @@ struct BearCompatibilitySection: View {
               )
             }
           }
-          .disabled(isChecking)
+          .disabled(isChecking || isObserving)
           .accessibilityIdentifier("typover.settings.bear.run-probe")
 
           Spacer()
@@ -60,6 +63,16 @@ struct BearCompatibilitySection: View {
           .font(.caption)
           .foregroundStyle(.secondary)
         }
+
+        if report?.status.allowsEventObservation == true {
+          Divider()
+
+          BearEventObservationControl(
+            report: eventReport,
+            isObserving: isObserving,
+            onObserve: onObserve
+          )
+        }
       }
       .padding(4)
     } label: {
@@ -73,6 +86,107 @@ struct BearCompatibilitySection: View {
       } icon: {
         Image(systemName: "pawprint")
       }
+    }
+  }
+}
+
+private struct BearEventObservationControl: View {
+  let report: BearAccessibilityEventReport?
+  let isObserving: Bool
+  let onObserve: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      if isObserving {
+        Label {
+          Text(
+            "Move the caret, scroll, or resize Bear now.",
+            bundle: #bundle,
+            comment:
+              "Instruction shown while Typover observes read-only Bear Accessibility events."
+          )
+        } icon: {
+          ProgressView()
+            .controlSize(.small)
+        }
+        .font(.callout)
+      } else if let report {
+        BearEventObservationResult(report: report)
+      } else {
+        Text(
+          "Observe Bear for five seconds, then move the caret, scroll, or resize the window. Typover records only event names and counts.",
+          bundle: #bundle,
+          comment:
+            "Instructions for Typover's timed Bear Accessibility event observation."
+        )
+        .font(.callout)
+        .foregroundStyle(.secondary)
+      }
+
+      Button(action: onObserve) {
+        Text(
+          isObserving
+            ? "Observing Bear…"
+            : "Observe Bear for 5 Seconds",
+          bundle: #bundle,
+          comment:
+            "Button that starts or describes Typover's timed read-only Bear event observation."
+        )
+      }
+      .disabled(isObserving)
+      .accessibilityIdentifier("typover.settings.bear.observe-events")
+    }
+  }
+}
+
+private struct BearEventObservationResult: View {
+  let report: BearAccessibilityEventReport
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label {
+        Text(
+          "\(totalEventCount) events observed",
+          bundle: #bundle,
+          comment:
+            "Summary of the number of content-free Bear Accessibility events Typover observed."
+        )
+      } icon: {
+        Image(
+          systemName: totalEventCount == 0
+            ? "exclamationmark.circle"
+            : "checkmark.circle.fill"
+        )
+      }
+      .font(.headline)
+      .foregroundStyle(
+        totalEventCount == 0 ? Color.secondary : Color.green
+      )
+
+      if report.observations.isEmpty {
+        Text(
+          "No events arrived. Run the observation again and interact with the Bear editor while it is in front.",
+          bundle: #bundle,
+          comment:
+            "Guidance shown when no Bear Accessibility events were observed."
+        )
+        .font(.callout)
+        .foregroundStyle(.secondary)
+      } else {
+        ForEach(report.observations) { observation in
+          LabeledContent {
+            Text(observation.count, format: .number)
+          } label: {
+            Text(observation.title)
+          }
+        }
+      }
+    }
+  }
+
+  private var totalEventCount: Int {
+    report.observations.reduce(0) { result, observation in
+      result + observation.count
     }
   }
 }
@@ -172,6 +286,10 @@ private struct BearCapabilityRow: View {
 }
 
 extension BearAccessibilityProbeStatus {
+  fileprivate var allowsEventObservation: Bool {
+    self == .ready || self == .editorAvailableButNotFocused
+  }
+
   fileprivate var title: LocalizedStringResource {
     switch self {
     case .ready:
@@ -230,6 +348,29 @@ extension BearAccessibilityProbeStatus {
     case .bearNotRunning, .focusedEditorUnavailable,
       .focusedElementIsNotTextArea, .editorAvailableButNotFocused:
       .secondary
+    }
+  }
+}
+
+extension AccessibilityEventObservation {
+  fileprivate var title: LocalizedStringResource {
+    switch name {
+    case "AXSelectedTextChanged":
+      "Selection"
+    case "AXValueChanged":
+      "Text"
+    case "AXLayoutChanged":
+      "Layout"
+    case "AXFocusedUIElementChanged":
+      "Editor focus"
+    case "AXFocusedWindowChanged":
+      "Window focus"
+    case "AXWindowMoved":
+      "Window moved"
+    case "AXWindowResized":
+      "Window resized"
+    default:
+      "Other event"
     }
   }
 }
