@@ -206,15 +206,31 @@ Warm median latency was 1.71 seconds and p95 was 2.88 seconds. Detailed scope,
 results, and operating-cost caveats are in the
 [sentence-rewrite benchmark](../testing/sentence-rewrite-benchmark.md).
 
-## Next milestone: natural-writing and cross-version validation
+## Model decision checkpoint
 
-- Grow the rewrite benchmark from 35 to at least 500 cases, including at least
-  300 diverse unchanged controls.
-- Add consented, de-identified natural writing samples that contain no private
-  text.
-- Test the correction and rewrite corpora against every macOS system-model
-  version Typover supports.
-- Keep false-positive avoidance ahead of raw correction coverage.
+- [x] Benchmark inexpensive OpenAI and Anthropic models against the same rewrite
+      corpus.
+- [x] Benchmark stronger OpenAI and Anthropic models against the same rewrite
+      corpus.
+- [x] Keep Apple's on-device system model as Typover's product model for now.
+- [x] Keep GPT-5.6 Terra as a remote quality reference, not a product
+      dependency.
+
+Apple remains the current product choice. GPT-5.6 Terra matched the Apple
+baseline on the small reviewed corpus, which shows that stronger cloud models
+are worth retaining as evaluation references. It does not justify moving
+private writing off device or adding network latency and provider dependencies
+to the product. Typover therefore has no remote-model runtime dependency.
+
+## Parallel validation track: natural-writing and cross-version validation
+
+- [ ] Grow the rewrite benchmark from 35 to at least 500 cases, including at
+      least 300 diverse unchanged controls.
+- [ ] Add consented, de-identified natural writing samples that contain no
+      private text.
+- [ ] Test the correction and rewrite corpora against every macOS system-model
+      version Typover supports.
+- [ ] Keep false-positive avoidance ahead of raw correction coverage.
 
 The first cloud reference run used a deliberately shorter prompt. Claude Haiku
 4.5 was faster than the Apple baseline but introduced one regional false
@@ -252,3 +268,21 @@ The local-model foundation, operating-cost snapshot, expanded corpus, and
 candidate review now satisfy this gate. The Bear compatibility spike is the
 next implementation milestone. Natural-writing expansion, cross-version
 validation, and open-source comparison can continue without blocking it.
+
+## Next implementation milestone: Bear Phase 1
+
+Build the read-only Accessibility capability probe described in the
+[Bear compatibility spike](bear-compatibility-spike.md).
+
+- [ ] Add the `TypoverAccessibility` boundary and structured capability model.
+- [ ] Reliably locate Bear's focused `AXTextArea` without a fragile element
+      index.
+- [ ] Report required attributes, writability, parameterized range geometry,
+      and relevant Accessibility notifications.
+- [ ] Read the caret and a tightly bounded context without printing or
+      persisting document text.
+- [ ] Record a go/no-go decision for exact-range replacement and overlay
+      geometry.
+
+Phase 1 is diagnostic only: it does not modify a Bear note, draw an overlay, or
+request a Bear API token.

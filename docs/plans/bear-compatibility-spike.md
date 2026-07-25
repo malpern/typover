@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Deferred until the controlled-editor gate is complete
+- Status: Ready — Phase 1 is the next implementation milestone
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -39,12 +39,17 @@ TextKit editor:
       alternatives;
 - [x] support cursor-relative correction, capitalization, Unicode accents, and
       internal apostrophes while leaving surrounding text unchanged;
-- [ ] complete the correction corpus and editing-robustness gate in the
+- [x] complete the correction corpus and editing-robustness gate in the
       [controlled-editor roadmap](controlled-editor-roadmap.md).
 
 The controlled editor is the reference implementation. Bear compatibility is
 evaluated against it rather than defining the interaction while platform
 uncertainties remain.
+
+The prerequisite gate is complete. Apple remains Typover's product model for
+now because it keeps private writing on device and performed competitively in
+the reviewed rewrite benchmark. Phase 1 is intentionally read-only and does
+not depend on a cloud model or a Bear API token.
 
 The first controlled-editor milestone was completed on 2026-07-25 with a
 deterministic `teh` → `the` rule. The second milestone replaced that demo rule
