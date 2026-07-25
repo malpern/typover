@@ -33,7 +33,7 @@ TextKit editor:
 - [x] select the squiggle and restore the original;
 - [x] preserve selection, caret position, and Undo behavior for the initial
       correction transaction;
-- [ ] stress-test annotation alignment and state while scrolling a long
+- [x] stress-test annotation alignment and state while scrolling a long
       controlled document.
 
 The controlled editor is the reference implementation. Bear compatibility is
@@ -41,10 +41,19 @@ evaluated against it rather than defining the interaction while platform
 uncertainties remain.
 
 The first controlled-editor milestone was completed on 2026-07-25 with a
-deterministic `teh` → `the` rule. It remains intentionally narrow. Before the
-Bear probe, stress-test long-document scrolling; then replace the demo rule
-with an on-device spelling candidate source without weakening the confidence
-or range-safety policy.
+deterministic `teh` → `the` rule. It remains intentionally narrow. The initial
+long-document scrolling test now passes; next, replace the demo rule with an
+on-device spelling candidate source without weakening the confidence or
+range-safety policy.
+
+The reference editor now uses a TextKit 2-backed `NSTextView` and the macOS 27
+viewport-layout callback. This is the baseline for the long-document scrolling
+test; the Bear overlay remains a separate Accessibility and screen-geometry
+problem.
+
+The initial scrolling test used corrections at opposite ends of a 35-line
+document. Each annotation disappeared offscreen, reappeared in alignment after
+scrolling back into the viewport, and remained clickable.
 
 ## Known Bear surfaces
 

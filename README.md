@@ -53,7 +53,9 @@ swift test
 swift run Typover
 ```
 
-Requires macOS 15 or later and Swift 6.2 or later.
+Requires macOS 27 or later and Swift 6.4 or later. The research build uses
+TextKit 2 and the viewport-layout hooks introduced for `NSTextView` in macOS
+27.
 
 ## Architecture
 

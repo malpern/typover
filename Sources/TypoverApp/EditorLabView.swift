@@ -4,19 +4,7 @@ import TypoverCore
 
 struct EditorLabView: NSViewRepresentable {
   func makeNSView(context: Context) -> NSScrollView {
-    let textStorage = NSTextStorage()
-    let layoutManager = TypoverLayoutManager()
-    let textContainer = NSTextContainer(
-      size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-    )
-
-    textStorage.addLayoutManager(layoutManager)
-    layoutManager.addTextContainer(textContainer)
-
-    let textView = TypoverTextView(
-      frame: .zero,
-      textContainer: textContainer
-    )
+    let textView = TypoverTextView(usingTextLayoutManager: true)
     textView.allowsUndo = true
     textView.autoresizingMask = [.width]
     textView.backgroundColor = NSColor.clear
@@ -40,11 +28,11 @@ struct EditorLabView: NSViewRepresentable {
     textView.undoManager?.removeAllActions()
     textView.setAccessibilityIdentifier("typover.editor")
 
-    textContainer.containerSize = NSSize(
+    textView.textContainer?.containerSize = NSSize(
       width: 0,
       height: CGFloat.greatestFiniteMagnitude
     )
-    textContainer.widthTracksTextView = true
+    textView.textContainer?.widthTracksTextView = true
 
     textView.string = String(
       localized: """
@@ -83,6 +71,7 @@ private final class TypoverTextView: NSTextView {
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
   private var ledger = CorrectionLedger()
+  private var viewportRange: NSTextRange?
 
   override func didChangeText() {
     super.didChangeText()
@@ -93,6 +82,34 @@ private final class TypoverTextView: NSTextView {
 
     reconcileAnnotations()
     applyCorrectionBeforeTypedBoundary()
+  }
+
+  override func draw(_ dirtyRect: NSRect) {
+    super.draw(dirtyRect)
+
+    for (id, _) in correctionsByID {
+      guard ledger.record(for: id)?.disposition == .applied else {
+        continue
+      }
+
+      for range in annotatedRanges(for: id) {
+        for rect in textSegmentRects(for: range)
+        where dirtyRect.intersects(rect.insetBy(dx: -2, dy: -3)) {
+          drawSquiggle(
+            from: NSPoint(x: rect.minX, y: rect.maxY + 1),
+            toX: rect.maxX
+          )
+        }
+      }
+    }
+  }
+
+  override func textViewportLayoutControllerDidLayout(
+    _ textViewportLayoutController: NSTextViewportLayoutController
+  ) {
+    super.textViewportLayoutControllerDidLayout(textViewportLayoutController)
+    viewportRange = textViewportLayoutController.viewportRange
+    needsDisplay = true
   }
 
   override func mouseDown(with event: NSEvent) {
@@ -279,57 +296,25 @@ private final class TypoverTextView: NSTextView {
   }
 
   private func correctionID(at event: NSEvent) -> Correction.ID? {
-    guard
-      let layoutManager,
-      let textContainer,
-      let textStorage,
-      textStorage.length > 0
-    else {
-      return nil
-    }
-
     let viewPoint = convert(event.locationInWindow, from: nil)
-    let containerOrigin = textContainerOrigin
-    let containerPoint = NSPoint(
-      x: viewPoint.x - containerOrigin.x,
-      y: viewPoint.y - containerOrigin.y
-    )
-    var fraction: CGFloat = 0
-    let glyphIndex = layoutManager.glyphIndex(
-      for: containerPoint,
-      in: textContainer,
-      fractionOfDistanceThroughGlyph: &fraction
-    )
 
-    guard glyphIndex < layoutManager.numberOfGlyphs else {
-      return nil
+    for (id, _) in correctionsByID {
+      guard ledger.record(for: id)?.disposition == .applied else {
+        continue
+      }
+
+      let containsPoint = annotatedRanges(for: id).contains { range in
+        textSegmentRects(for: range).contains { rect in
+          rect.insetBy(dx: -2, dy: -3).contains(viewPoint)
+        }
+      }
+
+      if containsPoint {
+        return id
+      }
     }
 
-    let glyphRect = layoutManager.boundingRect(
-      forGlyphRange: NSRange(location: glyphIndex, length: 1),
-      in: textContainer
-    )
-
-    guard glyphRect.insetBy(dx: -2, dy: -3).contains(containerPoint) else {
-      return nil
-    }
-
-    let characterIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
-    guard characterIndex < textStorage.length else {
-      return nil
-    }
-
-    guard
-      let rawID = textStorage.attribute(
-        .typoverCorrectionID,
-        at: characterIndex,
-        effectiveRange: nil
-      ) as? String
-    else {
-      return nil
-    }
-
-    return Correction.ID(uuidString: rawID)
+    return nil
   }
 
   private func showCorrectionMenu(for id: Correction.ID, event: NSEvent) {
@@ -436,64 +421,52 @@ private final class TypoverTextView: NSTextView {
     }
     return Correction.ID(uuidString: rawID)
   }
-}
 
-@MainActor
-private final class TypoverLayoutManager: NSLayoutManager {
-  override func drawGlyphs(
-    forGlyphRange glyphsToShow: NSRange,
-    at origin: NSPoint
-  ) {
-    super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
-
+  private func textSegmentRects(for characterRange: NSRange) -> [NSRect] {
     guard
-      let textStorage,
-      let textContainer = textContainers.first
-    else {
-      return
-    }
-
-    let charactersToShow = characterRange(
-      forGlyphRange: glyphsToShow,
-      actualGlyphRange: nil
-    )
-    textStorage.enumerateAttribute(
-      .typoverCorrectionID,
-      in: charactersToShow
-    ) { value, characterRange, _ in
-      guard value != nil else {
-        return
-      }
-
-      let glyphRange = self.glyphRange(
-        forCharacterRange: characterRange,
-        actualCharacterRange: nil
+      let textLayoutManager,
+      let textContentManager = textLayoutManager.textContentManager,
+      let startLocation = textContentManager.location(
+        textContentManager.documentRange.location,
+        offsetBy: characterRange.location
+      ),
+      let endLocation = textContentManager.location(
+        startLocation,
+        offsetBy: characterRange.length
+      ),
+      let textRange = NSTextRange(
+        location: startLocation,
+        end: endLocation
       )
-      self.enumerateLineFragments(forGlyphRange: glyphRange) {
-        _, _, container, lineGlyphRange, _
-        in
-        guard container === textContainer else {
-          return
-        }
-
-        let segment = NSIntersectionRange(glyphRange, lineGlyphRange)
-        guard segment.length > 0 else {
-          return
-        }
-
-        let rect = self.boundingRect(
-          forGlyphRange: segment,
-          in: textContainer
-        )
-        self.drawSquiggle(
-          from: NSPoint(x: rect.minX + origin.x, y: rect.maxY + origin.y + 1),
-          toX: rect.maxX + origin.x
-        )
-      }
+    else {
+      return []
     }
+
+    if let viewportRange, !viewportRange.intersects(textRange) {
+      return []
+    }
+
+    textLayoutManager.ensureLayout(for: textRange)
+
+    let containerOrigin = textContainerOrigin
+    var rects: [NSRect] = []
+    textLayoutManager.enumerateTextSegments(
+      in: textRange,
+      type: .standard,
+      options: [.rangeNotRequired]
+    ) { _, frame, _, _ in
+      rects.append(
+        frame.offsetBy(
+          dx: containerOrigin.x,
+          dy: containerOrigin.y
+        )
+      )
+      return true
+    }
+    return rects
   }
 
-  private nonisolated func drawSquiggle(
+  private func drawSquiggle(
     from start: NSPoint,
     toX endX: CGFloat
   ) {
