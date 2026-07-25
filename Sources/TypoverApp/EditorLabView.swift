@@ -789,7 +789,7 @@ final class TypoverTextView: NSTextView {
     let menu = NSMenu()
     let changeBackItem = NSMenuItem(
       title: String(
-        localized: "Change Back to “\(correction.original)”",
+        localized: "Revert to “\(correction.original)”",
         bundle: #bundle,
         comment:
           "Menu action that restores the original word. The variable is the original typed word."
@@ -810,12 +810,7 @@ final class TypoverTextView: NSTextView {
       menu.addItem(.separator())
       for replacement in replacements {
         let alternativeItem = NSMenuItem(
-          title: String(
-            localized: "Change to “\(replacement)”",
-            bundle: #bundle,
-            comment:
-              "Menu action that changes an automatic correction to another spelling. The variable is the alternative spelling."
-          ),
+          title: replacement,
           action: #selector(useAlternative(_:)),
           keyEquivalent: ""
         )
@@ -1026,28 +1021,28 @@ final class TypoverTextView: NSTextView {
     switch source {
     case .appleIntelligence:
       return String(
-        localized: "Apple Intelligence · On Device",
+        localized: "Apple Intelligence",
         bundle: #bundle,
         comment:
           "Disabled correction-menu label identifying Apple's local contextual model."
       )
     case .appleIntelligenceRewrite:
       return String(
-        localized: "Apple Intelligence Rewrite · On Device",
+        localized: "Apple Rewrite",
         bundle: #bundle,
         comment:
           "Disabled correction-menu label identifying an opt-in local sentence rewrite."
       )
     case .rememberedPreference:
       return String(
-        localized: "Remembered Preference · On Device",
+        localized: "Remembered Preference",
         bundle: #bundle,
         comment:
           "Disabled correction-menu label identifying a locally remembered correction preference."
       )
     case .appleSpelling, .demo, nil:
       return String(
-        localized: "Apple Spelling · On Device",
+        localized: "Apple Spelling",
         bundle: #bundle,
         comment: "Disabled correction-menu label identifying the local spelling source."
       )

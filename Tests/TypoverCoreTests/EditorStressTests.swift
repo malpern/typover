@@ -321,8 +321,8 @@ struct EditorStressTests {
     #expect(fixture.editor.string == "ten the ")
   }
 
-  @Test("The correction menu omits the redundant Keep action")
-  func correctionMenuHasOnlyActionableChoices() throws {
+  @Test("The correction menu uses concise native-style choices")
+  func correctionMenuHasConciseChoices() throws {
     let fixture = EditorFixture()
     defer { fixture.removeLearningStore() }
     fixture.type("teh ")
@@ -332,9 +332,10 @@ struct EditorStressTests {
       .filter { !$0.isSeparatorItem }
       .map(\.title)
 
-    #expect(titles.contains("Change Back to “teh”"))
-    #expect(titles.contains("Change to “ten”"))
-    #expect(titles.contains("Apple Spelling · On Device"))
+    #expect(titles.contains("Revert to “teh”"))
+    #expect(titles.contains("ten"))
+    #expect(titles.contains("Apple Spelling"))
+    #expect(!titles.contains(where: { $0.hasPrefix("Change to ") }))
     #expect(!titles.contains("Keep Correction"))
   }
 
@@ -369,7 +370,7 @@ struct EditorStressTests {
     )
     #expect(
       menu.items.map(\.title).contains(
-        "Apple Intelligence · On Device"
+        "Apple Intelligence"
       )
     )
   }
@@ -578,7 +579,7 @@ struct EditorStressTests {
     )
     #expect(
       menu.items.map(\.title).contains(
-        "Apple Intelligence Rewrite · On Device"
+        "Apple Rewrite"
       )
     )
     let request = try #require(await contextualEngine.lastRequest)
