@@ -52,6 +52,18 @@ attempts to reproduce those capabilities through Accessibility in another app.
 The complete behavior contract is in
 [cursor-relative correction behavior](../correction-behavior.md).
 
+### 5. Local preference learning and outcome statistics
+
+- [x] Remember a chosen alternative for the same typo and language.
+- [x] Remember an identifiable direct manual edit as the next replacement.
+- [x] Treat Change Back as a local suppression preference.
+- [x] Apply remembered preferences before the next eligible replacement.
+- [x] Keep menu-driven preference changes consistent with Undo and Redo.
+- [x] Persist preferences and correction outcomes locally across relaunches.
+- [x] Count applied, kept, reverted, alternative, manual-edit, overridden, and
+      unresolved corrections without storing document text in statistics.
+- [ ] Add a user-facing statistics and preference-management surface.
+
 ## Next milestone: evaluation and editing robustness
 
 Before adding a contextual model, build a repeatable local harness around the

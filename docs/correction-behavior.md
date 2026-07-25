@@ -61,6 +61,47 @@ that correction, removes its mark, and records the user response as an edit.
 Every successful automatic correction retains the original word and exposes
 Change Back, alternatives, Keep, and normal Undo.
 
+## Remembered preferences
+
+Typover remembers explicit correction choices locally for the same original
+word and spelling language:
+
+- choosing an alternative makes that replacement the preferred correction next
+  time;
+- directly editing an annotated correction makes the resulting word preferred
+  when Typover can identify it;
+- Change Back suppresses automatic correction of that exact original word;
+- Undo and Redo of menu-driven correction changes restore the corresponding
+  preference state.
+
+Preferences use the exact original casing and language. A choice for `teh` in
+English does not silently become a preference for another language or a
+differently cased token.
+
+If a direct edit removes the entire annotation before Typover can identify the
+new word, the interaction still counts as a manual override but does not create
+an uncertain word mapping.
+
+## Local statistics
+
+Typover records one activity entry for each successfully applied correction and
+tracks whether that correction was:
+
+- explicitly kept;
+- changed back;
+- changed to an alternative;
+- manually edited;
+- left unresolved.
+
+The override rate is the number of unique applied corrections that were ever
+changed back, given an alternative, or manually edited, divided by all applied
+corrections. Repeated clicks on the same correction do not inflate that rate.
+
+Activity entries contain a correction ID, timestamp, and outcome flags—not the
+document text. Remembered preferences necessarily contain the original typo and
+preferred replacement, but remain only in Typover’s local Application Support
+file. Typover does not upload or synchronize either dataset.
+
 ## Deferred behavior
 
 Typover does not autonomously revisit an entire page or document while the

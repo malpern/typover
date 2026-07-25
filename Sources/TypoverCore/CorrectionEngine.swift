@@ -3,6 +3,7 @@ import Foundation
 public enum CorrectionSource: Equatable, Sendable {
   case demo
   case appleSpelling
+  case rememberedPreference
 }
 
 public enum CorrectionUserResponse: Equatable, Sendable {

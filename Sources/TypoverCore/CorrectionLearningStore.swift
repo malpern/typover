@@ -1,0 +1,323 @@
+import Foundation
+
+public enum RememberedCorrectionPreference: Codable, Equatable, Sendable {
+  case preferred(String)
+  case suppressed
+}
+
+public enum CorrectionOutcome: String, Codable, CaseIterable, Sendable {
+  case kept
+  case reverted
+  case alternativeChosen
+  case manuallyEdited
+}
+
+public struct CorrectionStatistics: Equatable, Sendable {
+  public let correctionsApplied: Int
+  public let kept: Int
+  public let reverted: Int
+  public let alternativesChosen: Int
+  public let manuallyEdited: Int
+  public let overriddenCorrections: Int
+  public let unresolvedCorrections: Int
+
+  public init(
+    correctionsApplied: Int,
+    kept: Int,
+    reverted: Int,
+    alternativesChosen: Int,
+    manuallyEdited: Int,
+    overriddenCorrections: Int,
+    unresolvedCorrections: Int
+  ) {
+    self.correctionsApplied = correctionsApplied
+    self.kept = kept
+    self.reverted = reverted
+    self.alternativesChosen = alternativesChosen
+    self.manuallyEdited = manuallyEdited
+    self.overriddenCorrections = overriddenCorrections
+    self.unresolvedCorrections = unresolvedCorrections
+  }
+
+  public var overrideRate: Double {
+    guard correctionsApplied > 0 else {
+      return 0
+    }
+    return Double(overriddenCorrections) / Double(correctionsApplied)
+  }
+}
+
+@MainActor
+public final class CorrectionLearningStore {
+  private struct PreferenceKey: Codable, Equatable, Hashable {
+    let original: String
+    let language: String
+  }
+
+  private struct PreferenceEntry: Codable, Equatable {
+    let key: PreferenceKey
+    var preference: RememberedCorrectionPreference
+    var updatedAt: Date
+  }
+
+  private struct Activity: Codable, Equatable {
+    let correctionID: UUID
+    let appliedAt: Date
+    var outcomes: Set<CorrectionOutcome>
+  }
+
+  private struct PersistedState: Codable, Equatable {
+    var preferences: [PreferenceEntry] = []
+    var activities: [Activity] = []
+  }
+
+  private let fileURL: URL
+  private let fileManager: FileManager
+  private var state: PersistedState
+
+  public convenience init() {
+    self.init(fileURL: Self.defaultFileURL())
+  }
+
+  public init(
+    fileURL: URL,
+    fileManager: FileManager = .default
+  ) {
+    self.fileURL = fileURL
+    self.fileManager = fileManager
+    self.state =
+      (try? Self.loadState(from: fileURL)) ?? PersistedState()
+  }
+
+  public func preference(
+    for original: String,
+    language: String?
+  ) -> RememberedCorrectionPreference? {
+    let key = preferenceKey(original: original, language: language)
+    return state.preferences.first(where: { $0.key == key })?.preference
+  }
+
+  public func applyingPreference(
+    to proposal: CorrectionProposal
+  ) -> CorrectionProposal? {
+    switch preference(
+      for: proposal.correction.original,
+      language: proposal.language
+    ) {
+    case .suppressed:
+      return nil
+    case .preferred(let replacement):
+      var seen = Set([proposal.correction.original, replacement])
+      let alternatives =
+        ([proposal.correction.replacement] + proposal.alternatives)
+        .filter { seen.insert($0).inserted }
+
+      return CorrectionProposal(
+        correction: Correction(
+          id: proposal.correction.id,
+          original: proposal.correction.original,
+          replacement: replacement,
+          createdAt: proposal.correction.createdAt
+        ),
+        alternatives: alternatives,
+        source: .rememberedPreference,
+        language: proposal.language,
+        lookupDuration: proposal.lookupDuration
+      )
+    case nil:
+      return proposal
+    }
+  }
+
+  public func recordApplied(_ proposal: CorrectionProposal) {
+    guard
+      !state.activities.contains(where: {
+        $0.correctionID == proposal.correction.id
+      })
+    else {
+      return
+    }
+
+    state.activities.append(
+      Activity(
+        correctionID: proposal.correction.id,
+        appliedAt: proposal.correction.createdAt,
+        outcomes: []
+      )
+    )
+    persist()
+  }
+
+  public func recordKept(_ proposal: CorrectionProposal) {
+    record(.kept, for: proposal.correction.id)
+  }
+
+  public func recordReverted(_ proposal: CorrectionProposal) {
+    setPreference(
+      .suppressed,
+      for: proposal.correction.original,
+      language: proposal.language
+    )
+    record(.reverted, for: proposal.correction.id)
+  }
+
+  public func recordPreferred(
+    _ replacement: String,
+    for proposal: CorrectionProposal,
+    outcome: CorrectionOutcome? = nil
+  ) {
+    setPreference(
+      .preferred(replacement),
+      for: proposal.correction.original,
+      language: proposal.language
+    )
+    if let outcome {
+      record(outcome, for: proposal.correction.id)
+    }
+  }
+
+  public func recordManualEdit(
+    _ replacement: String?,
+    for proposal: CorrectionProposal
+  ) {
+    if let replacement, !replacement.isEmpty {
+      if replacement == proposal.correction.original {
+        setPreference(
+          .suppressed,
+          for: proposal.correction.original,
+          language: proposal.language
+        )
+      } else {
+        setPreference(
+          .preferred(replacement),
+          for: proposal.correction.original,
+          language: proposal.language
+        )
+      }
+    }
+    record(.manuallyEdited, for: proposal.correction.id)
+  }
+
+  public func removePreference(
+    for original: String,
+    language: String?
+  ) {
+    let key = preferenceKey(original: original, language: language)
+    let originalCount = state.preferences.count
+    state.preferences.removeAll(where: { $0.key == key })
+    if state.preferences.count != originalCount {
+      persist()
+    }
+  }
+
+  public func statistics(since startDate: Date? = nil) -> CorrectionStatistics {
+    let activities = state.activities.filter { activity in
+      startDate.map({ activity.appliedAt >= $0 }) ?? true
+    }
+    let overrideOutcomes: Set<CorrectionOutcome> = [
+      .reverted,
+      .alternativeChosen,
+      .manuallyEdited,
+    ]
+
+    return CorrectionStatistics(
+      correctionsApplied: activities.count,
+      kept: activities.count(where: { $0.outcomes.contains(.kept) }),
+      reverted: activities.count(where: { $0.outcomes.contains(.reverted) }),
+      alternativesChosen: activities.count(where: {
+        $0.outcomes.contains(.alternativeChosen)
+      }),
+      manuallyEdited: activities.count(where: {
+        $0.outcomes.contains(.manuallyEdited)
+      }),
+      overriddenCorrections: activities.count(where: {
+        !$0.outcomes.isDisjoint(with: overrideOutcomes)
+      }),
+      unresolvedCorrections: activities.count(where: { $0.outcomes.isEmpty })
+    )
+  }
+
+  private static func defaultFileURL() -> URL {
+    if let overridePath = ProcessInfo.processInfo.environment[
+      "TYPOVER_LEARNING_STORE_PATH"
+    ], !overridePath.isEmpty {
+      return URL(fileURLWithPath: overridePath)
+    }
+
+    let applicationSupport =
+      FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? FileManager.default.temporaryDirectory
+    return
+      applicationSupport
+      .appendingPathComponent("Typover", isDirectory: true)
+      .appendingPathComponent("correction-learning.json")
+  }
+
+  private static func loadState(from fileURL: URL) throws -> PersistedState {
+    let data = try Data(contentsOf: fileURL)
+    return try JSONDecoder().decode(PersistedState.self, from: data)
+  }
+
+  private func preferenceKey(
+    original: String,
+    language: String?
+  ) -> PreferenceKey {
+    PreferenceKey(
+      original: original.precomposedStringWithCanonicalMapping,
+      language: language ?? ""
+    )
+  }
+
+  private func setPreference(
+    _ preference: RememberedCorrectionPreference,
+    for original: String,
+    language: String?
+  ) {
+    let key = preferenceKey(original: original, language: language)
+    if let index = state.preferences.firstIndex(where: { $0.key == key }) {
+      state.preferences[index].preference = preference
+      state.preferences[index].updatedAt = Date()
+    } else {
+      state.preferences.append(
+        PreferenceEntry(
+          key: key,
+          preference: preference,
+          updatedAt: Date()
+        )
+      )
+    }
+    persist()
+  }
+
+  private func record(
+    _ outcome: CorrectionOutcome,
+    for correctionID: UUID
+  ) {
+    guard
+      let index = state.activities.firstIndex(where: {
+        $0.correctionID == correctionID
+      })
+    else {
+      return
+    }
+    let insertion = state.activities[index].outcomes.insert(outcome)
+    if insertion.inserted {
+      persist()
+    }
+  }
+
+  private func persist() {
+    do {
+      try fileManager.createDirectory(
+        at: fileURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+      let data = try JSONEncoder().encode(state)
+      try data.write(to: fileURL, options: .atomic)
+    } catch {
+      // Preference learning and statistics must never interrupt typing.
+    }
+  }
+}

@@ -79,7 +79,9 @@ The controlled editor’s correction rules are captured in
 
 Controlled-editor interaction prototype with Apple spelling candidates, a
 binary automatic-correction policy, ranked alternatives, Change Back, Keep, and
-Undo. No system-wide text monitoring or replacement is implemented yet.
+Undo. Explicit alternatives, manual edits, and Change Back choices are learned
+locally, and aggregate correction outcomes are retained without document text.
+No system-wide text monitoring or replacement is implemented yet.
 
 ## License
 

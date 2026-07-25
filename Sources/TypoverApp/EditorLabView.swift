@@ -66,6 +66,19 @@ extension NSAttributedString.Key {
 
 @MainActor
 private final class TypoverTextView: NSTextView {
+  private enum LearningEffect {
+    case none
+    case removePreference
+    case suppress
+    case prefer(String, outcome: CorrectionOutcome?)
+  }
+
+  private struct PendingManualCorrection {
+    let correctionID: Correction.ID
+    var range: NSRange
+    var replacement: String
+  }
+
   private final class AlternativeSelection: NSObject {
     let correctionID: Correction.ID
     let replacement: String
@@ -77,12 +90,38 @@ private final class TypoverTextView: NSTextView {
   }
 
   private let correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
+  private let learningStore = CorrectionLearningStore()
 
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
   private var ledger = CorrectionLedger()
+  private var pendingManualCorrections: [Correction.ID: PendingManualCorrection] =
+    [:]
   private var proposalsByID: [Correction.ID: CorrectionProposal] = [:]
   private var viewportRange: NSTextRange?
+
+  override func shouldChangeText(
+    in affectedCharRange: NSRange,
+    replacementString: String?
+  ) -> Bool {
+    let shouldChange = super.shouldChangeText(
+      in: affectedCharRange,
+      replacementString: replacementString
+    )
+    guard shouldChange, !isPerformingCorrection else {
+      return shouldChange
+    }
+
+    updatePendingManualCorrections(
+      for: affectedCharRange,
+      replacementString: replacementString ?? ""
+    )
+    captureManualReplacement(
+      in: affectedCharRange,
+      replacementString: replacementString ?? ""
+    )
+    return true
+  }
 
   override func didChangeText() {
     super.didChangeText()
@@ -147,7 +186,8 @@ private final class TypoverTextView: NSTextView {
     }
 
     guard
-      let proposal = correctionEngine.proposal(for: completedWord.text),
+      let baseProposal = correctionEngine.proposal(for: completedWord.text),
+      let proposal = learningStore.applyingPreference(to: baseProposal),
       proposal.correction.changesText
     else {
       return
@@ -157,7 +197,11 @@ private final class TypoverTextView: NSTextView {
     correctionsByID[correction.id] = correction
     proposalsByID[correction.id] = proposal
     ledger.record(correction)
-    replaceCorrectionText(
+    let appliedLearningEffect: LearningEffect =
+      proposal.source == .rememberedPreference
+      ? .prefer(correction.replacement, outcome: nil)
+      : .removePreference
+    let didApply = replaceCorrectionText(
       correctionAfter: correction,
       correctionForReverse: correction,
       range: completedWord.range,
@@ -167,12 +211,17 @@ private final class TypoverTextView: NSTextView {
       dispositionAfter: .applied,
       undoAnnotatesReplacement: false,
       undoDisposition: .restored,
+      learningEffectAfter: appliedLearningEffect,
+      reverseLearningEffect: .suppress,
       actionName: String(
         localized: "Correct Spelling",
         bundle: #bundle,
         comment: "Undo menu action name for an automatic Typover correction."
       )
     )
+    if didApply {
+      learningStore.recordApplied(proposal)
+    }
   }
 
   @discardableResult
@@ -186,14 +235,22 @@ private final class TypoverTextView: NSTextView {
     dispositionAfter: CorrectionDisposition,
     undoAnnotatesReplacement: Bool,
     undoDisposition: CorrectionDisposition,
+    learningEffectAfter: LearningEffect = .none,
+    reverseLearningEffect: LearningEffect = .none,
     actionName: String
   ) -> Bool {
     guard
       let textStorage,
       NSMaxRange(range) <= textStorage.length,
-      (textStorage.string as NSString).substring(with: range) == expectedText,
-      shouldChangeText(in: range, replacementString: replacementText)
+      (textStorage.string as NSString).substring(with: range) == expectedText
     else {
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
+    }
+
+    isPerformingCorrection = true
+    guard shouldChangeText(in: range, replacementString: replacementText) else {
+      isPerformingCorrection = false
       ledger.transition(correctionAfter.id, to: .invalidated)
       return false
     }
@@ -204,7 +261,6 @@ private final class TypoverTextView: NSTextView {
       length: replacementText.utf16.count
     )
 
-    isPerformingCorrection = true
     textStorage.beginEditing()
     textStorage.replaceCharacters(in: range, with: replacementText)
     if annotateReplacement {
@@ -233,6 +289,10 @@ private final class TypoverTextView: NSTextView {
     correctionsByID[correctionAfter.id] = correctionAfter
     ledger.record(correctionAfter)
     ledger.transition(correctionAfter.id, to: dispositionAfter)
+    applyLearningEffect(
+      learningEffectAfter,
+      correctionID: correctionAfter.id
+    )
 
     undoManager?.registerUndo(withTarget: self) { target in
       target.replaceCorrectionText(
@@ -245,6 +305,8 @@ private final class TypoverTextView: NSTextView {
         dispositionAfter: undoDisposition,
         undoAnnotatesReplacement: annotateReplacement,
         undoDisposition: dispositionAfter,
+        learningEffectAfter: reverseLearningEffect,
+        reverseLearningEffect: learningEffectAfter,
         actionName: actionName
       )
     }
@@ -263,6 +325,11 @@ private final class TypoverTextView: NSTextView {
       }
 
       let ranges = annotatedRanges(for: id)
+      let manualReplacement =
+        pendingManualCorrections[id]?.replacement
+        ?? (ranges.count == 1
+          ? (textStorage.string as NSString).substring(with: ranges[0])
+          : nil)
       let annotationIsValid =
         ranges.count == 1
         && (textStorage.string as NSString).substring(with: ranges[0])
@@ -278,7 +345,102 @@ private final class TypoverTextView: NSTextView {
       ledger.transition(id, to: .invalidated)
       if let proposal = proposalsByID[id] {
         correctionEngine.record(.edited, for: proposal)
+        if pendingManualCorrections[id] == nil {
+          learningStore.recordManualEdit(
+            manualReplacement,
+            for: proposal
+          )
+        }
       }
+    }
+  }
+
+  private func captureManualReplacement(
+    in affectedRange: NSRange,
+    replacementString: String
+  ) {
+    guard let textStorage else {
+      return
+    }
+
+    for (id, _) in correctionsByID {
+      guard
+        ledger.record(for: id)?.disposition == .applied,
+        let annotationRange = annotatedRanges(for: id).first,
+        affectedRange.location >= annotationRange.location,
+        NSMaxRange(affectedRange) <= NSMaxRange(annotationRange)
+      else {
+        continue
+      }
+
+      let currentText = (textStorage.string as NSString).substring(
+        with: annotationRange
+      )
+      let localRange = NSRange(
+        location: affectedRange.location - annotationRange.location,
+        length: affectedRange.length
+      )
+      let replacement =
+        (currentText as NSString).replacingCharacters(
+          in: localRange,
+          with: replacementString
+        )
+      pendingManualCorrections[id] = PendingManualCorrection(
+        correctionID: id,
+        range: NSRange(
+          location: annotationRange.location,
+          length: replacement.utf16.count
+        ),
+        replacement: replacement
+      )
+    }
+  }
+
+  private func updatePendingManualCorrections(
+    for affectedRange: NSRange,
+    replacementString: String
+  ) {
+    for id in Array(pendingManualCorrections.keys) {
+      guard var pending = pendingManualCorrections[id] else {
+        continue
+      }
+
+      let editContinuesReplacement =
+        affectedRange.location >= pending.range.location
+        && NSMaxRange(affectedRange) <= NSMaxRange(pending.range)
+        && isWordEdit(replacementString)
+      guard editContinuesReplacement else {
+        finalizePendingManualCorrection(id)
+        continue
+      }
+
+      let localRange = NSRange(
+        location: affectedRange.location - pending.range.location,
+        length: affectedRange.length
+      )
+      pending.replacement =
+        (pending.replacement as NSString).replacingCharacters(
+          in: localRange,
+          with: replacementString
+        )
+      pending.range.length = pending.replacement.utf16.count
+      pendingManualCorrections[id] = pending
+    }
+  }
+
+  private func finalizePendingManualCorrection(_ id: Correction.ID) {
+    guard
+      let pending = pendingManualCorrections.removeValue(forKey: id),
+      let proposal = proposalsByID[pending.correctionID]
+    else {
+      return
+    }
+    learningStore.recordManualEdit(pending.replacement, for: proposal)
+  }
+
+  private func isWordEdit(_ replacement: String) -> Bool {
+    replacement.allSatisfy { character in
+      character.isLetter || character == "'" || character == "’"
     }
   }
 
@@ -387,11 +549,7 @@ private final class TypoverTextView: NSTextView {
 
     menu.addItem(.separator())
     let sourceItem = NSMenuItem(
-      title: String(
-        localized: "Apple Spelling · On Device",
-        bundle: #bundle,
-        comment: "Disabled correction-menu label identifying the local spelling source."
-      ),
+      title: sourceTitle(for: proposalsByID[id]?.source),
       action: nil,
       keyEquivalent: ""
     )
@@ -425,6 +583,11 @@ private final class TypoverTextView: NSTextView {
       dispositionAfter: .restored,
       undoAnnotatesReplacement: true,
       undoDisposition: .applied,
+      learningEffectAfter: .suppress,
+      reverseLearningEffect: restorationEffect(
+        for: correction,
+        proposal: proposalsByID[id]
+      ),
       actionName: String(
         localized: "Change Back",
         bundle: #bundle,
@@ -462,6 +625,14 @@ private final class TypoverTextView: NSTextView {
       dispositionAfter: .applied,
       undoAnnotatesReplacement: true,
       undoDisposition: .applied,
+      learningEffectAfter: .prefer(
+        alternative.replacement,
+        outcome: .alternativeChosen
+      ),
+      reverseLearningEffect: restorationEffect(
+        for: correction,
+        proposal: proposalsByID[correction.id]
+      ),
       actionName: String(
         localized: "Change Correction",
         bundle: #bundle,
@@ -488,6 +659,72 @@ private final class TypoverTextView: NSTextView {
     ledger.transition(id, to: .kept)
     if let proposal = proposalsByID[id] {
       correctionEngine.record(.accepted, for: proposal)
+      learningStore.recordKept(proposal)
+    }
+  }
+
+  private func applyLearningEffect(
+    _ effect: LearningEffect,
+    correctionID: Correction.ID
+  ) {
+    guard
+      let proposal = proposalsByID[correctionID]
+    else {
+      return
+    }
+
+    switch effect {
+    case .none:
+      return
+    case .removePreference:
+      learningStore.removePreference(
+        for: proposal.correction.original,
+        language: proposal.language
+      )
+    case .suppress:
+      learningStore.recordReverted(proposal)
+    case .prefer(let replacement, let outcome):
+      learningStore.recordPreferred(
+        replacement,
+        for: proposal,
+        outcome: outcome
+      )
+    }
+  }
+
+  private func restorationEffect(
+    for correction: Correction,
+    proposal: CorrectionProposal?
+  ) -> LearningEffect {
+    guard let proposal else {
+      return .none
+    }
+
+    if proposal.source == .rememberedPreference
+      || correction.replacement != proposal.correction.replacement
+    {
+      return .prefer(correction.replacement, outcome: nil)
+    }
+    return .removePreference
+  }
+
+  private func sourceTitle(
+    for source: CorrectionSource?
+  ) -> String {
+    switch source {
+    case .rememberedPreference:
+      return String(
+        localized: "Remembered Preference · On Device",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a locally remembered correction preference."
+      )
+    case .appleSpelling, .demo, nil:
+      return String(
+        localized: "Apple Spelling · On Device",
+        bundle: #bundle,
+        comment: "Disabled correction-menu label identifying the local spelling source."
+      )
     }
   }
 
