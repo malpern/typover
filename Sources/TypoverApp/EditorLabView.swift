@@ -4,8 +4,11 @@ import TypoverAppleSpell
 import TypoverCore
 
 struct EditorLabView: NSViewRepresentable {
+  let learningStore: CorrectionLearningStore
+
   func makeNSView(context: Context) -> NSScrollView {
     let textView = TypoverTextView(usingTextLayoutManager: true)
+    textView.useLearningStore(learningStore)
     textView.allowsUndo = true
     textView.autoresizingMask = [.width]
     textView.backgroundColor = NSColor.clear
@@ -134,6 +137,10 @@ final class TypoverTextView: NSTextView {
     self.correctionEngine = correctionEngine
     self.learningStore = learningStore
     testingUndoManager = undoManager
+  }
+
+  func useLearningStore(_ learningStore: CorrectionLearningStore) {
+    self.learningStore = learningStore
   }
 
   override var undoManager: UndoManager? {
@@ -576,10 +583,25 @@ final class TypoverTextView: NSTextView {
 
   private func showCorrectionMenu(for id: Correction.ID, event: NSEvent) {
     guard
+      let menu = correctionMenu(for: id),
+      let firstItem = menu.items.first
+    else {
+      return
+    }
+
+    menu.popUp(
+      positioning: firstItem,
+      at: convert(event.locationInWindow, from: nil),
+      in: self
+    )
+  }
+
+  func correctionMenu(for id: Correction.ID) -> NSMenu? {
+    guard
       let correction = correctionsByID[id],
       ledger.record(for: id)?.disposition == .applied
     else {
-      return
+      return nil
     }
 
     let menu = NSMenu()
@@ -625,20 +647,6 @@ final class TypoverTextView: NSTextView {
     }
 
     menu.addItem(.separator())
-    let keepItem = NSMenuItem(
-      title: String(
-        localized: "Keep Correction",
-        bundle: #bundle,
-        comment: "Menu action that accepts an automatic correction and removes its annotation."
-      ),
-      action: #selector(keepCorrection(_:)),
-      keyEquivalent: ""
-    )
-    keepItem.representedObject = id.uuidString
-    keepItem.target = self
-    menu.addItem(keepItem)
-
-    menu.addItem(.separator())
     let sourceItem = NSMenuItem(
       title: sourceTitle(for: proposalsByID[id]?.source),
       action: nil,
@@ -646,12 +654,7 @@ final class TypoverTextView: NSTextView {
     )
     sourceItem.isEnabled = false
     menu.addItem(sourceItem)
-
-    menu.popUp(
-      positioning: changeBackItem,
-      at: convert(event.locationInWindow, from: nil),
-      in: self
-    )
+    return menu
   }
 
   @objc
@@ -754,90 +757,6 @@ final class TypoverTextView: NSTextView {
       correctionEngine.record(.edited, for: proposal)
     }
     return didReplace
-  }
-
-  @objc
-  private func keepCorrection(_ sender: NSMenuItem) {
-    guard let id = correctionID(from: sender) else {
-      return
-    }
-    keepCorrection(correctionID: id)
-  }
-
-  @discardableResult
-  func keepCorrection(
-    correctionID id: Correction.ID,
-    recordsResponse: Bool = true
-  ) -> Bool {
-    guard
-      let textStorage,
-      ledger.record(for: id)?.disposition == .applied
-    else {
-      return false
-    }
-    let ranges = annotatedRanges(for: id)
-    guard ranges.count == 1 else {
-      return false
-    }
-    for range in ranges {
-      textStorage.removeAttribute(.typoverCorrectionID, range: range)
-    }
-    ledger.transition(id, to: .kept)
-    if recordsResponse, let proposal = proposalsByID[id] {
-      correctionEngine.record(.accepted, for: proposal)
-      learningStore.recordKept(proposal)
-    }
-    let actionName = String(
-      localized: "Keep Correction",
-      bundle: #bundle,
-      comment: "Undo menu action name after accepting an automatic correction."
-    )
-    undoManager?.registerUndo(withTarget: self) { target in
-      target.restoreKeptCorrection(
-        correctionID: id,
-        ranges: ranges,
-        actionName: actionName
-      )
-    }
-    undoManager?.setActionName(actionName)
-    return true
-  }
-
-  @discardableResult
-  private func restoreKeptCorrection(
-    correctionID id: Correction.ID,
-    ranges: [NSRange],
-    actionName: String
-  ) -> Bool {
-    guard
-      let textStorage,
-      let correction = correctionsByID[id],
-      ranges.count == 1,
-      NSMaxRange(ranges[0]) <= textStorage.length,
-      (textStorage.string as NSString).substring(with: ranges[0])
-      == correction.replacement
-    else {
-      recordDiagnostic(
-        .staleText,
-        correctionID: id,
-        range: ranges.first
-      )
-      ledger.transition(id, to: .invalidated)
-      return false
-    }
-
-    textStorage.addAttribute(
-      .typoverCorrectionID,
-      value: id.uuidString,
-      range: ranges[0]
-    )
-    ledger.transition(id, to: .applied)
-    undoManager?.registerUndo(withTarget: self) { target in
-      target.keepCorrection(correctionID: id, recordsResponse: false)
-    }
-    undoManager?.setActionName(actionName)
-    needsDisplay = true
-    return true
   }
 
   private func applyLearningEffect(

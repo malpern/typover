@@ -300,35 +300,51 @@ struct EditorStressTests {
     )
   }
 
-  @Test("Undo and redo Keep without changing text")
-  func undoRedoKeep() throws {
+  @Test("Removing a shared learned choice changes the next correction")
+  func removedSharedChoiceTakesEffectImmediately() throws {
     let fixture = EditorFixture()
     defer { fixture.removeLearningStore() }
     fixture.type("teh ")
     let id = try #require(fixture.appliedSnapshots.first?.correction.id)
-    fixture.editor.undoManager?.removeAllActions()
+    #expect(
+      fixture.editor.useAlternative(
+        correctionID: id,
+        replacement: "ten"
+      )
+    )
+    let rule = try #require(fixture.learningStore.rememberedRules.first)
 
-    #expect(fixture.editor.keepCorrection(correctionID: id))
-    #expect(fixture.editor.string == "the ")
-    #expect(fixture.editor.correctionSnapshots.first?.disposition == .kept)
-    #expect(fixture.editor.correctionSnapshots.first?.annotatedRanges.isEmpty == true)
+    fixture.learningStore.removeRule(rule.id)
+    fixture.moveCaret(to: fixture.editor.string.utf16.count)
+    fixture.type("teh ")
 
-    fixture.editor.undoManager?.undo()
-    #expect(fixture.editor.string == "the ")
-    #expect(fixture.editor.correctionSnapshots.first?.disposition == .applied)
-    #expect(fixture.editor.correctionSnapshots.first?.annotatedRanges.count == 1)
-
-    fixture.editor.undoManager?.redo()
-    #expect(fixture.editor.string == "the ")
-    #expect(fixture.editor.correctionSnapshots.first?.disposition == .kept)
-    #expect(fixture.editor.correctionSnapshots.first?.annotatedRanges.isEmpty == true)
+    #expect(fixture.editor.string == "ten the ")
   }
+
+  @Test("The correction menu omits the redundant Keep action")
+  func correctionMenuHasOnlyActionableChoices() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh ")
+    let id = try #require(fixture.appliedSnapshots.first?.correction.id)
+    let menu = try #require(fixture.editor.correctionMenu(for: id))
+    let titles = menu.items
+      .filter { !$0.isSeparatorItem }
+      .map(\.title)
+
+    #expect(titles.contains("Change Back to “teh”"))
+    #expect(titles.contains("Change to “ten”"))
+    #expect(titles.contains("Apple Spelling · On Device"))
+    #expect(!titles.contains("Keep Correction"))
+  }
+
 }
 
 @MainActor
 private final class EditorFixture {
   let editor: TypoverTextView
   let engine: TestCorrectionEngine
+  let learningStore: CorrectionLearningStore
 
   private let learningDirectory: URL
   private let scrollView: NSScrollView
@@ -338,7 +354,7 @@ private final class EditorFixture {
     editor = TypoverTextView(usingTextLayoutManager: true)
     learningDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    let learningStore = CorrectionLearningStore(
+    learningStore = CorrectionLearningStore(
       fileURL: learningDirectory.appendingPathComponent("learning.json")
     )
 

@@ -243,8 +243,7 @@ Reposition or hide the annotation when Bear:
 Make the annotation clickable without losing the correction target. Present:
 
 - Change Back to the original;
-- alternative corrections, when available;
-- Keep Correction, which removes the annotation.
+- alternative corrections, when available.
 
 ### Acceptance criteria
 

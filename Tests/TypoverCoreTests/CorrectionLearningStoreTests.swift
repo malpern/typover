@@ -141,6 +141,76 @@ struct CorrectionLearningStoreTests {
     #expect(restored.source == .appleSpelling)
   }
 
+  @Test("Remembered rules expose stable identifiers and newest-first order")
+  func listsRememberedRules() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let first = makeProposal(original: "teh", replacement: "the")
+    let second = makeProposal(original: "wrod", replacement: "word")
+
+    store.recordPreferred("the", for: first)
+    store.recordReverted(second)
+
+    let rules = store.rememberedRules
+    #expect(rules.count == 2)
+    #expect(rules[0].original == "wrod")
+    #expect(rules[0].preference == .suppressed)
+    #expect(rules[1].id.original == "teh")
+    #expect(rules[1].id.language == "en_US")
+    #expect(rules[1].preference == .preferred("the"))
+  }
+
+  @Test("A remembered rule can be removed by its stable identifier")
+  func removesRuleByID() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+    store.recordPreferred("the", for: proposal)
+    let rule = try #require(store.rememberedRules.first)
+
+    store.removeRule(rule.id)
+
+    #expect(store.rememberedRules.isEmpty)
+    #expect(store.preference(for: "teh", language: "en_US") == nil)
+  }
+
+  @Test("Statistics and preferences can be reset independently")
+  func resetsStoredDataIndependently() {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+    store.recordApplied(proposal)
+    store.recordPreferred("the", for: proposal)
+
+    store.resetStatistics()
+
+    #expect(store.statistics().correctionsApplied == 0)
+    #expect(store.rememberedRules.count == 1)
+
+    store.resetPreferences()
+
+    #expect(store.statistics().correctionsApplied == 0)
+    #expect(store.rememberedRules.isEmpty)
+  }
+
+  @Test("Reset all learning clears statistics and remembered rules")
+  func resetsAllLearning() {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+    store.recordApplied(proposal)
+    store.recordPreferred("the", for: proposal)
+
+    store.resetAllLearning()
+
+    #expect(store.statistics().correctionsApplied == 0)
+    #expect(store.rememberedRules.isEmpty)
+  }
+
   private func makeProposal(
     original: String,
     replacement: String,

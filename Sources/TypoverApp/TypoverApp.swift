@@ -1,15 +1,18 @@
 import AppKit
 import SwiftUI
+import TypoverCore
 
 @main
 struct TypoverApp: App {
+  @State private var learningStore = CorrectionLearningStore()
+
   init() {
     NSApplication.shared.applicationIconImage = TypoverBrand.appIcon
   }
 
   var body: some Scene {
     WindowGroup {
-      ContentView()
+      ContentView(learningStore: learningStore)
     }
     .defaultSize(width: 760, height: 540)
     .windowResizability(.contentMinSize)
@@ -22,6 +25,10 @@ struct TypoverApp: App {
     }
     .defaultPosition(.center)
     .windowResizability(.contentSize)
+
+    Settings {
+      LearningSettingsView(learningStore: learningStore)
+    }
   }
 }
 

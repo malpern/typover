@@ -19,7 +19,7 @@ attempts to reproduce those capabilities through Accessibility in another app.
 - [x] Replace only the exact misspelled range.
 - [x] Preserve the original and replacement in `TypoverCore`.
 - [x] Render a persistent light-gray squiggle.
-- [x] Provide Change Back, alternatives, Keep, and Undo.
+- [x] Provide Change Back, alternatives, and Undo.
 - [x] Preserve the caret and selection through replacement.
 
 ### 2. Modern TextKit reference editor
@@ -33,7 +33,7 @@ attempts to reproduce those capabilities through Accessibility in another app.
 
 - [x] Replace the deterministic demo rule with `NSSpellChecker`.
 - [x] Use Apple’s ranked guesses when no separate automatic candidate exists.
-- [x] Feed accepted, reverted, and edited responses back to Apple.
+- [x] Feed reverted and edited responses back to Apple.
 - [x] Keep spelling lookup entirely on device.
 - [x] Keep the candidate source behind a replaceable engine protocol.
 
@@ -60,9 +60,9 @@ The complete behavior contract is in
 - [x] Apply remembered preferences before the next eligible replacement.
 - [x] Keep menu-driven preference changes consistent with Undo and Redo.
 - [x] Persist preferences and correction outcomes locally across relaunches.
-- [x] Count applied, kept, reverted, alternative, manual-edit, overridden, and
+- [x] Count applied, reverted, alternative, manual-edit, overridden, and
       unresolved corrections without storing document text in statistics.
-- [ ] Add a user-facing statistics and preference-management surface.
+- [x] Add a user-facing statistics and preference-management surface.
 
 ## Next milestone: evaluation and editing robustness
 
@@ -94,13 +94,15 @@ corrections. Apple leaves the provisional French `cafe` example unchanged.
 
 - [x] Exercise rapid typing across many consecutive corrections.
 - [x] Exercise multiple corrections before and after the caret.
-- [x] Verify Undo and Redo through correction, alternative, Change Back, and
-      Keep sequences.
+- [x] Verify Undo and Redo through correction, alternative, and Change Back
+      sequences.
 - [x] Verify edits immediately before, inside, and after an annotated
       correction.
 - [ ] Verify paste, selection replacement, dictation, and marked-text input do
       not cause stale or duplicate corrections. Paste, selection replacement,
-      and marked-text composition are covered; automated dictation remains.
+      and marked-text composition are covered. The real-input
+      [Dictation QA pass](../testing/dictation-qa.md) is defined; automated
+      Dictation remains.
 - [x] Verify punctuation, paragraph boundaries, scrolling, wrapping, and large
       documents.
 - [x] Add structured diagnostics for rejected or stale proposals without

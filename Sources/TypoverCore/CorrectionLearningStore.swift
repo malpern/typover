@@ -1,8 +1,43 @@
 import Foundation
+import Observation
 
 public enum RememberedCorrectionPreference: Codable, Equatable, Sendable {
   case preferred(String)
   case suppressed
+}
+
+public struct RememberedCorrectionRule: Equatable, Identifiable, Sendable {
+  public struct ID: Equatable, Hashable, Sendable {
+    public let original: String
+    public let language: String
+
+    public init(original: String, language: String) {
+      self.original = original
+      self.language = language
+    }
+  }
+
+  public let id: ID
+  public let original: String
+  public let language: String?
+  public let preference: RememberedCorrectionPreference
+  public let updatedAt: Date
+
+  public init(
+    original: String,
+    language: String?,
+    preference: RememberedCorrectionPreference,
+    updatedAt: Date
+  ) {
+    self.original = original
+    self.language = language
+    self.preference = preference
+    self.updatedAt = updatedAt
+    self.id = ID(
+      original: original,
+      language: language ?? ""
+    )
+  }
 }
 
 public enum CorrectionOutcome: String, Codable, CaseIterable, Sendable {
@@ -48,6 +83,7 @@ public struct CorrectionStatistics: Equatable, Sendable {
 }
 
 @MainActor
+@Observable
 public final class CorrectionLearningStore {
   private struct PreferenceKey: Codable, Equatable, Hashable {
     let original: String
@@ -208,6 +244,62 @@ public final class CorrectionLearningStore {
     if state.preferences.count != originalCount {
       persist()
     }
+  }
+
+  public var rememberedRules: [RememberedCorrectionRule] {
+    state.preferences
+      .map { entry in
+        RememberedCorrectionRule(
+          original: entry.key.original,
+          language: entry.key.language.isEmpty ? nil : entry.key.language,
+          preference: entry.preference,
+          updatedAt: entry.updatedAt
+        )
+      }
+      .sorted { left, right in
+        if left.updatedAt != right.updatedAt {
+          return left.updatedAt > right.updatedAt
+        }
+        if left.original != right.original {
+          return left.original.localizedStandardCompare(right.original)
+            == .orderedAscending
+        }
+        return (left.language ?? "") < (right.language ?? "")
+      }
+  }
+
+  public func removeRule(_ id: RememberedCorrectionRule.ID) {
+    removePreference(
+      for: id.original,
+      language: id.language.isEmpty ? nil : id.language
+    )
+  }
+
+  public func resetPreferences() {
+    guard !state.preferences.isEmpty else {
+      return
+    }
+    state.preferences.removeAll()
+    persist()
+  }
+
+  public func resetStatistics() {
+    guard !state.activities.isEmpty else {
+      return
+    }
+    state.activities.removeAll()
+    persist()
+  }
+
+  public func resetAllLearning() {
+    guard
+      !state.preferences.isEmpty
+      || !state.activities.isEmpty
+    else {
+      return
+    }
+    state = PersistedState()
+    persist()
   }
 
   public func statistics(since startDate: Date? = nil) -> CorrectionStatistics {

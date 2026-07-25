@@ -1,10 +1,13 @@
 import SwiftUI
+import TypoverCore
 
 struct ContentView: View {
+  let learningStore: CorrectionLearningStore
+
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       TypoverHeader()
-      EditorLabSection()
+      EditorLabSection(learningStore: learningStore)
       EditorPrinciples()
     }
     .padding(32)
@@ -58,6 +61,8 @@ private struct TypoverHeader: View {
 }
 
 private struct EditorLabSection: View {
+  let learningStore: CorrectionLearningStore
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
@@ -85,7 +90,7 @@ private struct EditorLabSection: View {
         .foregroundStyle(.secondary)
       }
 
-      EditorLabView()
+      EditorLabView(learningStore: learningStore)
         .frame(minHeight: 240)
         .padding(1)
         .background(Color(nsColor: .textBackgroundColor))
@@ -96,7 +101,7 @@ private struct EditorLabSection: View {
         }
 
       Text(
-        "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or keep the correction.",
+        "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or choose another correction.",
         bundle: #bundle,
         comment:
           "Instructions below the Typover editor explaining the reversible correction interaction."

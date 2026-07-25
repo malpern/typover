@@ -63,7 +63,7 @@ with the attributed text. Editing through an annotated correction invalidates
 that correction, removes its mark, and records the user response as an edit.
 
 Every successful automatic correction retains the original word and exposes
-Change Back, alternatives, Keep, and normal Undo.
+Change Back, alternatives, and normal Undo.
 
 Rejected transactions and invalidated annotations produce structured,
 text-free diagnostics containing only a reason, correction identifier, numeric
@@ -87,6 +87,11 @@ Preferences use the exact original casing and language. A choice for `teh` in
 English does not silently become a preference for another language or a
 differently cased token.
 
+Statistics and remembered choices are visible in Typover’s standard Settings
+window. Removing one choice affects the shared editor immediately. The writer
+can reset statistics independently or clear all local learning after a
+confirmation.
+
 If a direct edit removes the entire annotation before Typover can identify the
 new word, the interaction still counts as a manual override but does not create
 an uncertain word mapping.
@@ -96,7 +101,6 @@ an uncertain word mapping.
 Typover records one activity entry for each successfully applied correction and
 tracks whether that correction was:
 
-- explicitly kept;
 - changed back;
 - changed to an alternative;
 - manually edited;
