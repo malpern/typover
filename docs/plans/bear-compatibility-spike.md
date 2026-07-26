@@ -582,10 +582,16 @@ without creating a second correction path.
 The live short-note correction passed. An adjacent synthetic typing tail stayed
 outside the correction, the session remained tracked, switching to the Phase 4
 note hid the annotation, and returning to the uniquely verifying Phase 2 note
-retained the session. A live Revert-with-tail click remains pending because the
-automation bridge cannot address Typover's nonactivating overlay panel, though
-the real menu was manually verified and the full transaction is covered by the
-opt-in live harness.
+retained the session. The correction panel now exposes an Accessibility
+floating window and one logical correction button. Computer Use opened that
+button's native menu and verified that Revert changed only `the` back to `teh`
+while preserving an adjacent synthetic typing tail.
+
+The accessible press path is deliberately asynchronous so AppKit menu tracking
+does not hold the Accessibility request open. The menu session retains its
+action target until the menu closes and uses a stable Objective-C selector;
+focused tests cover the window hierarchy and actual AppKit action dispatch.
+Full spoken VoiceOver navigation remains pending.
 
 Manual supersession exposed and then verified a lifecycle fix. A stale or
 ambiguous geometry result after an actual Bear value-change now ends the old

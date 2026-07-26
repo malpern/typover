@@ -20,8 +20,14 @@ succeed before Bear moves the caret back to the edited word.
 Only the narrow squiggle strip accepts pointer input. Its `NSPanel` remains
 nonactivating and cannot become key or main. The primary fragment is exposed as
 one Accessibility button; wrapped fragments do not create duplicate VoiceOver
-stops. A Bear-only Control–Option–Command–Return shortcut opens the same native
-menu.
+stops. The primary panel is also exposed as an Accessibility floating window
+with a stable identifier, label, and help text. A Bear-only
+Control–Option–Command–Return shortcut opens the same native menu.
+
+Accessibility presses schedule menu presentation on the next main-loop turn so
+the press response does not remain blocked inside AppKit's menu-tracking loop.
+The presentation session owns the menu action target until `menuDidClose` and
+uses a stable Objective-C action selector. Pointer presentation remains direct.
 
 The menu is intentionally short:
 
@@ -67,5 +73,7 @@ Any other selection is considered a newer user action and is never changed.
 - A stale or ambiguous anchor after a real text-value change ends the preview
   session. The same unavailable geometry after a temporary focus or note switch
   stays hidden and may resume only after fresh verification.
-- Full VoiceOver, menu-dismissal, live Revert-with-tail, and cross-version
-  behavior remain explicit Phase 7 matrix items rather than assumptions.
+- The live Accessibility Revert-with-tail transaction has passed while
+  preserving adjacent typed text.
+- Full spoken VoiceOver navigation, menu-dismissal, and cross-version behavior
+  remain explicit Phase 7 matrix items rather than assumptions.

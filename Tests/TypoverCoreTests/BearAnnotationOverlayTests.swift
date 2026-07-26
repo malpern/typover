@@ -247,6 +247,22 @@ struct BearAnnotationOverlayTests {
     }
     #expect(presenter.panels[0].frame.width == 48)
     #expect(presenter.panels[0].frame.height == 12)
+    #expect(presenter.panels[0].isAccessibilityElement())
+    #expect(
+      presenter.panels[0].accessibilityRole() == .window
+    )
+    #expect(
+      presenter.panels[0].accessibilitySubrole() == .floatingWindow
+    )
+    #expect(
+      presenter.panels[0].accessibilityIdentifier()
+        == "typover.bear.correction-overlay"
+    )
+    #expect(
+      presenter.panels[0].accessibilityChildren()?.count == 1
+    )
+    #expect(!presenter.panels[1].isAccessibilityElement())
+    #expect(presenter.panels[1].accessibilityChildren()?.isEmpty == true)
     #expect(
       presenter.panels[0].contentView?.isAccessibilityElement() == true
     )
@@ -254,11 +270,41 @@ struct BearAnnotationOverlayTests {
       presenter.panels[0].contentView?.accessibilityIdentifier()
         == "typover.bear.correction-options"
     )
+    #expect(
+      presenter.panels[0].contentView?.accessibilityHelp()
+        == "Opens the menu for reverting this correction or choosing another suggestion."
+    )
 
     presenter.hide()
     for panel in presenter.panels {
       #expect(!panel.isVisible)
     }
+  }
+
+  @MainActor
+  @Test("An accessible menu session retains its action target")
+  func accessibleMenuSessionRetainsTarget() throws {
+    var selectedAction: BearAnnotationAction?
+    let session = BearAnnotationMenuSession(
+      interaction: overlayInteraction { action in
+        selectedAction = action
+      }
+    )
+
+    let menuItem = session.menu.items[0]
+    let target = menuItem.target
+    let action = try #require(menuItem.action)
+    #expect(target != nil)
+    #expect(NSStringFromSelector(action) == "performMenuItem:")
+    #expect(target?.responds(to: action) == true)
+    #expect(
+      NSApplication.shared.sendAction(
+        action,
+        to: target,
+        from: menuItem
+      )
+    )
+    #expect(selectedAction == .changeBack)
   }
 
   @MainActor
@@ -712,14 +758,20 @@ private func testController(
 }
 
 @MainActor
-private func overlayInteraction() -> BearAnnotationInteraction {
+private func overlayInteraction(
+  handler: @escaping @MainActor @Sendable (BearAnnotationAction) -> Void = {
+    _ in
+  }
+) -> BearAnnotationInteraction {
   BearAnnotationInteraction(
     items: BearAnnotationMenuModel.items(
       for: overlayApplication(),
       alternatives: ["ten", "tech"]
     ),
     accessibilityLabel: "Correction options for the"
-  ) { _ in }
+  ) { action in
+    handler(action)
+  }
 }
 
 @MainActor

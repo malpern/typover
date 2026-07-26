@@ -115,6 +115,17 @@ final class BearSquigglePanel: NSPanel {
     squiggleView.setAccessibilityIdentifier(
       "typover.bear.correction-options"
     )
+    squiggleView.setAccessibilityHelp(
+      "Opens the menu for reverting this correction or choosing another suggestion."
+    )
+    setAccessibilityElement(isPrimaryAccessibilityElement)
+    setAccessibilityRole(.window)
+    setAccessibilitySubrole(.floatingWindow)
+    setAccessibilityLabel(interaction.accessibilityLabel)
+    setAccessibilityIdentifier("typover.bear.correction-overlay")
+    setAccessibilityChildren(
+      isPrimaryAccessibilityElement ? [squiggleView] : []
+    )
     squiggleView.needsDisplay = true
   }
 
@@ -129,7 +140,7 @@ final class BearSquigglePanel: NSPanel {
 final class BearSquiggleView: NSView {
   var squiggleFrame = NSRect(x: 0, y: 0, width: 1, height: 4)
   var interaction: BearAnnotationInteraction?
-  private var menuTarget: BearAnnotationMenuTarget?
+  private var menuSession: BearAnnotationMenuSession?
 
   override var isOpaque: Bool { false }
 
@@ -142,8 +153,13 @@ final class BearSquiggleView: NSView {
   }
 
   override func accessibilityPerformPress() -> Bool {
-    showMenu()
-    return interaction != nil
+    guard interaction != nil else {
+      return false
+    }
+    Task { @MainActor [weak self] in
+      self?.showMenu()
+    }
+    return true
   }
 
   func showMenu() {
@@ -154,26 +170,15 @@ final class BearSquiggleView: NSView {
     guard let interaction, !interaction.items.isEmpty else {
       return
     }
-    let target = BearAnnotationMenuTarget(handler: interaction.handler)
-    menuTarget = target
-    let menu = NSMenu()
-    menu.autoenablesItems = false
-    for (index, item) in interaction.items.enumerated() {
-      if item.beginsAlternativeSection {
-        menu.addItem(.separator())
+    let session = BearAnnotationMenuSession(interaction: interaction)
+    session.onClose = { [weak self] menu in
+      guard self?.menuSession?.menu === menu else {
+        return
       }
-      let menuItem = NSMenuItem(
-        title: item.title,
-        action: #selector(BearAnnotationMenuTarget.perform(_:)),
-        keyEquivalent: ""
-      )
-      menuItem.target = target
-      menuItem.tag = index
-      menuItem.isEnabled = true
-      menuItem.setAccessibilityLabel(item.title)
-      menu.addItem(menuItem)
+      self?.menuSession = nil
     }
-    target.actions = interaction.items.map(\.action)
+    menuSession = session
+    let menu = session.menu
 
     if let event {
       NSMenu.popUpContextMenu(menu, with: event, for: self)
@@ -184,7 +189,6 @@ final class BearSquiggleView: NSView {
         in: self
       )
     }
-    menuTarget = nil
   }
 
   override func draw(_ dirtyRect: NSRect) {
@@ -215,7 +219,42 @@ final class BearSquiggleView: NSView {
 }
 
 @MainActor
-private final class BearAnnotationMenuTarget: NSObject {
+final class BearAnnotationMenuSession: NSObject, NSMenuDelegate {
+  let menu = NSMenu()
+  var onClose: ((NSMenu) -> Void)?
+  private let target: BearAnnotationMenuTarget
+
+  init(interaction: BearAnnotationInteraction) {
+    target = BearAnnotationMenuTarget(handler: interaction.handler)
+    super.init()
+    menu.delegate = self
+    menu.autoenablesItems = false
+    for (index, item) in interaction.items.enumerated() {
+      if item.beginsAlternativeSection {
+        menu.addItem(.separator())
+      }
+      let menuItem = NSMenuItem(
+        title: item.title,
+        action: NSSelectorFromString("performMenuItem:"),
+        keyEquivalent: ""
+      )
+      menuItem.target = target
+      menuItem.tag = index
+      menuItem.isEnabled = true
+      menuItem.setAccessibilityLabel(item.title)
+      menu.addItem(menuItem)
+    }
+    target.actions = interaction.items.map(\.action)
+  }
+
+  func menuDidClose(_ menu: NSMenu) {
+    onClose?(menu)
+  }
+}
+
+@MainActor
+@objc(TypoverBearAnnotationMenuTarget)
+final class BearAnnotationMenuTarget: NSObject {
   var actions: [BearAnnotationAction] = []
   private let handler: @MainActor @Sendable (BearAnnotationAction) -> Void
 
@@ -228,7 +267,8 @@ private final class BearAnnotationMenuTarget: NSObject {
     self.handler = handler
   }
 
-  @objc func perform(_ sender: NSMenuItem) {
+  @objc(performMenuItem:)
+  dynamic func perform(_ sender: NSMenuItem) {
     guard actions.indices.contains(sender.tag) else {
       return
     }

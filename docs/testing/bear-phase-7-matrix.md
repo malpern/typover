@@ -29,7 +29,7 @@ Accessibility behavior.
 | Short note baseline | Exact-range, geometry, overlay, menu tests pass | Passed on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
 | Long note | Bounded-read and earlier-position tests pass | Geometry matrix passed on 2026-07-25; interaction pending | No whole-note read or write; annotation remains aligned |
 | Repeated typo | Ambiguous-anchor tests pass | Pending | Act only on the uniquely anchored occurrence or refuse |
-| Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Correction, adjacent synthetic tail, and continued tracking passed; live Revert-with-tail pending | Preserve newly typed text and keep a unique correction anchored |
+| Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Passed on 2026-07-26, including live Revert with an adjacent synthetic tail | Preserve newly typed text and keep a unique correction anchored |
 | Edit before correction | Re-anchoring tests pass | Pending | Shift to the unique anchor without changing intervening text |
 | Edit after correction | Re-anchoring tests pass | Pending | Keep the correction anchored; preserve later text |
 | Change both context sides | Invalidated-anchor tests pass | Pending | Hide and refuse without writing |
@@ -39,6 +39,7 @@ Accessibility behavior.
 | Bear relaunch | Bear-not-running and focus-unavailable states pass | Pending | Hide old annotation; never reuse a stale interaction |
 | Typover relaunch | Correction state is intentionally session-scoped | Pending | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
+| Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed on 2026-07-26; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
 | Dark appearance | Native color behavior is deterministic | Pending | Menu remains native; squiggle remains subtle and legible |
 | Scroll during refresh | Offscreen and partial-visibility tests pass | Geometry matrix passed; in-flight interaction pending | Hide before movement and redraw only after verified geometry |
 | Markdown constructs | Wrapped and formatted geometry tests pass | Heading, list, link, code, and wrap geometry passed | Accessibility coordinates remain authoritative |
@@ -75,7 +76,9 @@ On Bear 2.8.1 and macOS 27.0, the installed, stable-signed Typover app:
    when the original uniquely verifying note returned;
 4. restored the disposable marker after each experiment; and
 5. successfully started a second correction after the first correction was
-   manually superseded.
+   manually superseded; and
+6. changed `the` back to `teh` while preserving a synthetic tail typed directly
+   after the corrected word.
 
 The observed correction was present in the first capture about 1.6 seconds
 after the menu action. That number includes Computer Use activation and capture
@@ -89,3 +92,19 @@ when it follows a real Accessibility value-change event. The same result after
 a temporary focus or note switch remains hidden and resumable. Deterministic
 tests cover both branches, and the permissioned two-correction sequence passed
 after deployment.
+
+The correction panel is now an explicit Accessibility floating window. Its
+primary underline fragment exposes one labeled button with help text and a
+stable identifier; wrapped visual fragments remain excluded from the
+Accessibility hierarchy. An Accessibility press schedules menu presentation on
+the next main-loop turn so the AX request returns before AppKit begins menu
+tracking. The menu session retains its action target until AppKit closes the
+menu, and its stable Objective-C action selector is covered by a dispatch test.
+
+Computer Use addressed the floating window, opened the native menu, chose
+**Revert to “teh”**, and verified the final synthetic marker as
+`teh-phase7tail`. The `-phase7tail` text was unchanged. The test fixture was
+then restored to `teh`. Computer Use selects one Typover window at a time, so
+the ordinary editor window was closed during this check; this did not activate
+the correction panel or alter the Bear transaction. Full spoken VoiceOver
+navigation remains a separate manual row.

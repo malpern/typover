@@ -374,6 +374,7 @@ so typing beside the word does not remove Change Back or alternatives. Both
 sides changed and duplicate one-sided matches fail closed. The real-Bear
 overlay harness contains the same sequence. The permissioned app host has now
 passed baseline correction, adjacent continued typing, note switching, safe
-return, manual supersession, and a fresh second correction. A live
-Revert-with-tail click, multiple-window interaction, relaunches, dark appearance,
-and the previous Bear release remain.
+return, manual supersession, a fresh second correction, and Revert while
+preserving an adjacent synthetic typing tail. Multiple-window interaction,
+relaunches, dark appearance, full VoiceOver navigation, and the previous Bear
+release remain.
