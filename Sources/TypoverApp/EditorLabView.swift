@@ -8,11 +8,13 @@ import TypoverRemoteIntelligence
 struct EditorLabView: NSViewRepresentable {
   let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
+  let onLearnedSuppression: (String?) -> Void
 
   func makeNSView(context: Context) -> NSScrollView {
     let textView = TypoverTextView(usingTextLayoutManager: true)
     textView.useBehaviorSettings(behaviorSettings)
     textView.useLearningStore(learningStore)
+    textView.onLearnedSuppression = onLearnedSuppression
     textView.allowsUndo = true
     textView.autoresizingMask = [.width]
     textView.backgroundColor = NSColor.clear
@@ -62,7 +64,10 @@ struct EditorLabView: NSViewRepresentable {
     return scrollView
   }
 
-  func updateNSView(_ scrollView: NSScrollView, context: Context) {}
+  func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    (scrollView.documentView as? TypoverTextView)?.onLearnedSuppression =
+      onLearnedSuppression
+  }
 }
 
 extension NSAttributedString.Key {
@@ -129,6 +134,7 @@ final class TypoverTextView: NSTextView {
   private var pendingUserEdit: PendingUserEdit?
   private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
+  var onLearnedSuppression: ((String?) -> Void)?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
   private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
 
@@ -300,11 +306,23 @@ final class TypoverTextView: NSTextView {
       return
     }
 
+    onLearnedSuppression?(nil)
     guard
-      let baseProposal = correctionEngine.proposal(for: completedWord.text),
-      let proposal = learningStore.applyingPreference(to: baseProposal),
-      proposal.correction.changesText
+      let baseProposal = correctionEngine.proposal(for: completedWord.text)
     else {
+      return
+    }
+    guard let proposal = learningStore.applyingPreference(to: baseProposal)
+    else {
+      if learningStore.preference(
+        for: baseProposal.correction.original,
+        language: baseProposal.language
+      ) == .suppressed {
+        onLearnedSuppression?(baseProposal.correction.original)
+      }
+      return
+    }
+    guard proposal.correction.changesText else {
       return
     }
 

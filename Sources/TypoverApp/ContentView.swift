@@ -68,6 +68,8 @@ private struct EditorLabSection: View {
   let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
 
+  @State private var learnedSuppression: String?
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
@@ -97,7 +99,10 @@ private struct EditorLabSection: View {
 
       EditorLabView(
         behaviorSettings: behaviorSettings,
-        learningStore: learningStore
+        learningStore: learningStore,
+        onLearnedSuppression: { original in
+          learnedSuppression = original
+        }
       )
       .frame(minHeight: 240)
       .padding(1)
@@ -116,6 +121,22 @@ private struct EditorLabSection: View {
       )
       .font(.callout)
       .foregroundStyle(.secondary)
+
+      if let learnedSuppression {
+        Label {
+          Text(
+            "Typover left “\(learnedSuppression)” unchanged because you previously chose Change Back. Forget that choice in Settings to correct it again.",
+            bundle: #bundle,
+            comment:
+              "Explanation shown when a remembered preference suppresses a spelling correction."
+          )
+        } icon: {
+          Image(systemName: "brain")
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("typover.editor.learned-suppression")
+      }
     }
   }
 }

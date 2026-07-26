@@ -274,6 +274,25 @@ struct EditorStressTests {
     #expect(fixture.editor.correctionSnapshots.first?.disposition == .restored)
   }
 
+  @Test("A learned suppression explains why a typo stays unchanged")
+  func learnedSuppressionIsReported() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    var reportedOriginal: String?
+    fixture.editor.onLearnedSuppression = { original in
+      reportedOriginal = original
+    }
+    fixture.type("teh ")
+    let id = try #require(fixture.appliedSnapshots.first?.correction.id)
+    #expect(fixture.editor.changeBack(correctionID: id))
+
+    fixture.moveCaret(to: fixture.editor.string.utf16.count)
+    fixture.type("teh ")
+
+    #expect(fixture.editor.string == "teh teh ")
+    #expect(reportedOriginal == "teh")
+  }
+
   @Test("Undo and redo an alternative correction")
   func undoRedoAlternative() throws {
     let fixture = EditorFixture()
