@@ -167,7 +167,7 @@ public struct BearAccessibilityProbe: BearAccessibilityProbing, Sendable {
 }
 
 extension BearAccessibilityProbe {
-  fileprivate func textAreas(in root: AXUIElement) -> [AXUIElement] {
+  func textAreas(in root: AXUIElement) -> [AXUIElement] {
     var queue: [(element: AXUIElement, depth: Int)] = [(root, 0)]
     var textAreas: [AXUIElement] = []
     var visited = Set<ObjectIdentifier>()

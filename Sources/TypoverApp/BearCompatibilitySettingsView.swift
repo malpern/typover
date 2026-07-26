@@ -6,8 +6,11 @@ struct BearCompatibilitySection: View {
   let eventReport: BearAccessibilityEventReport?
   let isChecking: Bool
   let isObserving: Bool
+  let overlayPreviewStatus: BearOverlayPreviewStatus
   let onCheck: () -> Void
   let onObserve: () -> Void
+  let onPreviewOverlay: () -> Void
+  let onStopOverlayPreview: () -> Void
 
   var body: some View {
     GroupBox {
@@ -73,6 +76,14 @@ struct BearCompatibilitySection: View {
             onObserve: onObserve
           )
         }
+
+        Divider()
+
+        BearOverlayPreviewControl(
+          status: overlayPreviewStatus,
+          onPreview: onPreviewOverlay,
+          onStop: onStopOverlayPreview
+        )
       }
       .padding(4)
     } label: {
@@ -86,6 +97,94 @@ struct BearCompatibilitySection: View {
       } icon: {
         Image(systemName: "pawprint")
       }
+    }
+  }
+}
+
+private struct BearOverlayPreviewControl: View {
+  let status: BearOverlayPreviewStatus
+  let onPreview: () -> Void
+  let onStop: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(
+        "To test the real overlay, select exactly “teh” in a disposable Bear note. Typover will change only that selection to “the” and place the light-gray mark beneath it.",
+        bundle: #bundle,
+        comment:
+          "Instructions for the bounded Bear annotation overlay preview."
+      )
+      .font(.callout)
+      .foregroundStyle(.secondary)
+
+      if let message = status.message {
+        Label(message, systemImage: status.systemImage)
+          .font(.callout)
+          .foregroundStyle(status == .active ? Color.green : Color.secondary)
+      }
+
+      HStack {
+        Button(action: onPreview) {
+          if status == .preparing {
+            ProgressView()
+              .controlSize(.small)
+            Text(
+              "Preparing Preview…",
+              bundle: #bundle,
+              comment: "Label while Typover starts the Bear overlay preview."
+            )
+          } else {
+            Text(
+              "Show Squiggle in Bear",
+              bundle: #bundle,
+              comment: "Button that begins the bounded Bear overlay preview."
+            )
+          }
+        }
+        .disabled(status == .preparing || status == .active)
+        .accessibilityIdentifier("typover.settings.bear.preview-overlay")
+
+        if status == .active {
+          Button(action: onStop) {
+            Text(
+              "Stop Preview",
+              bundle: #bundle,
+              comment: "Button that stops the Bear annotation overlay preview."
+            )
+          }
+          .accessibilityIdentifier("typover.settings.bear.stop-overlay")
+        }
+      }
+    }
+  }
+}
+
+extension BearOverlayPreviewStatus {
+  fileprivate var message: LocalizedStringResource? {
+    switch self {
+    case .idle:
+      nil
+    case .preparing:
+      "Checking the selected Bear text…"
+    case .active:
+      "Preview active while Bear remains in front"
+    case .bearUnavailable:
+      "Open Bear and try again"
+    case .selectExactTypo:
+      "Select exactly three characters in the Bear editor, then try again"
+    case .selectionDidNotMatch:
+      "The selected text was not “teh”; nothing was changed"
+    }
+  }
+
+  fileprivate var systemImage: String {
+    switch self {
+    case .active:
+      "scribble.variable"
+    case .preparing:
+      "ellipsis"
+    case .idle, .bearUnavailable, .selectExactTypo, .selectionDidNotMatch:
+      "info.circle"
     }
   }
 }

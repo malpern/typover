@@ -2,7 +2,9 @@ import AppKit
 import SwiftUI
 import TypoverAccessibility
 import TypoverAppleIntelligence
+import TypoverBearAdapter
 import TypoverCore
+import TypoverOverlay
 import TypoverRemoteIntelligence
 
 struct LearningSettingsView: View {
@@ -11,6 +13,7 @@ struct LearningSettingsView: View {
   let credentialStore: SecretsAppCredentialStore
   let bearProbe: any BearAccessibilityProbing
   let bearEventMonitor: any BearAccessibilityEventMonitoring
+  let bearCorrectionAdapter: BearCorrectionAdapter
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
@@ -18,6 +21,8 @@ struct LearningSettingsView: View {
   @State private var bearEventReport: BearAccessibilityEventReport?
   @State private var isCheckingBear = false
   @State private var isObservingBear = false
+  @State private var bearOverlayPreviewStatus: BearOverlayPreviewStatus = .idle
+  @State private var bearOverlayController: BearAnnotationOverlayController
 
   init(
     behaviorSettings: CorrectionBehaviorSettings,
@@ -25,13 +30,20 @@ struct LearningSettingsView: View {
     credentialStore: SecretsAppCredentialStore = SecretsAppCredentialStore(),
     bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe(),
     bearEventMonitor: any BearAccessibilityEventMonitoring =
-      BearAccessibilityEventMonitor()
+      BearAccessibilityEventMonitor(),
+    bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
     self.credentialStore = credentialStore
     self.bearProbe = bearProbe
     self.bearEventMonitor = bearEventMonitor
+    self.bearCorrectionAdapter = bearCorrectionAdapter
+    _bearOverlayController = State(
+      initialValue: BearAnnotationOverlayController(
+        adapter: bearCorrectionAdapter
+      )
+    )
   }
 
   var body: some View {
@@ -50,8 +62,11 @@ struct LearningSettingsView: View {
           eventReport: bearEventReport,
           isChecking: isCheckingBear,
           isObserving: isObservingBear,
+          overlayPreviewStatus: bearOverlayPreviewStatus,
           onCheck: checkBearCompatibility,
-          onObserve: observeBearEvents
+          onObserve: observeBearEvents,
+          onPreviewOverlay: previewBearOverlay,
+          onStopOverlayPreview: stopBearOverlayPreview
         )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
@@ -189,6 +204,65 @@ struct LearningSettingsView: View {
       isObservingBear = false
     }
   }
+
+  private func previewBearOverlay() {
+    bearOverlayPreviewStatus = .preparing
+    let returnApplication = NSRunningApplication.current
+    let bearApplication = NSRunningApplication.runningApplications(
+      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    ).first
+    bearApplication?.activate(options: [.activateAllWindows])
+
+    Task {
+      guard bearApplication != nil else {
+        bearOverlayPreviewStatus = .bearUnavailable
+        return
+      }
+      try? await Task.sleep(for: .milliseconds(400))
+      let probe = bearProbe
+      let report = await Task.detached(priority: .userInitiated) {
+        probe.run()
+      }.value
+      guard let selectedRange = report.selectedRange,
+        selectedRange.length == 3
+      else {
+        returnApplication.activate(options: [.activateAllWindows])
+        bearOverlayPreviewStatus = .selectExactTypo
+        return
+      }
+
+      let adapter = bearCorrectionAdapter
+      let application = await Task.detached(priority: .userInitiated) {
+        adapter.apply(
+          original: "teh",
+          replacement: "the",
+          at: selectedRange
+        )
+      }.value
+      guard application.report.isVerifiedApplication else {
+        returnApplication.activate(options: [.activateAllWindows])
+        bearOverlayPreviewStatus = .selectionDidNotMatch
+        return
+      }
+
+      bearOverlayController.track(application)
+      bearOverlayPreviewStatus = .active
+    }
+  }
+
+  private func stopBearOverlayPreview() {
+    bearOverlayController.stop()
+    bearOverlayPreviewStatus = .idle
+  }
+}
+
+enum BearOverlayPreviewStatus: Equatable {
+  case idle
+  case preparing
+  case active
+  case bearUnavailable
+  case selectExactTypo
+  case selectionDidNotMatch
 }
 
 private struct CorrectionBehaviorSection: View {

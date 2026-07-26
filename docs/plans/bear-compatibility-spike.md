@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Phase 2 complete — independent restoration is next
+- Status: Phase 5 complete — correction interaction is next
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -424,6 +424,51 @@ Reposition or hide the annotation when Bear:
 - No stale mark is shown over unrelated text.
 - The overlay does not appear in screenshots of other spaces or windows.
 - Typing latency remains imperceptible.
+
+### Live result: 2026-07-25
+
+Phase 5 adds a dedicated `TypoverOverlay` component. It converts each
+Accessibility fragment from top-left screen coordinates into the matching
+AppKit display's coordinate space and renders one narrow light-gray wave per
+fragment. Wrapped corrections therefore never become one underline spanning
+unrelated text.
+
+The windows are borderless, transparent, nonactivating, click-through, omitted
+from the app switcher, and intentionally do not join every Space. Typover only
+orders them onscreen while Bear is the frontmost application. Moving to another
+application hides every panel immediately; returning to Bear recomputes rather
+than reusing an old rectangle.
+
+The tracker subscribes to Bear's text, layout, focus, window-move, and
+window-resize Accessibility notifications. Geometry-changing events hide the
+mark before requesting fresh bounded geometry. A 125-millisecond fallback
+refresh covers missed scroll or layout notifications. Every nonavailable
+geometry result hides all fragments.
+
+The live disposable-note preview changed only an explicitly selected `teh` to
+`the`, drew a 22-by-5-point gray squiggle directly beneath it, and left Bear
+frontmost. The mark disappeared when Finder came forward, returned when Bear
+regained focus, disappeared after the corrected word was manually changed to
+`thy`, and returned when the expected replacement was restored. The harness
+then independently changed the word back to `teh` and restored the original
+selection.
+
+Deterministic tests cover primary and secondary-display conversion, wrapped
+fragments, invalid and excessive fragment rejection, frontmost-app gating,
+every unsafe geometry state, panel focus behavior, pointer passthrough, and the
+absence of `canJoinAllSpaces`. Phase 4's live long-note matrix already proves
+that scrolling returns `offscreen` with no stale bounds; Phase 5's policy hides
+that result. Continuous rapid-scroll and typing-load measurement remains part
+of the Phase 7 robustness matrix rather than the interaction work in Phase 6.
+
+The Settings preview is deliberately bounded: it requires exactly three
+selected characters and the guarded replacement still verifies that they are
+`teh` before any write. It does not enable unattended Bear correction.
+
+Decision: **go** for Phase 6. The external overlay can carry Typover's visual
+language without activating Typover or intercepting Bear's editor. Phase 6 can
+make only the annotation hit target interactive while preserving these window
+and focus rules.
 
 ## Phase 6: Correction interaction
 

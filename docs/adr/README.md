@@ -9,3 +9,4 @@
 - [ADR-007: Allow explicit contextual-model selection with external secrets](adr-007-user-selectable-contextual-models.md)
 - [ADR-008: Use Accessibility coordinates for live Bear editing](adr-008-bear-live-editing-coordinate-space.md)
 - [ADR-009: Fragment wrapped Bear ranges before drawing annotations](adr-009-fragment-wrapped-bear-geometry.md)
+- [ADR-010: Use fail-closed nonactivating panels for Bear annotations](adr-010-fail-closed-bear-annotation-panels.md)

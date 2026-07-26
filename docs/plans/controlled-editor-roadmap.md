@@ -339,9 +339,19 @@ and distinguishes unsupported, failed, and invalid geometry. The live matrix
 passed across formatting, wrapping, scrolling, zoom, attachment-adjacent text,
 and separate Bear windows.
 
-## Next implementation milestone: Bear Phase 5
+## Completed implementation milestone: Bear Phase 5
 
-Build a borderless, nonactivating AppKit overlay that renders the light-gray
-squiggle from the Phase 4 fragments. It must track Bear scrolling, window
-movement and resizing, focus, note changes, typography changes, and anchor
-invalidation without intercepting typing or leaving a stale mark onscreen.
+Typover now renders each verified Bear geometry fragment in a borderless,
+nonactivating, click-through AppKit panel. Accessibility invalidations hide and
+recompute the mark, a bounded fallback refresh covers missed layout events, and
+frontmost-app gating prevents the overlay from following the user into another
+application or Space. The live synthetic correction stayed aligned, hid across
+an application switch and manual supersession, returned only after fresh
+verification, and restored the fixture afterward.
+
+## Next implementation milestone: Bear Phase 6
+
+Make the squiggle itself a narrow interactive target without activating
+Typover or disturbing Bear's caret. Its menu should offer Change Back and
+verified alternatives, dismiss without changing the note, and expose equivalent
+keyboard and VoiceOver actions.
