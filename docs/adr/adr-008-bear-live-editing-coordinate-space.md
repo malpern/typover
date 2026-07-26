@@ -37,7 +37,10 @@ The live path will:
 - verify the expected original at that exact Accessibility range;
 - write only `AXSelectedText`, never the complete `AXValue`;
 - restore and verify the Accessibility selection;
-- verify a bounded surrounding context before creating a correction record.
+- verify a bounded surrounding context before creating a correction record;
+- retain only fingerprints of that context for later re-anchoring;
+- restore through the same verified exact-range transaction only when one
+  fingerprinted candidate remains.
 
 Bear's official CLI may be used for disposable test-fixture setup, stable note
 identity, content-free diagnostics, bulk maintenance, and later reconciliation

@@ -108,8 +108,9 @@ product surfaces.
 
 Active research work is described in [docs/plans](docs/plans/README.md),
 including the completed controlled-editor milestones and the active Bear
-compatibility spike. Bear Phase 2 has proven one guarded, exact-range
-Accessibility replacement and native Undo behavior in a disposable note.
+compatibility spike. Bear Phase 3 has proven guarded exact-range replacement,
+native Undo behavior, and an independent Change Back transaction in a
+disposable note.
 
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
@@ -125,8 +126,10 @@ spelling alternatives, manual edits, and Change Back choices are learned
 locally, and aggregate correction outcomes are retained without document text.
 Contextual overrides are measured but do not create unsafe global rules for
 otherwise valid words. Bear observation and exact-range replacement now exist
-as explicit test transactions; unattended cross-app correction and the
-external annotation overlay are not implemented yet.
+as explicit test transactions. Change Back re-anchors from bounded,
+content-private context fingerprints and refuses stale or ambiguous targets;
+unattended cross-app correction and the external annotation overlay are not
+implemented yet.
 
 ## License
 

@@ -315,14 +315,25 @@ disposable note changed only `teh` to `the`, restored the original caret, and
 verified its local postconditions. Native Command-Z restored and selected the
 original word.
 
-## Next implementation milestone: Bear Phase 3
+## Completed implementation milestone: Bear Phase 3
 
-Implement Typover's independent Change Back transaction and correction-anchor
-state:
+Typover now has an independent Change Back transaction and correction-anchor
+state that:
 
-- preserve a bounded context fingerprint with the verified correction record;
-- re-anchor after edits before or after the corrected range;
-- restore only when the replacement remains uniquely identifiable;
-- refuse ambiguous or stale restoration without editing;
-- keep native Undo behavior documented but do not depend on the Undo stack for
+- preserves bounded context fingerprints with the verified correction record;
+- re-anchors after edits before or after the corrected range;
+- restores only when the replacement remains uniquely identifiable;
+- refuses ambiguous or stale restoration without editing;
+- keeps native Undo behavior documented but does not depend on the Undo stack for
   Typover's menu action.
+
+The deterministic restoration suite passes, and an opt-in live Bear test
+applied and independently restored the synthetic typo without invoking native
+Undo.
+
+## Next implementation milestone: Bear Phase 4
+
+Measure `AXBoundsForRange` for corrected text across visible lines, wrapping,
+formatting, scrolling, and separate Bear windows. Produce a content-free
+geometry capability result that distinguishes stable visible bounds, offscreen
+ranges, and unsupported or stale geometry before beginning the overlay.

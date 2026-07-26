@@ -3,6 +3,7 @@ import ApplicationServices
 import Foundation
 import Testing
 import TypoverBearAdapter
+import TypoverCore
 
 @testable import TypoverAccessibility
 
@@ -15,7 +16,7 @@ struct BearExactRangeReplacementTests {
       selection: AccessibilityTextRange(location: 10, length: 0)
     )
 
-    let report = BearExactRangeTransaction().apply(
+    let outcome = BearExactRangeTransaction().applyOutcome(
       request(
         location: 6,
         original: "teh",
@@ -23,6 +24,7 @@ struct BearExactRangeReplacementTests {
       ),
       to: editor
     )
+    let report = outcome.report
 
     #expect(report.status == .applied)
     #expect(report.isVerifiedApplication)
@@ -32,6 +34,7 @@ struct BearExactRangeReplacementTests {
         == AccessibilityTextRange(location: 10, length: 0)
     )
     #expect(editor.replacementWriteCount == 1)
+    #expect(outcome.correctionAnchor != nil)
   }
 
   @Test("A longer replacement shifts the caret by only its length delta")
@@ -272,6 +275,12 @@ struct BearExactRangeReplacementTests {
       surroundingContextVerified: true,
       caretRestored: true
     )
+    let anchor = BearCorrectionAnchor(
+      correctionRange: AccessibilityTextRange(location: 6, length: 3),
+      documentLength: 15,
+      leadingContext: "alpha ",
+      trailingContext: " omega"
+    )
     let failedReport = BearExactRangeReplacementReport(
       status: .verificationFailed,
       writeOccurred: true,
@@ -279,7 +288,10 @@ struct BearExactRangeReplacementTests {
     )
 
     let verified = BearCorrectionAdapter(
-      replacer: StubBearReplacer(report: verifiedReport)
+      replacer: StubBearReplacer(
+        report: verifiedReport,
+        correctionAnchor: anchor
+      )
     ).apply(
       original: "teh",
       replacement: "the",
@@ -312,13 +324,17 @@ struct BearExactRangeReplacementTests {
     let probe = BearAccessibilityProbe().run()
     let selection = try #require(probe.selectedRange)
     #expect(probe.status == .ready)
-    #expect(selection.length == 0)
-    #expect(selection.location >= 4)
-
-    let targetRange = AccessibilityTextRange(
-      location: selection.location - 4,
-      length: 3
-    )
+    let targetRange: AccessibilityTextRange
+    if selection.length == 3 {
+      targetRange = selection
+    } else {
+      #expect(selection.length == 0)
+      #expect(selection.location >= 4)
+      targetRange = AccessibilityTextRange(
+        location: selection.location - 4,
+        length: 3
+      )
+    }
     let adapter = BearCorrectionAdapter()
     let application = adapter.apply(
       original: "teh",
@@ -371,6 +387,262 @@ struct BearExactRangeReplacementTests {
       replacement: replacement
     )
   }
+}
+
+@Suite("Bear independent Change Back")
+struct BearCorrectionRestorationTests {
+  @Test("Change Back restores only the corrected range")
+  func restoresCorrection() throws {
+    let fixture = try makeAppliedFixture()
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(report.writeOccurred)
+    #expect(fixture.editor.text as String == fixture.originalDocument)
+    #expect(fixture.editor.replacementWriteCount == 2)
+  }
+
+  @Test("Typing before the context re-anchors by document-length delta")
+  func reanchorsAfterEditBefore() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(location: 0, length: 0),
+      with: "inserted before "
+    )
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(
+      fixture.editor.text as String
+        == "inserted before " + fixture.originalDocument
+    )
+  }
+
+  @Test("Typing after the context keeps the original anchor valid")
+  func reanchorsAfterEditAfter() throws {
+    let fixture = try makeAppliedFixture()
+    let suffix = " user text written later"
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.editor.text.length,
+        length: 0
+      ),
+      with: suffix
+    )
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(fixture.editor.text as String == fixture.originalDocument + suffix)
+  }
+
+  @Test("An externally restored original is recognized without another write")
+  func recognizesAlreadyRestored() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      fixture.anchor.correctionRange,
+      with: "teh"
+    )
+    let writeCount = fixture.editor.replacementWriteCount
+
+    let report = restore(fixture)
+
+    #expect(report.status == .alreadyRestored)
+    #expect(!report.writeOccurred)
+    #expect(fixture.editor.replacementWriteCount == writeCount)
+  }
+
+  @Test("A manually changed correction is superseded and never overwritten")
+  func refusesSupersededCorrection() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      fixture.anchor.correctionRange,
+      with: "thy"
+    )
+
+    let report = restore(fixture)
+
+    #expect(report.status == .superseded)
+    #expect(!report.writeOccurred)
+    #expect((fixture.editor.text as String).contains(" thy "))
+  }
+
+  @Test("Duplicated surrounding context is ambiguous and never edited")
+  func refusesAmbiguousAnchor() throws {
+    let fixture = try makeAppliedFixture()
+    let duplicate = String(repeating: "a", count: 39)
+      + " the "
+      + String(repeating: "z", count: 39)
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.editor.text.length,
+        length: 0
+      ),
+      with: duplicate
+    )
+    let textBefore = fixture.editor.text as String
+
+    let report = restore(fixture)
+
+    #expect(report.status == .invalidated)
+    #expect(report.candidateCount > 1)
+    #expect(!report.writeOccurred)
+    #expect(fixture.editor.text as String == textBefore)
+  }
+
+  @Test("Changed nearby context invalidates the anchor without editing")
+  func refusesStaleAnchor() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location - 2,
+        length: 1
+      ),
+      with: "x"
+    )
+    let textBefore = fixture.editor.text as String
+
+    let report = restore(fixture)
+
+    #expect(report.status == .invalidated)
+    #expect(report.candidateCount == 0)
+    #expect(!report.writeOccurred)
+    #expect(fixture.editor.text as String == textBefore)
+  }
+
+  @Test("Stored anchors contain fingerprints rather than surrounding prose")
+  func anchorIsContentPrivate() throws {
+    let fixture = try makeAppliedFixture()
+    let data = try JSONEncoder().encode(fixture.anchor)
+    let json = try #require(String(data: data, encoding: .utf8))
+
+    #expect(!json.contains(String(repeating: "a", count: 39)))
+    #expect(!json.contains(String(repeating: "z", count: 39)))
+    #expect(!json.contains("teh"))
+    #expect(!json.contains("the"))
+  }
+
+  @Test("The Bear adapter maps restoration outcomes to explicit dispositions")
+  func adapterTransitionsDisposition() throws {
+    let fixture = try makeAppliedFixture()
+    let correction = Correction(original: "teh", replacement: "the")
+    let application = BearCorrectionApplication(
+      report: BearExactRangeReplacementReport(
+        status: .applied,
+        writeOccurred: true,
+        targetRange: AccessibilityTextRange(location: 61, length: 3),
+        replacementRange: fixture.anchor.correctionRange,
+        surroundingContextVerified: true,
+        caretRestored: true
+      ),
+      correction: correction,
+      correctionRecord: CorrectionRecord(correction: correction),
+      correctionAnchor: fixture.anchor
+    )
+
+    let restored = BearCorrectionAdapter(
+      replacer: StubBearReplacer(report: application.report),
+      restorer: StubBearRestorer(status: .restored)
+    ).changeBack(application)
+    let superseded = BearCorrectionAdapter(
+      replacer: StubBearReplacer(report: application.report),
+      restorer: StubBearRestorer(status: .superseded)
+    ).changeBack(application)
+    let invalidated = BearCorrectionAdapter(
+      replacer: StubBearReplacer(report: application.report),
+      restorer: StubBearRestorer(status: .invalidated)
+    ).changeBack(application)
+
+    #expect(restored.correctionRecord.disposition == .restored)
+    #expect(superseded.correctionRecord.disposition == .superseded)
+    #expect(invalidated.correctionRecord.disposition == .invalidated)
+  }
+
+  @Test(
+    "Live Bear Change Back restores the synthetic correction",
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "TYPOVER_RUN_LIVE_BEAR_CHANGE_BACK"
+      ] == "1"
+    )
+  )
+  func liveBearChangeBack() throws {
+    let probe = BearAccessibilityProbe().run()
+    let selection = try #require(probe.selectedRange)
+    #expect(probe.status == .ready)
+    let targetRange: AccessibilityTextRange
+    if selection.length == 3 {
+      targetRange = selection
+    } else {
+      #expect(selection.length == 0)
+      #expect(selection.location >= 4)
+      targetRange = AccessibilityTextRange(
+        location: selection.location - 4,
+        length: 3
+      )
+    }
+    let adapter = BearCorrectionAdapter()
+    let application = adapter.apply(
+      original: "teh",
+      replacement: "the",
+      at: targetRange
+    )
+    let record = try #require(application.correctionRecord)
+    #expect(record.disposition == .applied)
+
+    let restoration = adapter.changeBack(application)
+    #expect(restoration.report.status == .restored)
+    #expect(restoration.correctionRecord.disposition == .restored)
+  }
+
+  private func makeAppliedFixture() throws -> AppliedFixture {
+    let originalDocument = String(repeating: "a", count: 60)
+      + " teh "
+      + String(repeating: "z", count: 60)
+    let editor = FakeBearEditableTextClient(
+      text: originalDocument,
+      selection: AccessibilityTextRange(
+        location: originalDocument.utf16.count,
+        length: 0
+      )
+    )
+    let outcome = BearExactRangeTransaction().applyOutcome(
+      BearExactRangeReplacementRequest(
+        targetRange: AccessibilityTextRange(location: 61, length: 3),
+        expectedOriginal: "teh",
+        replacement: "the"
+      ),
+      to: editor
+    )
+    let report = outcome.report
+    #expect(report.status == .applied)
+    return AppliedFixture(
+      editor: editor,
+      anchor: try #require(outcome.correctionAnchor),
+      originalDocument: originalDocument
+    )
+  }
+
+  private func restore(
+    _ fixture: AppliedFixture
+  ) -> BearCorrectionRestorationReport {
+    BearCorrectionRestorationTransaction().restore(
+      BearCorrectionRestorationRequest(
+        anchor: fixture.anchor,
+        expectedReplacement: "the",
+        original: "teh"
+      ),
+      in: fixture.editor
+    )
+  }
+}
+
+private struct AppliedFixture {
+  let editor: FakeBearEditableTextClient
+  let anchor: BearCorrectionAnchor
+  let originalDocument: String
 }
 
 private func performBearUndoMenuAction() throws -> Bool {
@@ -561,14 +833,59 @@ private final class FakeBearEditableTextClient: BearEditableTextClient {
     }
     return .success
   }
+
+  func userReplace(
+    _ range: AccessibilityTextRange,
+    with replacement: String
+  ) {
+    let delta = replacement.utf16.count - range.length
+    text.replaceCharacters(
+      in: NSRange(location: range.location, length: range.length),
+      with: replacement
+    )
+    let rangeEnd = range.location + range.length
+    if selection.location >= rangeEnd {
+      selection = AccessibilityTextRange(
+        location: selection.location + delta,
+        length: selection.length
+      )
+    } else if selection.location > range.location {
+      selection = AccessibilityTextRange(
+        location: range.location + replacement.utf16.count,
+        length: 0
+      )
+    }
+  }
 }
 
 private struct StubBearReplacer: BearExactRangeReplacing {
   let report: BearExactRangeReplacementReport
+  let correctionAnchor: BearCorrectionAnchor?
+
+  init(
+    report: BearExactRangeReplacementReport,
+    correctionAnchor: BearCorrectionAnchor? = nil
+  ) {
+    self.report = report
+    self.correctionAnchor = correctionAnchor
+  }
 
   func replace(
     _: BearExactRangeReplacementRequest
-  ) -> BearExactRangeReplacementReport {
-    report
+  ) -> BearExactRangeReplacementOutcome {
+    BearExactRangeReplacementOutcome(
+      report: report,
+      correctionAnchor: correctionAnchor
+    )
+  }
+}
+
+private struct StubBearRestorer: BearCorrectionRestoring {
+  let status: BearCorrectionRestorationStatus
+
+  func restore(
+    _: BearCorrectionRestorationRequest
+  ) -> BearCorrectionRestorationReport {
+    BearCorrectionRestorationReport(status: status)
   }
 }

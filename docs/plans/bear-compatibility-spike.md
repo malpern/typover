@@ -156,15 +156,17 @@ Primary references:
 
 ### `TypoverCore`
 
-Owns correction decisions, binary eligibility rules, range-level diffs,
-correction records, context fingerprints, and re-anchoring logic. It has no
-dependency on Bear, Accessibility, AppKit, or TextKit.
+Owns correction decisions, binary eligibility rules, range-level diffs, and
+generic correction records and dispositions. It has no dependency on Bear,
+Accessibility, AppKit, or TextKit.
 
 ### `TypoverAccessibility`
 
 Finds the active application and focused editable element, reads a bounded
 context range, reads and writes selection, performs the smallest possible
-replacement, and subscribes to relevant Accessibility notifications.
+replacement, stores Bear-specific content-private context fingerprints,
+re-anchors those ranges, and subscribes to relevant Accessibility
+notifications.
 
 ### `TypoverBearAdapter`
 
@@ -313,6 +315,32 @@ an old absolute offset after later typing.
   identified.
 - A correction record transitions through explicit applied, restored,
   superseded, or invalidated states.
+
+### Live result: 2026-07-25
+
+Phase 3 now stores a SHA-256 fingerprint of up to 40 UTF-16 units immediately
+before and after each verified replacement. It retains the correction range
+and note length but does not retain or serialize the surrounding prose.
+
+Change Back searches two bounded Accessibility neighborhoods: the original
+location and the location adjusted by the note's net length change. It restores
+only one candidate whose leading and trailing fingerprints both match. This
+supports later typing before or after the correction without scanning or
+rewriting the whole note.
+
+Deterministic tests verify restoration after edits on either side, recognition
+of an already restored word, superseding after a manual word change, and
+refusal after stale or duplicated context. Ambiguous and stale anchors perform
+no write. The Bear adapter maps successful, superseded, and invalidated
+outcomes to explicit correction-record dispositions.
+
+The opt-in live transaction ran in the retained tag-free
+`Typover Bear Phase 2 — 2026-07-25` note. It changed the synthetic marker from
+`teh` to `the`, restored it through Typover's independent Change Back path, and
+left the final marker as `teh`. This path did not invoke Bear's Undo command.
+
+Decision: **go** for Phase 4 range geometry. Typover's menu action can now be
+independent of Bear's global Undo stack.
 
 ## Phase 4: Range geometry
 

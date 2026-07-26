@@ -5,7 +5,7 @@ import Foundation
 public protocol BearExactRangeReplacing: Sendable {
   func replace(
     _ request: BearExactRangeReplacementRequest
-  ) -> BearExactRangeReplacementReport
+  ) -> BearExactRangeReplacementOutcome
 }
 
 public struct BearExactRangeReplacementRequest: Equatable, Sendable {
@@ -87,16 +87,31 @@ public struct BearExactRangeReplacementReport:
   }
 }
 
+public struct BearExactRangeReplacementOutcome: Equatable, Sendable {
+  public let report: BearExactRangeReplacementReport
+  public let correctionAnchor: BearCorrectionAnchor?
+
+  public init(
+    report: BearExactRangeReplacementReport,
+    correctionAnchor: BearCorrectionAnchor? = nil
+  ) {
+    self.report = report
+    self.correctionAnchor = correctionAnchor
+  }
+}
+
 public struct BearExactRangeReplacer: BearExactRangeReplacing, Sendable {
   public init() {}
 
   public func replace(
     _ request: BearExactRangeReplacementRequest
-  ) -> BearExactRangeReplacementReport {
+  ) -> BearExactRangeReplacementOutcome {
     guard AXIsProcessTrusted() else {
-      return report(
-        .accessibilityPermissionRequired,
-        request: request
+      return BearExactRangeReplacementOutcome(
+        report: report(
+          .accessibilityPermissionRequired,
+          request: request
+        )
       )
     }
 
@@ -105,7 +120,9 @@ public struct BearExactRangeReplacer: BearExactRangeReplacing, Sendable {
         withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
       ).first
     else {
-      return report(.bearNotRunning, request: request)
+      return BearExactRangeReplacementOutcome(
+        report: report(.bearNotRunning, request: request)
+      )
     }
 
     let applicationElement = AXUIElementCreateApplication(
@@ -120,10 +137,12 @@ public struct BearExactRangeReplacer: BearExactRangeReplacing, Sendable {
         startingAt: focusedElement
       )
     else {
-      return report(.focusedEditorUnavailable, request: request)
+      return BearExactRangeReplacementOutcome(
+        report: report(.focusedEditorUnavailable, request: request)
+      )
     }
 
-    return BearExactRangeTransaction().apply(
+    return BearExactRangeTransaction().applyOutcome(
       request,
       to: AXBearEditableTextClient(element: editorElement)
     )
@@ -155,6 +174,13 @@ struct BearExactRangeTransaction {
     _ request: BearExactRangeReplacementRequest,
     to editor: BearEditableTextClient
   ) -> BearExactRangeReplacementReport {
+    applyOutcome(request, to: editor).report
+  }
+
+  func applyOutcome(
+    _ request: BearExactRangeReplacementRequest,
+    to editor: BearEditableTextClient
+  ) -> BearExactRangeReplacementOutcome {
     let target = request.targetRange
     let originalLength = request.expectedOriginal.utf16.count
     let replacementLength = request.replacement.utf16.count
@@ -165,27 +191,31 @@ struct BearExactRangeTransaction {
       replacementLength > 0,
       request.expectedOriginal != request.replacement
     else {
-      return report(.invalidRequest, request: request)
+      return outcome(report(.invalidRequest, request: request))
     }
 
     guard let selectionBefore = editor.selectedRange() else {
-      return report(.selectedRangeUnavailable, request: request)
+      return outcome(report(.selectedRangeUnavailable, request: request))
     }
     guard let characterCount = editor.characterCount() else {
-      return report(
-        .characterCountUnavailable,
-        request: request,
-        selectionBefore: selectionBefore
+      return outcome(
+        report(
+          .characterCountUnavailable,
+          request: request,
+          selectionBefore: selectionBefore
+        )
       )
     }
     guard
       target.location <= characterCount,
       target.length <= characterCount - target.location
     else {
-      return report(
-        .targetOutOfBounds,
-        request: request,
-        selectionBefore: selectionBefore
+      return outcome(
+        report(
+          .targetOutOfBounds,
+          request: request,
+          selectionBefore: selectionBefore
+        )
       )
     }
 
@@ -195,20 +225,24 @@ struct BearExactRangeTransaction {
     )
     if editor.string(in: target) != request.expectedOriginal {
       if editor.string(in: replacementRange) == request.replacement {
-        return BearExactRangeReplacementReport(
-          status: .alreadyApplied,
-          targetRange: target,
-          replacementRange: replacementRange,
-          selectionBefore: selectionBefore,
-          selectionAfter: selectionBefore,
-          surroundingContextVerified: true,
-          caretRestored: true
+        return outcome(
+          BearExactRangeReplacementReport(
+            status: .alreadyApplied,
+            targetRange: target,
+            replacementRange: replacementRange,
+            selectionBefore: selectionBefore,
+            selectionAfter: selectionBefore,
+            surroundingContextVerified: true,
+            caretRestored: true
+          )
         )
       }
-      return report(
-        .preconditionFailed,
-        request: request,
-        selectionBefore: selectionBefore
+      return outcome(
+        report(
+          .preconditionFailed,
+          request: request,
+          selectionBefore: selectionBefore
+        )
       )
     }
 
@@ -217,10 +251,12 @@ struct BearExactRangeTransaction {
       characterCount: characterCount
     )
     guard let contextBefore = editor.string(in: contextRange) else {
-      return report(
-        .contextUnavailable,
-        request: request,
-        selectionBefore: selectionBefore
+      return outcome(
+        report(
+          .contextUnavailable,
+          request: request,
+          selectionBefore: selectionBefore
+        )
       )
     }
     let localTargetRange = NSRange(
@@ -237,21 +273,25 @@ struct BearExactRangeTransaction {
       if editor.selectedRange() != selectionBefore {
         _ = editor.setSelectedRange(selectionBefore)
       }
-      return report(
-        .selectionWriteFailed,
-        request: request,
-        selectionBefore: selectionBefore,
-        selectionAfter: editor.selectedRange(),
-        errorCode: selectionError.rawValue
+      return outcome(
+        report(
+          .selectionWriteFailed,
+          request: request,
+          selectionBefore: selectionBefore,
+          selectionAfter: editor.selectedRange(),
+          errorCode: selectionError.rawValue
+        )
       )
     }
     guard editor.selectedRange() == target else {
       _ = editor.setSelectedRange(selectionBefore)
-      return report(
-        .selectionWriteFailed,
-        request: request,
-        selectionBefore: selectionBefore,
-        selectionAfter: editor.selectedRange()
+      return outcome(
+        report(
+          .selectionWriteFailed,
+          request: request,
+          selectionBefore: selectionBefore,
+          selectionAfter: editor.selectedRange()
+        )
       )
     }
 
@@ -260,12 +300,14 @@ struct BearExactRangeTransaction {
     )
     guard replacementError == .success else {
       _ = editor.setSelectedRange(selectionBefore)
-      return report(
-        .replacementWriteFailed,
-        request: request,
-        selectionBefore: selectionBefore,
-        selectionAfter: editor.selectedRange(),
-        errorCode: replacementError.rawValue
+      return outcome(
+        report(
+          .replacementWriteFailed,
+          request: request,
+          selectionBefore: selectionBefore,
+          selectionAfter: editor.selectedRange(),
+          errorCode: replacementError.rawValue
+        )
       )
     }
 
@@ -277,14 +319,16 @@ struct BearExactRangeTransaction {
     let restoreError = editor.setSelectedRange(adjustedSelection)
     let selectionAfter = editor.selectedRange()
     guard restoreError == .success, selectionAfter == adjustedSelection else {
-      return BearExactRangeReplacementReport(
-        status: .selectionRestoreFailed,
-        writeOccurred: true,
-        targetRange: target,
-        replacementRange: replacementRange,
-        selectionBefore: selectionBefore,
-        selectionAfter: selectionAfter,
-        errorCode: restoreError == .success ? nil : restoreError.rawValue
+      return outcome(
+        BearExactRangeReplacementReport(
+          status: .selectionRestoreFailed,
+          writeOccurred: true,
+          targetRange: target,
+          replacementRange: replacementRange,
+          selectionBefore: selectionBefore,
+          selectionAfter: selectionAfter,
+          errorCode: restoreError == .success ? nil : restoreError.rawValue
+        )
       )
     }
 
@@ -297,19 +341,21 @@ struct BearExactRangeTransaction {
     let countVerified = editor.characterCount()
       == characterCount + replacementLength - originalLength
     guard contextVerified, countVerified else {
-      return BearExactRangeReplacementReport(
-        status: .verificationFailed,
-        writeOccurred: true,
-        targetRange: target,
-        replacementRange: replacementRange,
-        selectionBefore: selectionBefore,
-        selectionAfter: selectionAfter,
-        surroundingContextVerified: false,
-        caretRestored: true
+      return outcome(
+        BearExactRangeReplacementReport(
+          status: .verificationFailed,
+          writeOccurred: true,
+          targetRange: target,
+          replacementRange: replacementRange,
+          selectionBefore: selectionBefore,
+          selectionAfter: selectionAfter,
+          surroundingContextVerified: false,
+          caretRestored: true
+        )
       )
     }
 
-    return BearExactRangeReplacementReport(
+    let report = BearExactRangeReplacementReport(
       status: .applied,
       writeOccurred: true,
       targetRange: target,
@@ -318,6 +364,22 @@ struct BearExactRangeTransaction {
       selectionAfter: selectionAfter,
       surroundingContextVerified: true,
       caretRestored: true
+    )
+    return BearExactRangeReplacementOutcome(
+      report: report,
+      correctionAnchor: BearCorrectionAnchor(
+        correctionRange: replacementRange,
+        documentLength: characterCount + replacementLength - originalLength,
+        leadingContext: (expectedContextAfter as NSString).substring(
+          with: NSRange(
+            location: 0,
+            length: localTargetRange.location
+          )
+        ),
+        trailingContext: (expectedContextAfter as NSString).substring(
+          from: localTargetRange.location + replacementLength
+        )
+      )
     )
   }
 
@@ -373,9 +435,15 @@ struct BearExactRangeTransaction {
       errorCode: errorCode
     )
   }
+
+  private func outcome(
+    _ report: BearExactRangeReplacementReport
+  ) -> BearExactRangeReplacementOutcome {
+    BearExactRangeReplacementOutcome(report: report)
+  }
 }
 
-private final class AXBearEditableTextClient: BearEditableTextClient {
+final class AXBearEditableTextClient: BearEditableTextClient {
   private let element: AXUIElement
 
   init(element: AXUIElement) {

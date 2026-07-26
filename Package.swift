@@ -85,6 +85,7 @@ let package = Package(
         "TypoverAppleIntelligence",
         "TypoverAppleSpell",
         "TypoverAccessibility",
+        "TypoverBearAdapter",
         "TypoverCore",
         "TypoverEvaluation",
         "TypoverRemoteIntelligence",

@@ -42,7 +42,7 @@ public struct AccessibilityCapability: Codable, Equatable, Sendable {
   }
 }
 
-public struct AccessibilityTextRange: Codable, Equatable, Sendable {
+public struct AccessibilityTextRange: Codable, Equatable, Hashable, Sendable {
   public let location: Int
   public let length: Int
 
