@@ -348,11 +348,18 @@ struct BearAnnotationOverlayTests {
   )
   func liveBearOverlay() async throws {
     _ = NSApplication.shared
-    let bear = try #require(
-      NSRunningApplication.runningApplications(
-        withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
-      ).first
+    try BearLiveFixtureLauncher().openStableNote()
+    var runningBear: NSRunningApplication?
+    #expect(
+      await waitForBearOverlay(timeout: .seconds(5)) {
+        runningBear =
+          NSRunningApplication.runningApplications(
+            withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+          ).first
+        return runningBear != nil
+      }
     )
+    let bear = try #require(runningBear)
     bear.activate(options: [.activateAllWindows])
     #expect(
       await waitForBearOverlay {
@@ -365,44 +372,41 @@ struct BearAnnotationOverlayTests {
         return false
       }
     )
-    try await Task.sleep(for: .milliseconds(250))
-
     let applicationElement = AXUIElementCreateApplication(
       bear.processIdentifier
     )
-    let focusedElement = try #require(
-      overlayTestElementAttribute(
-        applicationElement,
-        kAXFocusedUIElementAttribute as CFString
-      )
-    )
-    let probe = BearAccessibilityProbe()
     func matchingEditor() -> (AXUIElement, NSString, NSRange)? {
-      let focusedWindow = overlayTestElementAttribute(
-        applicationElement,
-        kAXFocusedWindowAttribute as CFString
-      )
-      let windowEditors = focusedWindow.map(probe.textAreas(in:)) ?? []
-      let applicationEditors = probe.textAreas(in: applicationElement)
-      let editorCandidates =
-        [probe.nearestTextArea(startingAt: focusedElement)]
-        + windowEditors.map(Optional.some)
-        + applicationEditors.map(Optional.some)
-      return editorCandidates.compactMap { $0 }.lazy.compactMap {
-        element -> (AXUIElement, NSString, NSRange)? in
-        let candidate = AXBearEditableTextClient(element: element)
-        guard let count = candidate.characterCount(),
-          let value = candidate.string(
-            in: AccessibilityTextRange(location: 0, length: count)
-          ) as NSString?
-        else {
-          return nil
-        }
-        let range = value.range(of: "Phase 2 marker: teh")
-        return range.location == NSNotFound ? nil : (element, value, range)
-      }.first
+      guard
+        let focusedElement = overlayTestElementAttribute(
+          applicationElement,
+          kAXFocusedUIElementAttribute as CFString
+        ),
+        let editorElement = BearAccessibilityProbe().nearestTextArea(
+          startingAt: focusedElement
+        )
+      else {
+        return nil
+      }
+      let candidate = AXBearEditableTextClient(element: editorElement)
+      guard let count = candidate.characterCount(),
+        let value = candidate.string(
+          in: AccessibilityTextRange(location: 0, length: count)
+        ) as NSString?
+      else {
+        return nil
+      }
+      let range = value.range(of: "Phase 2 marker: teh")
+      return range.location == NSNotFound
+        ? nil
+        : (editorElement, value, range)
     }
-    let editorMatch = matchingEditor()
+    var editorMatch: (AXUIElement, NSString, NSRange)?
+    #expect(
+      await waitForBearOverlay(timeout: .seconds(5)) {
+        editorMatch = matchingEditor()
+        return editorMatch != nil
+      }
+    )
     let (editorElement, _, markerRange) = try #require(editorMatch)
     #expect(
       AXUIElementSetAttributeValue(

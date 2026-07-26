@@ -145,13 +145,16 @@ as explicit test transactions. Change Back re-anchors from bounded,
 content-private context fingerprints and refuses stale or ambiguous targets;
 visible Bear corrections now produce guarded screen-space fragments and a
 narrow interactive AppKit squiggle while offscreen, background, or stale
-corrections produce no visible overlay. The concise Bear menu offers Change
-Back followed by verified alternatives, with no inert “Keep Existing” row. A
+corrections produce no visible overlay. The concise Bear menu offers Revert
+followed by verified alternatives, with no inert “Keep Existing” row. A
 guarded delayed caret repair handles Bear's asynchronous selection update
 without overriding a newer user selection. A conservative one-sided anchor
 keeps the menu available during continued typing without allowing newly typed
-text into the replacement range. Unattended cross-app correction and the
-remaining Phase 7 cross-version robustness matrix are not implemented yet.
+text into the replacement range. The Phase 7 live harness now opens one exact
+disposable note by stable Bear note ID instead of inheriting search-result
+selection state. Unattended cross-app correction, a permissioned live harness
+pass, and the remaining Phase 7 cross-version robustness matrix are not
+implemented yet.
 
 ## License
 

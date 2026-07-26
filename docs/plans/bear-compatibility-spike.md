@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Phase 6 implemented — robustness matrix is next
+- Status: Phase 7 in progress — stable live fixture implemented
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -552,6 +552,26 @@ Run the full interaction against:
 Track correctness, annotation alignment, replacement latency, and reasons for
 every refused correction.
 
+### Stable live fixture result: 2026-07-26
+
+The opt-in overlay test no longer depends on selecting a note through Bear's
+search results. Before touching Accessibility, it asks Bear's local CLI for
+metadata matching the exact disposable-note title, requires exactly one exact
+title match, and opens that note's stable ID directly in editing mode. Missing,
+fuzzy, duplicate, malformed, and failed-open results all stop the test before
+any note text is changed. The CLI query requests only note ID and title; live
+text ranges remain exclusively in Bear's Accessibility coordinate space.
+
+After opening the fixture, the harness waits up to five seconds for Bear to
+launch, focus the note, and expose the synthetic marker through its focused
+Accessibility editor. This removes the transient search-selection dependency
+while preserving the existing bounded-write and cleanup behavior. Five
+deterministic launcher tests cover exact resolution and every fail-closed path.
+
+The scenario-by-scenario evidence ledger is maintained in
+[the Phase 7 matrix](../testing/bear-phase-7-matrix.md). A permissioned live
+app-host pass is still required before the matrix can be called complete.
+
 ### Continued-typing result: 2026-07-25
 
 The deterministic Bear transaction and geometry suites now cover immediate
@@ -566,9 +586,10 @@ The opt-in live overlay harness now performs the same sequence against Bear:
 apply `teh` to `the`, insert a unique continuation immediately afterward,
 verify the overlay, choose a length-changing alternative, and Change Back while
 checking that the continuation remains untouched. The current command-line
-test host could not read Bear's editor through Accessibility, so that live pass
-must be rerun from the permissioned Typover app before this matrix row is
-considered complete.
+test host could not read Bear's editor through Accessibility. The harness now
+opens one exact disposable fixture by stable Bear note ID rather than
+inheriting a transient search-results selection, but the interaction must still
+be rerun from the permissioned Typover app before this row is complete.
 
 The first manual preview attempt exposed a development-signing failure rather
 than a Bear range failure. Replacing and ad-hoc signing the executable changed

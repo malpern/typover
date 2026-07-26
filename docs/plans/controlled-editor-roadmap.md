@@ -361,8 +361,12 @@ caret update without overriding a newer user selection.
 Run the complete interaction robustness matrix across long notes, repeated
 typos, rapid typing, note and window switches, relaunches, appearance changes,
 Markdown constructs, attachments, and the previous supported Bear release.
-Make the opt-in fixture independent of Bear's transient search-results
-selection before treating it as an unattended gate.
+The opt-in fixture now resolves one exact disposable-note title through Bear's
+local CLI and opens its stable note ID directly before waiting for the focused
+Accessibility editor. Missing, fuzzy, duplicate, malformed, and failed-open
+results fail closed. This removes the transient search-results dependency; a
+permissioned live app-host pass and the remaining matrix rows are still needed
+before treating the interaction as an unattended gate.
 
 The continued-typing slice is implemented deterministically. A unique expected
 correction remains anchored when either its leading or trailing context changes,
