@@ -50,7 +50,7 @@ public enum BearAnnotationMenuModel {
   ) -> [BearAnnotationMenuItem] {
     var items = [
       BearAnnotationMenuItem(
-        title: "Change Back to \(quoted(application.correction.original))",
+        title: "Revert to \(quoted(application.correction.original))",
         action: .changeBack
       )
     ]
@@ -72,7 +72,7 @@ public enum BearAnnotationMenuModel {
     for (index, alternative) in filtered.enumerated() {
       items.append(
         BearAnnotationMenuItem(
-          title: "Change to \(quoted(alternative))",
+          title: alternative,
           action: .chooseAlternative(alternative),
           beginsAlternativeSection: index == 0
         )

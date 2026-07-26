@@ -25,11 +25,15 @@ menu.
 
 The menu is intentionally short:
 
-1. Change Back to the originally typed text.
-2. Up to five safe, unique alternatives.
+1. Revert to the originally typed text.
+2. Up to five safe, unique alternatives shown as bare words.
 
 There is no “Keep Existing” item. Dismissing the menu already performs that
 action and must not write.
+
+The visible wording matches Typover's controlled editor: the revert action is
+explicit once, while alternatives do not repeat “Change to” on every row. The
+standard `NSMenu` styling remains native, accessible, and visually compact.
 
 Menu actions never edit Bear directly from a stored rectangle or range. They
 invoke guarded transactions that resolve the content-private correction

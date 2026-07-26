@@ -195,13 +195,18 @@ struct BearAnnotationOverlayTests {
       ]
     )
 
-    #expect(items.first?.title == "Change Back to “teh”")
+    #expect(items.first?.title == "Revert to “teh”")
     #expect(items.first?.action == .changeBack)
     #expect(items.count == 1 + BearAnnotationMenuModel.maximumAlternativeCount)
-    #expect(items[1].title == "Change to “ten”")
+    #expect(items[1].title == "ten")
     #expect(items[1].beginsAlternativeSection)
     #expect(items.dropFirst(2).allSatisfy { !$0.beginsAlternativeSection })
     #expect(items.map(\.title).allSatisfy { !$0.contains("Keep Existing") })
+    #expect(
+      items.dropFirst().allSatisfy {
+        !$0.title.hasPrefix("Change to ")
+      }
+    )
   }
 
   @Test("Unsafe alternative labels never enter the menu")

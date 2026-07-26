@@ -497,9 +497,11 @@ for the current correction; wrapped secondary fragments remain pointer targets
 without becoming duplicate VoiceOver elements. Control–Option–Command–Return
 opens the same menu while Bear is frontmost.
 
-The native menu contains Change Back first, followed by at most five distinct,
-single-line Apple Spelling alternatives. It deliberately has no “Keep
-Existing” row because dismissing the menu already preserves the current text.
+The native menu contains one explicit Revert action first, followed by at most
+five distinct, single-line Apple Spelling alternatives shown as bare words.
+This matches the controlled editor and avoids repeating “Change to” on every
+row. It deliberately has no “Keep Existing” row because dismissing the menu
+already preserves the current text.
 Unsafe, empty, duplicate, original, and current values are filtered before the
 menu is built.
 
