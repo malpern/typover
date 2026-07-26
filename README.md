@@ -152,9 +152,11 @@ without overriding a newer user selection. A conservative one-sided anchor
 keeps the menu available during continued typing without allowing newly typed
 text into the replacement range. The Phase 7 live harness now opens one exact
 disposable note by stable Bear note ID instead of inheriting search-result
-selection state. Unattended cross-app correction, a permissioned live harness
-pass, and the remaining Phase 7 cross-version robustness matrix are not
-implemented yet.
+selection state. Settings and the native **Preview Selected Bear Typo** app-menu
+command share one guarded preview coordinator. The permissioned app has passed
+baseline correction, adjacent continued typing, note switching, safe return,
+manual supersession, and a fresh second correction. Unattended cross-app
+correction and the remaining Phase 7 robustness matrix are not implemented yet.
 
 ## License
 

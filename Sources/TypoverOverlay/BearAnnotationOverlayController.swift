@@ -118,7 +118,10 @@ public final class BearAnnotationOverlayController {
     onFinished = nil
   }
 
-  private func refresh(hideFirst: Bool) {
+  private func refresh(
+    hideFirst: Bool,
+    finishIfInvalidated: Bool = false
+  ) {
     guard let application else {
       presenter.hide()
       return
@@ -145,11 +148,17 @@ public final class BearAnnotationOverlayController {
       else {
         return
       }
-      self.present(report)
+      self.present(
+        report,
+        finishIfInvalidated: finishIfInvalidated
+      )
     }
   }
 
-  private func present(_ report: BearCorrectionGeometryReport) {
+  private func present(
+    _ report: BearCorrectionGeometryReport,
+    finishIfInvalidated: Bool
+  ) {
     guard
       let placements = BearAnnotationLayout.visiblePlacements(
         for: report,
@@ -158,6 +167,11 @@ public final class BearAnnotationOverlayController {
       )
     else {
       presenter.hide()
+      if report.status.endsTracking
+        || (finishIfInvalidated && report.status.isInvalidatedAnchor)
+      {
+        finishTracking()
+      }
       return
     }
     guard let application else {
@@ -184,7 +198,10 @@ public final class BearAnnotationOverlayController {
     _ event: BearAccessibilityInvalidationEvent
   ) {
     let invalidatesGeometry = event != .selectionChanged
-    refresh(hideFirst: invalidatesGeometry)
+    refresh(
+      hideFirst: invalidatesGeometry,
+      finishIfInvalidated: event == .valueChanged
+    )
     if event == .focusedElementChanged || event == .focusedWindowChanged {
       restartInvalidationMonitor()
     }
@@ -265,11 +282,9 @@ public final class BearAnnotationOverlayController {
               )
             )
           }
-          let onFinished = self.onFinished
-          self.stop()
-          onFinished?()
+          self.finishTracking()
         case .superseded, .invalidated:
-          self.stop()
+          self.finishTracking()
         default:
           self.refresh(hideFirst: true)
         }
@@ -295,7 +310,7 @@ public final class BearAnnotationOverlayController {
         } else {
           switch result.report.status {
           case .superseded, .invalidated:
-            self.stop()
+            self.finishTracking()
           default:
             self.refresh(hideFirst: true)
           }
@@ -422,6 +437,12 @@ public final class BearAnnotationOverlayController {
     workspaceObservers = []
   }
 
+  private func finishTracking() {
+    let onFinished = onFinished
+    stop()
+    onFinished?()
+  }
+
   private var isBearFrontmost: Bool {
     frontmostBundleIdentifier()
       == BearAccessibilityProbe.bearBundleIdentifier
@@ -454,5 +475,23 @@ public final class BearAnnotationOverlayController {
         )
       )
     }
+  }
+}
+
+extension BearCorrectionGeometryStatus {
+  fileprivate var endsTracking: Bool {
+    switch self {
+    case .superseded, .accessibilityPermissionRequired, .bearNotRunning:
+      true
+    case .available, .offscreen, .staleAnchor, .ambiguousAnchor,
+      .focusedEditorUnavailable, .characterCountUnavailable,
+      .visibleRangeUnavailable, .contextUnavailable, .boundsUnsupported,
+      .boundsQueryFailed, .invalidBounds:
+      false
+    }
+  }
+
+  fileprivate var isInvalidatedAnchor: Bool {
+    self == .staleAnchor || self == .ambiguousAnchor
   }
 }

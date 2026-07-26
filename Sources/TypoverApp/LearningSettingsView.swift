@@ -1,11 +1,9 @@
 import AppKit
-import ApplicationServices
 import SwiftUI
 import TypoverAccessibility
 import TypoverAppleIntelligence
 import TypoverBearAdapter
 import TypoverCore
-import TypoverOverlay
 import TypoverRemoteIntelligence
 
 struct LearningSettingsView: View {
@@ -14,7 +12,7 @@ struct LearningSettingsView: View {
   let credentialStore: SecretsAppCredentialStore
   let bearProbe: any BearAccessibilityProbing
   let bearEventMonitor: any BearAccessibilityEventMonitoring
-  let bearCorrectionAdapter: BearCorrectionAdapter
+  let bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
@@ -22,9 +20,6 @@ struct LearningSettingsView: View {
   @State private var bearEventReport: BearAccessibilityEventReport?
   @State private var isCheckingBear = false
   @State private var isObservingBear = false
-  @State private var bearOverlayPreviewStatus: BearOverlayPreviewStatus = .idle
-  @State private var bearOverlayController: BearAnnotationOverlayController
-
   init(
     behaviorSettings: CorrectionBehaviorSettings,
     learningStore: CorrectionLearningStore,
@@ -32,19 +27,20 @@ struct LearningSettingsView: View {
     bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe(),
     bearEventMonitor: any BearAccessibilityEventMonitoring =
       BearAccessibilityEventMonitor(),
-    bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
+    bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter(),
+    bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator? = nil
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
     self.credentialStore = credentialStore
     self.bearProbe = bearProbe
     self.bearEventMonitor = bearEventMonitor
-    self.bearCorrectionAdapter = bearCorrectionAdapter
-    _bearOverlayController = State(
-      initialValue: BearAnnotationOverlayController(
-        adapter: bearCorrectionAdapter
+    self.bearOverlayPreviewCoordinator =
+      bearOverlayPreviewCoordinator
+      ?? BearOverlayPreviewCoordinator(
+        bearProbe: bearProbe,
+        bearCorrectionAdapter: bearCorrectionAdapter
       )
-    )
   }
 
   var body: some View {
@@ -63,11 +59,12 @@ struct LearningSettingsView: View {
           eventReport: bearEventReport,
           isChecking: isCheckingBear,
           isObserving: isObservingBear,
-          overlayPreviewStatus: bearOverlayPreviewStatus,
+          overlayPreviewStatus: bearOverlayPreviewCoordinator.status,
           onCheck: checkBearCompatibility,
           onObserve: observeBearEvents,
-          onPreviewOverlay: previewBearOverlay,
-          onStopOverlayPreview: stopBearOverlayPreview
+          onPreviewOverlay:
+            bearOverlayPreviewCoordinator.previewSelectedTypo,
+          onStopOverlayPreview: bearOverlayPreviewCoordinator.stopPreview
         )
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
@@ -206,82 +203,6 @@ struct LearningSettingsView: View {
     }
   }
 
-  private func previewBearOverlay() {
-    guard AXIsProcessTrusted() else {
-      let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-      _ = AXIsProcessTrustedWithOptions(options)
-      bearOverlayPreviewStatus = .accessibilityPermissionRequired
-      return
-    }
-
-    bearOverlayPreviewStatus = .preparing
-    let returnApplication = NSRunningApplication.current
-    let bearApplication = NSRunningApplication.runningApplications(
-      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
-    ).first
-    bearApplication?.activate(options: [.activateAllWindows])
-
-    Task {
-      guard bearApplication != nil else {
-        bearOverlayPreviewStatus = .bearUnavailable
-        return
-      }
-      try? await Task.sleep(for: .milliseconds(400))
-      let probe = bearProbe
-      let report = await Task.detached(priority: .userInitiated) {
-        probe.run()
-      }.value
-      if let failure = BearOverlayPreviewStatus.failure(for: report) {
-        returnApplication.activate(options: [.activateAllWindows])
-        bearOverlayPreviewStatus = failure
-        return
-      }
-      guard let selectedRange = report.selectedRange else {
-        returnApplication.activate(options: [.activateAllWindows])
-        bearOverlayPreviewStatus = .selectExactTypo
-        return
-      }
-
-      let adapter = bearCorrectionAdapter
-      let application = await Task.detached(priority: .userInitiated) {
-        adapter.apply(
-          original: "teh",
-          replacement: "the",
-          at: selectedRange
-        )
-      }.value
-      if let failure = BearOverlayPreviewStatus.failure(
-        for: application.report
-      ) {
-        returnApplication.activate(options: [.activateAllWindows])
-        bearOverlayPreviewStatus = failure
-        return
-      }
-
-      let spellChecker = NSSpellChecker.shared
-      let wordRange = NSRange(location: 0, length: "teh".utf16.count)
-      let language = spellChecker.userPreferredLanguages.first
-      let alternatives =
-        spellChecker.guesses(
-          forWordRange: wordRange,
-          in: "teh",
-          language: language,
-          inSpellDocumentWithTag: 0
-        ) ?? []
-      bearOverlayController.track(
-        application,
-        alternatives: alternatives
-      ) {
-        bearOverlayPreviewStatus = .idle
-      }
-      bearOverlayPreviewStatus = .active
-    }
-  }
-
-  private func stopBearOverlayPreview() {
-    bearOverlayController.stop()
-    bearOverlayPreviewStatus = .idle
-  }
 }
 
 enum BearOverlayPreviewStatus: Equatable {

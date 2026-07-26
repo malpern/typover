@@ -372,5 +372,8 @@ The continued-typing slice is implemented deterministically. A unique expected
 correction remains anchored when either its leading or trailing context changes,
 so typing beside the word does not remove Change Back or alternatives. Both
 sides changed and duplicate one-sided matches fail closed. The real-Bear
-overlay harness contains the same sequence but still needs a pass from the
-permissioned app host.
+overlay harness contains the same sequence. The permissioned app host has now
+passed baseline correction, adjacent continued typing, note switching, safe
+return, manual supersession, and a fresh second correction. A live
+Revert-with-tail click, multiple-window interaction, relaunches, dark appearance,
+and the previous Bear release remain.

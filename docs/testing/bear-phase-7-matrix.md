@@ -25,16 +25,17 @@ Accessibility behavior.
 
 | Scenario | Deterministic evidence | Permissioned live evidence | Expected result |
 |---|---|---|---|
-| Stable fixture selection | 5 launcher tests pass | Pending rerun | One exact title opens by note ID; every ambiguous or missing state stops |
-| Short note baseline | Exact-range, geometry, overlay, menu tests pass | Manually verified on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
+| Stable fixture selection | 5 launcher tests pass | One exact CLI title match verified; app-host launcher rerun pending | One exact title opens by note ID; every ambiguous or missing state stops |
+| Short note baseline | Exact-range, geometry, overlay, menu tests pass | Passed on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
 | Long note | Bounded-read and earlier-position tests pass | Geometry matrix passed on 2026-07-25; interaction pending | No whole-note read or write; annotation remains aligned |
 | Repeated typo | Ambiguous-anchor tests pass | Pending | Act only on the uniquely anchored occurrence or refuse |
-| Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Pending permissioned harness rerun | Preserve newly typed text and keep a unique correction anchored |
+| Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Correction, adjacent synthetic tail, and continued tracking passed; live Revert-with-tail pending | Preserve newly typed text and keep a unique correction anchored |
 | Edit before correction | Re-anchoring tests pass | Pending | Shift to the unique anchor without changing intervening text |
 | Edit after correction | Re-anchoring tests pass | Pending | Keep the correction anchored; preserve later text |
 | Change both context sides | Invalidated-anchor tests pass | Pending | Hide and refuse without writing |
 | Multiple Bear windows | Secondary-window geometry passed | Interaction pending | Follow only the focused editor; never annotate another window |
-| Switch notes while pending | Focus invalidation and stale-anchor policies pass | Pending | Hide immediately; refuse unless the active editor uniquely verifies |
+| Switch notes while pending | Focus invalidation and stale-anchor policies pass | Passed on 2026-07-26 | Hide immediately; refuse unless the active editor uniquely verifies |
+| Manual supersession | Terminal value-change lifecycle tests pass | Passed after fix on 2026-07-26 | Hide, end the old session, and allow a fresh correction |
 | Bear relaunch | Bear-not-running and focus-unavailable states pass | Pending | Hide old annotation; never reuse a stale interaction |
 | Typover relaunch | Correction state is intentionally session-scoped | Pending | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
@@ -57,3 +58,34 @@ For each live row, record:
 
 No row is complete if the final text, selection, or annotation position was not
 visually or programmatically verified after the interaction.
+
+## Permissioned app-host pass: 2026-07-26
+
+Typover now owns one shared Bear preview coordinator used by both Settings and a
+native **Preview Selected Bear Typo** app-menu command. The command provides a
+stable path into the same guarded transaction without requiring automation to
+inspect the Settings window.
+
+On Bear 2.8.1 and macOS 27.0, the installed, stable-signed Typover app:
+
+1. changed only the selected synthetic `teh` to `the`;
+2. kept the correction tracked after an adjacent synthetic typing tail was
+   inserted;
+3. hid the annotation when another note became active and retained the session
+   when the original uniquely verifying note returned;
+4. restored the disposable marker after each experiment; and
+5. successfully started a second correction after the first correction was
+   manually superseded.
+
+The observed correction was present in the first capture about 1.6 seconds
+after the menu action. That number includes Computer Use activation and capture
+overhead, so it is an upper-bound interaction observation rather than an engine
+latency measurement.
+
+The first supersession pass exposed a lifecycle bug: the annotation hid, but
+the coordinator remained active. Bear reported the manually changed text as a
+stale anchor. Typover now treats a stale or ambiguous result as terminal only
+when it follows a real Accessibility value-change event. The same result after
+a temporary focus or note switch remains hidden and resumable. Deterministic
+tests cover both branches, and the permissioned two-correction sequence passed
+after deployment.

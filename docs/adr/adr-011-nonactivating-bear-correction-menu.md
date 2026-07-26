@@ -61,5 +61,11 @@ Any other selection is considered a newer user action and is never changed.
   fail-closed if the user moves the caret.
 - The global shortcut is deliberately specific and active only while a tracked
   correction is visible in frontmost Bear.
-- Full VoiceOver, menu-dismissal, rapid-typing, and cross-version behavior
-  remain explicit Phase 7 matrix items rather than assumptions.
+- Settings and the app-menu preview command share one coordinator and one
+  overlay controller; the menu command does not create a second correction
+  implementation.
+- A stale or ambiguous anchor after a real text-value change ends the preview
+  session. The same unavailable geometry after a temporary focus or note switch
+  stays hidden and may resume only after fresh verification.
+- Full VoiceOver, menu-dismissal, live Revert-with-tail, and cross-version
+  behavior remain explicit Phase 7 matrix items rather than assumptions.

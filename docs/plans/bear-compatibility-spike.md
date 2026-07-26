@@ -569,8 +569,29 @@ while preserving the existing bounded-write and cleanup behavior. Five
 deterministic launcher tests cover exact resolution and every fail-closed path.
 
 The scenario-by-scenario evidence ledger is maintained in
-[the Phase 7 matrix](../testing/bear-phase-7-matrix.md). A permissioned live
-app-host pass is still required before the matrix can be called complete.
+[the Phase 7 matrix](../testing/bear-phase-7-matrix.md). The remaining live and
+cross-version rows must pass before the matrix can be called complete.
+
+### Permissioned app-host result: 2026-07-26
+
+The installed, stable-signed app now exposes the same guarded preview through a
+native **Preview Selected Bear Typo** app-menu command backed by a shared
+coordinator. This avoids coupling live verification to the Settings window
+without creating a second correction path.
+
+The live short-note correction passed. An adjacent synthetic typing tail stayed
+outside the correction, the session remained tracked, switching to the Phase 4
+note hid the annotation, and returning to the uniquely verifying Phase 2 note
+retained the session. A live Revert-with-tail click remains pending because the
+automation bridge cannot address Typover's nonactivating overlay panel, though
+the real menu was manually verified and the full transaction is covered by the
+opt-in live harness.
+
+Manual supersession exposed and then verified a lifecycle fix. A stale or
+ambiguous geometry result after an actual Bear value-change now ends the old
+preview session and notifies the shared coordinator. A stale result caused only
+by focus or note switching stays hidden and resumable. After deployment, the
+fixture was manually restored and a second correction started successfully.
 
 ### Continued-typing result: 2026-07-25
 

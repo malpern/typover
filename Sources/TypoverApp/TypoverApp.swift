@@ -6,6 +6,8 @@ import TypoverCore
 struct TypoverApp: App {
   @State private var behaviorSettings = CorrectionBehaviorSettings()
   @State private var learningStore = CorrectionLearningStore()
+  @State private var bearOverlayPreviewCoordinator =
+    BearOverlayPreviewCoordinator()
 
   init() {
     NSApplication.shared.applicationIconImage = TypoverBrand.appIcon
@@ -22,6 +24,9 @@ struct TypoverApp: App {
     .windowResizability(.contentMinSize)
     .commands {
       AboutCommands()
+      BearPreviewCommands(
+        coordinator: bearOverlayPreviewCoordinator
+      )
     }
 
     Window("About Typover", id: "about") {
@@ -33,8 +38,29 @@ struct TypoverApp: App {
     Settings {
       LearningSettingsView(
         behaviorSettings: behaviorSettings,
-        learningStore: learningStore
+        learningStore: learningStore,
+        bearOverlayPreviewCoordinator: bearOverlayPreviewCoordinator
       )
+    }
+  }
+}
+
+private struct BearPreviewCommands: Commands {
+  let coordinator: BearOverlayPreviewCoordinator
+
+  var body: some Commands {
+    CommandGroup(after: .appSettings) {
+      Button {
+        coordinator.previewSelectedTypo()
+      } label: {
+        Text(
+          "Preview Selected Bear Typo",
+          bundle: #bundle,
+          comment:
+            "App menu command that previews Typover on the selected Bear typo."
+        )
+      }
+      .keyboardShortcut("p", modifiers: [.control, .option, .command])
     }
   }
 }

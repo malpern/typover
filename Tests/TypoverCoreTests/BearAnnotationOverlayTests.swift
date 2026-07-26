@@ -338,6 +338,85 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("A superseded correction ends the preview session")
+  func supersededGeometryFinishesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let service = StubBearCorrectionService(
+      geometryReport: BearCorrectionGeometryReport(status: .superseded)
+    )
+    let controller = testController(
+      presenter: presenter,
+      service: service
+    )
+
+    controller.track(overlayApplication()) {
+      completion.didFinish = true
+    }
+
+    #expect(
+      await waitForBearOverlay {
+        completion.didFinish
+      }
+    )
+    #expect(!presenter.isVisible)
+  }
+
+  @MainActor
+  @Test("A temporary stale anchor hides without ending the session")
+  func staleGeometryRemainsTrackable() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let service = StubBearCorrectionService(
+      geometryReport: BearCorrectionGeometryReport(status: .staleAnchor)
+    )
+    let controller = testController(
+      presenter: presenter,
+      service: service
+    )
+
+    controller.track(overlayApplication()) {
+      completion.didFinish = true
+    }
+
+    #expect(
+      !(await waitForBearOverlay(timeout: .milliseconds(150)) {
+        completion.didFinish
+      })
+    )
+    #expect(!presenter.isVisible)
+    controller.stop()
+  }
+
+  @MainActor
+  @Test("A stale anchor after a text change ends the session")
+  func valueChangeWithStaleAnchorFinishesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let monitor = StubBearInvalidationMonitor()
+    let service = StubBearCorrectionService(
+      geometryReport: BearCorrectionGeometryReport(status: .staleAnchor)
+    )
+    let controller = testController(
+      presenter: presenter,
+      service: service,
+      invalidationMonitor: monitor
+    )
+
+    controller.track(overlayApplication()) {
+      completion.didFinish = true
+    }
+    monitor.send(.valueChanged)
+
+    #expect(
+      await waitForBearOverlay {
+        completion.didFinish
+      }
+    )
+    #expect(!presenter.isVisible)
+  }
+
+  @MainActor
   @Test(
     "Live Bear overlay annotates and restores the synthetic marker",
     .enabled(
@@ -599,12 +678,14 @@ private func overlayApplication(
 @MainActor
 private func testController(
   presenter: SpyBearAnnotationPresenter,
-  service: StubBearCorrectionService
+  service: StubBearCorrectionService,
+  invalidationMonitor: StubBearInvalidationMonitor =
+    StubBearInvalidationMonitor()
 ) -> BearAnnotationOverlayController {
   BearAnnotationOverlayController(
     adapter: service,
     presenter: presenter,
-    invalidationMonitor: StubBearInvalidationMonitor(),
+    invalidationMonitor: invalidationMonitor,
     frontmostBundleIdentifier: {
       BearAccessibilityProbe.bearBundleIdentifier
     },
@@ -667,34 +748,54 @@ private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
 private final class StubBearInvalidationMonitor:
   BearAccessibilityInvalidationObserving
 {
+  private typealias Handler =
+    @MainActor @Sendable (
+      BearAccessibilityInvalidationEvent
+    ) -> Void
+
+  private var handler: Handler?
+
   func start(
-    handler _:
+    handler:
       @escaping @MainActor @Sendable (
         BearAccessibilityInvalidationEvent
       ) -> Void
   ) -> Bool {
-    true
+    self.handler = handler
+    return true
   }
 
-  func stop() {}
+  func stop() {
+    handler = nil
+  }
+
+  func send(_ event: BearAccessibilityInvalidationEvent) {
+    handler?(event)
+  }
 }
 
 private struct StubBearCorrectionService: BearCorrectionServicing {
   let alternative: BearCorrectionAlternativeApplication
+  let geometryReport: BearCorrectionGeometryReport?
 
   init(
     alternative: BearCorrectionAlternativeApplication =
       BearCorrectionAlternativeApplication(
         report: BearCorrectionRetargetReport(status: .invalidated),
         application: nil
-      )
+      ),
+    geometryReport: BearCorrectionGeometryReport? = nil
   ) {
     self.alternative = alternative
+    self.geometryReport = geometryReport
   }
 
   func geometry(
     for _: BearCorrectionApplication
   ) -> BearCorrectionGeometryReport {
+    if let geometryReport {
+      return geometryReport
+    }
     let bounds = AccessibilityBounds(
       x: 100,
       y: 100,
