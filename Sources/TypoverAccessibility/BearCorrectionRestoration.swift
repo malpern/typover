@@ -150,9 +150,6 @@ public struct BearCorrectionRestorer: BearCorrectionRestoring, Sendable {
 }
 
 struct BearCorrectionRestorationTransaction {
-  private let searchRadius = 256
-  private let maximumOrdinaryCorrectionLength = 256
-
   func restore(
     _ request: BearCorrectionRestorationRequest,
     in editor: BearEditableTextClient
@@ -160,26 +157,26 @@ struct BearCorrectionRestorationTransaction {
     guard editor.selectedRange() != nil else {
       return report(.selectedRangeUnavailable)
     }
-    guard let documentLength = editor.characterCount() else {
+    let resolution = BearCorrectionAnchorResolver().resolve(
+      anchor: request.anchor,
+      expectedLengths: [
+        request.original.utf16.count,
+        request.expectedReplacement.utf16.count,
+      ],
+      in: editor
+    )
+    let candidate: AccessibilityTextRange
+    let currentText: String
+    switch resolution {
+    case .characterCountUnavailable:
       return report(.characterCountUnavailable)
-    }
-
-    guard let candidates = anchoredCandidates(
-      for: request,
-      documentLength: documentLength,
-      editor: editor
-    ) else {
+    case .contextUnavailable:
       return report(.contextUnavailable)
-    }
-    guard candidates.count == 1, let candidate = candidates.first else {
-      return report(.invalidated, candidateCount: candidates.count)
-    }
-    guard let currentText = editor.string(in: candidate) else {
-      return report(
-        .contextUnavailable,
-        matchedRange: candidate,
-        candidateCount: 1
-      )
+    case let .invalidated(candidateCount):
+      return report(.invalidated, candidateCount: candidateCount)
+    case let .matched(range, text):
+      candidate = range
+      currentText = text
     }
 
     if currentText == request.original {
@@ -208,12 +205,89 @@ struct BearCorrectionRestorationTransaction {
     return mapReplacementReport(replacementReport, matchedRange: candidate)
   }
 
+  private func mapReplacementReport(
+    _ replacementReport: BearExactRangeReplacementReport,
+    matchedRange: AccessibilityTextRange
+  ) -> BearCorrectionRestorationReport {
+    let status: BearCorrectionRestorationStatus = switch replacementReport.status {
+    case .applied: .restored
+    case .alreadyApplied: .alreadyRestored
+    case .selectedRangeUnavailable: .selectedRangeUnavailable
+    case .characterCountUnavailable: .characterCountUnavailable
+    case .contextUnavailable: .contextUnavailable
+    case .selectionWriteFailed: .selectionWriteFailed
+    case .replacementWriteFailed: .replacementWriteFailed
+    case .selectionRestoreFailed: .selectionRestoreFailed
+    case .verificationFailed: .verificationFailed
+    case .accessibilityPermissionRequired: .accessibilityPermissionRequired
+    case .bearNotRunning: .bearNotRunning
+    case .focusedEditorUnavailable: .focusedEditorUnavailable
+    case .invalidRequest, .targetOutOfBounds, .preconditionFailed: .invalidated
+    }
+    return BearCorrectionRestorationReport(
+      status: status,
+      writeOccurred: replacementReport.writeOccurred,
+      matchedRange: matchedRange,
+      candidateCount: 1,
+      replacementStatus: replacementReport.status
+    )
+  }
+
+  private func report(
+    _ status: BearCorrectionRestorationStatus,
+    matchedRange: AccessibilityTextRange? = nil,
+    candidateCount: Int = 0
+  ) -> BearCorrectionRestorationReport {
+    BearCorrectionRestorationReport(
+      status: status,
+      matchedRange: matchedRange,
+      candidateCount: candidateCount
+    )
+  }
+}
+
+enum BearCorrectionAnchorResolution: Equatable {
+  case matched(range: AccessibilityTextRange, text: String)
+  case invalidated(candidateCount: Int)
+  case characterCountUnavailable
+  case contextUnavailable
+}
+
+struct BearCorrectionAnchorResolver {
+  private let searchRadius = 256
+  private let maximumOrdinaryCorrectionLength = 256
+
+  func resolve(
+    anchor: BearCorrectionAnchor,
+    expectedLengths: [Int],
+    in reader: BearTextReadingClient
+  ) -> BearCorrectionAnchorResolution {
+    guard let documentLength = reader.characterCount() else {
+      return .characterCountUnavailable
+    }
+    guard let candidates = anchoredCandidates(
+      anchor: anchor,
+      expectedLengths: expectedLengths,
+      documentLength: documentLength,
+      reader: reader
+    ) else {
+      return .contextUnavailable
+    }
+    guard candidates.count == 1, let candidate = candidates.first else {
+      return .invalidated(candidateCount: candidates.count)
+    }
+    guard let text = reader.string(in: candidate) else {
+      return .contextUnavailable
+    }
+    return .matched(range: candidate, text: text)
+  }
+
   private func anchoredCandidates(
-    for request: BearCorrectionRestorationRequest,
+    anchor: BearCorrectionAnchor,
+    expectedLengths: [Int],
     documentLength: Int,
-    editor: BearEditableTextClient
+    reader: BearTextReadingClient
   ) -> Set<AccessibilityTextRange>? {
-    let anchor = request.anchor
     let lengthDelta = documentLength - anchor.documentLength
     let centers = Set([
       anchor.correctionRange.location,
@@ -221,8 +295,7 @@ struct BearCorrectionRestorationTransaction {
     ])
     let maximumCandidateLength = max(
       maximumOrdinaryCorrectionLength,
-      request.original.utf16.count,
-      request.expectedReplacement.utf16.count
+      expectedLengths.max() ?? 0
     )
     var matches = Set<AccessibilityTextRange>()
 
@@ -243,7 +316,7 @@ struct BearCorrectionRestorationTransaction {
         location: searchStart,
         length: searchEnd - searchStart
       )
-      guard let searchText = editor.string(in: searchRange) else {
+      guard let searchText = reader.string(in: searchRange) else {
         return nil
       }
       matches.formUnion(
@@ -331,45 +404,5 @@ struct BearCorrectionRestorationTransaction {
       }
     }
     return matches
-  }
-
-  private func mapReplacementReport(
-    _ replacementReport: BearExactRangeReplacementReport,
-    matchedRange: AccessibilityTextRange
-  ) -> BearCorrectionRestorationReport {
-    let status: BearCorrectionRestorationStatus = switch replacementReport.status {
-    case .applied: .restored
-    case .alreadyApplied: .alreadyRestored
-    case .selectedRangeUnavailable: .selectedRangeUnavailable
-    case .characterCountUnavailable: .characterCountUnavailable
-    case .contextUnavailable: .contextUnavailable
-    case .selectionWriteFailed: .selectionWriteFailed
-    case .replacementWriteFailed: .replacementWriteFailed
-    case .selectionRestoreFailed: .selectionRestoreFailed
-    case .verificationFailed: .verificationFailed
-    case .accessibilityPermissionRequired: .accessibilityPermissionRequired
-    case .bearNotRunning: .bearNotRunning
-    case .focusedEditorUnavailable: .focusedEditorUnavailable
-    case .invalidRequest, .targetOutOfBounds, .preconditionFailed: .invalidated
-    }
-    return BearCorrectionRestorationReport(
-      status: status,
-      writeOccurred: replacementReport.writeOccurred,
-      matchedRange: matchedRange,
-      candidateCount: 1,
-      replacementStatus: replacementReport.status
-    )
-  }
-
-  private func report(
-    _ status: BearCorrectionRestorationStatus,
-    matchedRange: AccessibilityTextRange? = nil,
-    candidateCount: Int = 0
-  ) -> BearCorrectionRestorationReport {
-    BearCorrectionRestorationReport(
-      status: status,
-      matchedRange: matchedRange,
-      candidateCount: candidateCount
-    )
   }
 }

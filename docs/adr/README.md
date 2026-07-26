@@ -8,3 +8,4 @@
 - [ADR-006: Separate correction scope from sentence-rewrite permission](adr-006-separate-correction-scope-from-sentence-rewrites.md)
 - [ADR-007: Allow explicit contextual-model selection with external secrets](adr-007-user-selectable-contextual-models.md)
 - [ADR-008: Use Accessibility coordinates for live Bear editing](adr-008-bear-live-editing-coordinate-space.md)
+- [ADR-009: Fragment wrapped Bear ranges before drawing annotations](adr-009-fragment-wrapped-bear-geometry.md)

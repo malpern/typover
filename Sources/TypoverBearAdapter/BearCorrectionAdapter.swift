@@ -36,13 +36,17 @@ public struct BearCorrectionRestoration: Equatable, Sendable {
 public struct BearCorrectionAdapter: Sendable {
   private let replacer: any BearExactRangeReplacing
   private let restorer: any BearCorrectionRestoring
+  private let geometryProvider: any BearCorrectionGeometryProviding
 
   public init(
     replacer: any BearExactRangeReplacing = BearExactRangeReplacer(),
-    restorer: any BearCorrectionRestoring = BearCorrectionRestorer()
+    restorer: any BearCorrectionRestoring = BearCorrectionRestorer(),
+    geometryProvider: any BearCorrectionGeometryProviding =
+      BearCorrectionGeometryProvider()
   ) {
     self.replacer = replacer
     self.restorer = restorer
+    self.geometryProvider = geometryProvider
   }
 
   public func apply(
@@ -111,6 +115,23 @@ public struct BearCorrectionAdapter: Sendable {
       correctionRecord: CorrectionRecord(
         correction: application.correction,
         disposition: disposition
+      )
+    )
+  }
+
+  public func geometry(
+    for application: BearCorrectionApplication
+  ) -> BearCorrectionGeometryReport {
+    guard
+      application.correctionRecord?.disposition == .applied,
+      let anchor = application.correctionAnchor
+    else {
+      return BearCorrectionGeometryReport(status: .staleAnchor)
+    }
+    return geometryProvider.geometry(
+      for: BearCorrectionGeometryRequest(
+        anchor: anchor,
+        expectedReplacement: application.correction.replacement
       )
     )
   }

@@ -362,6 +362,47 @@ Query Bear for the screen bounds of the corrected character range. Test:
 - Geometry can be refreshed without reading the whole note.
 - Unsupported geometry produces a clear capability failure.
 
+### Live result: 2026-07-25
+
+Phase 4 now exposes a content-free geometry report with explicit available,
+offscreen, stale, ambiguous, superseded, unsupported, failed, and invalid
+states. It reuses Phase 3's bounded anchor resolver, so edits before a
+correction move the geometry range without trusting an old offset. Production
+refresh reads at most two bounded Accessibility neighborhoods rather than the
+whole note.
+
+The first live run returned an identical usable rectangle for three consecutive
+reads of the synthetic corrected word. The expanded matrix used the retained
+`Typover Bear Phase 4 Geometry — 2026-07-25` note, which contains only synthetic
+text and a Typover icon attachment. It verified markers on top, middle, bottom,
+wrapped, heading, list, variable-width, link, inline-code, and attachment-adjacent
+content. Selecting each marker to scroll it onscreen produced stable bounds;
+querying the top marker while the bottom remained visible returned `offscreen`
+without a bounds result.
+
+A second, narrower Bear window exposed an important behavior: a range split by
+wrapping returns one stable union rectangle covering unrelated space between
+the two lines. Typover now detects that case, queries composed-character bounds,
+and returns one fragment per rendered line. The narrow-window heading and
+variable-width markers each resolved to two precise fragments. The same matrix
+passed in separate windows with different origins and widths.
+
+Two levels of Bear zoom changed body-line height from 27 to 33 points and
+heading-line height from about 31 to 39 points. Geometry refreshed correctly at
+the new scale, including wrapped fragments, and Bear was returned to Actual
+Size afterward.
+
+The live fixture test may read its complete synthetic note solely to locate
+known markers. Shipping geometry uses only bounded context. Deterministic tests
+also verify long-note bounded reads, edits before the correction, offscreen and
+partially visible ranges, stale and duplicated anchors, manual supersession,
+unsupported queries, invalid rectangles, wrapped fragmentation, adapter
+gating, and content-free reports.
+
+Decision: **go** for Phase 5. Bear's geometry is sufficient for a guarded
+annotation overlay when Typover uses line fragments and hides every nonavailable
+state.
+
 ## Phase 5: Annotation overlay
 
 Render the light-gray squiggle in a borderless, nonactivating AppKit panel. The

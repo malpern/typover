@@ -331,9 +331,17 @@ The deterministic restoration suite passes, and an opt-in live Bear test
 applied and independently restored the synthetic typo without invoking native
 Undo.
 
-## Next implementation milestone: Bear Phase 4
+## Completed implementation milestone: Bear Phase 4
 
-Measure `AXBoundsForRange` for corrected text across visible lines, wrapping,
-formatting, scrolling, and separate Bear windows. Produce a content-free
-geometry capability result that distinguishes stable visible bounds, offscreen
-ranges, and unsupported or stale geometry before beginning the overlay.
+Typover now resolves `AXBoundsForRange` through the correction anchor, returns
+precise line fragments for wrapped targets, hides offscreen or stale ranges,
+and distinguishes unsupported, failed, and invalid geometry. The live matrix
+passed across formatting, wrapping, scrolling, zoom, attachment-adjacent text,
+and separate Bear windows.
+
+## Next implementation milestone: Bear Phase 5
+
+Build a borderless, nonactivating AppKit overlay that renders the light-gray
+squiggle from the Phase 4 fragments. It must track Bear scrolling, window
+movement and resizing, focus, note changes, typography changes, and anchor
+invalidation without intercepting typing or leaving a stale mark onscreen.

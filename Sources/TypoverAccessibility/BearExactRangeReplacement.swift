@@ -159,10 +159,13 @@ public struct BearExactRangeReplacer: BearExactRangeReplacing, Sendable {
   }
 }
 
-protocol BearEditableTextClient: AnyObject {
-  func selectedRange() -> AccessibilityTextRange?
+protocol BearTextReadingClient: AnyObject {
   func characterCount() -> Int?
   func string(in range: AccessibilityTextRange) -> String?
+}
+
+protocol BearEditableTextClient: BearTextReadingClient {
+  func selectedRange() -> AccessibilityTextRange?
   func setSelectedRange(_ range: AccessibilityTextRange) -> AXError
   func replaceSelectedText(with replacement: String) -> AXError
 }
@@ -444,7 +447,7 @@ struct BearExactRangeTransaction {
 }
 
 final class AXBearEditableTextClient: BearEditableTextClient {
-  private let element: AXUIElement
+  let element: AXUIElement
 
   init(element: AXUIElement) {
     self.element = element
