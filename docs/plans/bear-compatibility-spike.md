@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Phase 1 complete — exact-range replacement is next
+- Status: Phase 2 complete — independent restoration is next
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -90,6 +90,50 @@ grouping.
 Bear’s x-callback URL API can identify and retrieve the selected note with an
 API token. It may help associate an Accessibility editor with a stable Bear
 note ID, but it is too coarse and expensive for per-word correction.
+
+### Automation and scripting research: 2026-07-25
+
+Bear 2.8's supported external automation surfaces are useful, but none replaces
+the live Accessibility path:
+
+- `bearcli` and Bear's official MCP server expose local note-level search,
+  read, create, append, and edit operations. `bearcli edit` finds exact strings
+  with Bear's in-app search engine; it does not address the active editor by a
+  selected character range or preserve its caret as part of the operation.
+- The CLI has valuable safety behavior for scripting, including rejecting
+  attachment-removing edits unless explicitly forced. Encrypted notes can be
+  listed but not read or modified.
+- x-callback URLs can open the selected note, place the cursor in its editor,
+  return note content, and append, prepend, or replace note-level content. They
+  do not expose the current selection range, text-layout geometry, editor
+  notifications, or a range-level replacement transaction.
+- Bear's Shortcuts actions cover note creation, lookup, search, opening,
+  appending, tagging, exporting, and related note-level operations. The app
+  advertises no action for replacing the active editor selection.
+- The installed Bear 2.8.1 app has no AppleScript scripting dictionary.
+- Bear uses the macOS spelling-and-grammar controls in its Edit menu, which
+  supports the hypothesis that its editor participates in standard macOS text
+  services. This does not provide an extension point for Typover's persistent
+  annotation.
+
+The first Phase 2 fixture run also demonstrated that a `bearcli search-in`
+offset does not identify the same character in Bear's Accessibility editor.
+The guarded transaction rejected the mismatched range before writing. Raw
+Markdown, CLI, and Accessibility offsets must therefore never be mixed.
+
+Decision: use Bear's official CLI only for disposable fixture setup, stable
+note identity, diagnostics, and possible reconciliation. Use the focused
+`AXTextArea` as the sole coordinate system for live correction, caret
+restoration, and annotation geometry. Do not add a Bear API token, Shortcuts
+dependency, MCP connection, or AppleScript bridge to the live typing path.
+
+Primary references:
+
+- [Bear command-line interface](https://bear.app/faq/command-line-interface/)
+- [Bear x-callback URL scheme](https://bear.app/faq/x-callback-url-scheme-documentation/)
+- [Bear 2.8 CLI announcement and search-engine clarification](https://community.bear.app/t/bear-2-8-bearcli-claude-connector-and-mcp-server/19072)
+- [Bear Shortcuts automation overview](https://blog.bear.app/2022/03/automate-your-notes-with-shortcuts-and-bear/)
+- [Bear spelling and grammar controls](https://bear.app/faq/disable-spell-check-and-corrections/)
 
 ## Safety and privacy boundaries
 
@@ -225,6 +269,32 @@ Do not fall back to writing the complete `AXValue`.
 - The caret returns to the expected position.
 - A failed precondition makes no edit.
 - Repeating the transaction is idempotent.
+
+### Live result: 2026-07-25
+
+The first live attempt deliberately supplied a `bearcli search-in` offset. The
+transaction found that `teh` did not occupy that Accessibility range and
+returned `preconditionFailed` without selecting or changing text. A second
+attempt inferred the range from the caret in a tagged fixture, but Bear had
+placed the caret after the bottom tag rather than after the CLI-appended marker;
+that attempt also failed safely without a write.
+
+The successful run used the tag-free
+`Typover Bear Phase 2 — 2026-07-25` disposable note, with the caret immediately
+after `teh `. Typover:
+
+- verified the three-unit target at Accessibility location 145;
+- wrote only `AXSelectedText`;
+- changed exactly `teh` to `the`;
+- restored the zero-length caret to its original location 149;
+- verified the bounded surrounding context and unchanged document length;
+- created a correction record only after those checks passed;
+- treated the repeated transaction as already applied without another write.
+
+Bear's native Command-Z restored `teh`. After Undo, Bear selected the restored
+word at range 145–148 instead of leaving the caret after the following space.
+That behavior is coherent for native Undo but is more disruptive than Typover's
+planned correction-specific Change Back interaction.
 
 ## Phase 3: Undo and restoration
 

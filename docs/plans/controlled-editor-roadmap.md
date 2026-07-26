@@ -296,7 +296,7 @@ Build the read-only Accessibility capability probe described in the
 Phase 1 is diagnostic only: it does not modify a Bear note, draw an overlay, or
 request a Bear API token.
 
-## Next implementation milestone: Bear Phase 2
+## Completed implementation milestone: Bear Phase 2
 
 Implement and verify one exact selected-range replacement in the dedicated
 disposable note:
@@ -307,3 +307,22 @@ disposable note:
 - verify a tightly bounded local result;
 - create a correction record only after verification succeeds;
 - measure Bear's native Undo result before expanding the experiment.
+
+The exact-range transaction now passes deterministic stale-target,
+idempotency, caret-delta, selection-failure, surrounding-context, and
+correction-record tests. A live Accessibility transaction in the tag-free
+disposable note changed only `teh` to `the`, restored the original caret, and
+verified its local postconditions. Native Command-Z restored and selected the
+original word.
+
+## Next implementation milestone: Bear Phase 3
+
+Implement Typover's independent Change Back transaction and correction-anchor
+state:
+
+- preserve a bounded context fingerprint with the verified correction record;
+- re-anchor after edits before or after the corrected range;
+- restore only when the replacement remains uniquely identifiable;
+- refuse ambiguous or stale restoration without editing;
+- keep native Undo behavior documented but do not depend on the Undo stack for
+  Typover's menu action.

@@ -218,7 +218,7 @@ extension BearAccessibilityProbe {
     return textAreas
   }
 
-  fileprivate func nearestTextArea(startingAt element: AXUIElement) -> AXUIElement? {
+  func nearestTextArea(startingAt element: AXUIElement) -> AXUIElement? {
     var current: AXUIElement? = element
     for _ in 0..<8 {
       guard let candidate = current else {
@@ -690,7 +690,7 @@ private func copyParameterizedAttributeNames(
   return Set(names)
 }
 
-private func copyElementAttribute(
+func copyElementAttribute(
   _ element: AXUIElement,
   _ name: CFString
 ) -> AXUIElement? {
@@ -744,7 +744,7 @@ private func copyStringAttribute(
   return value as? String
 }
 
-private func copyIntegerAttribute(
+func copyIntegerAttribute(
   _ element: AXUIElement,
   _ name: CFString
 ) -> Int? {
@@ -758,7 +758,7 @@ private func copyIntegerAttribute(
   return number.intValue
 }
 
-private func copyRangeAttribute(
+func copyRangeAttribute(
   _ element: AXUIElement,
   _ name: CFString
 ) -> AccessibilityTextRange? {
@@ -784,7 +784,7 @@ private func copyRangeAttribute(
   )
 }
 
-private func copyParameterizedValue(
+func copyParameterizedValue(
   from element: AXUIElement,
   name: CFString,
   range: AccessibilityTextRange

@@ -107,9 +107,9 @@ correction interaction, while SwiftUI remains available for conventional
 product surfaces.
 
 Active research work is described in [docs/plans](docs/plans/README.md),
-beginning with the controlled-editor evaluation and robustness milestone. Bear
-compatibility remains documented but deferred until the reference prototype is
-highly functional.
+including the completed controlled-editor milestones and the active Bear
+compatibility spike. Bear Phase 2 has proven one guarded, exact-range
+Accessibility replacement and native Undo behavior in a disposable note.
 
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
@@ -124,8 +124,9 @@ Anthropic are explicit cloud options. Explicit
 spelling alternatives, manual edits, and Change Back choices are learned
 locally, and aggregate correction outcomes are retained without document text.
 Contextual overrides are measured but do not create unsafe global rules for
-otherwise valid words. No system-wide text monitoring or replacement is
-implemented yet.
+otherwise valid words. Bear observation and exact-range replacement now exist
+as explicit test transactions; unattended cross-app correction and the
+external annotation overlay are not implemented yet.
 
 ## License
 

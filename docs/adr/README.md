@@ -7,3 +7,4 @@
 - [ADR-005: Use Apple’s on-device model for bounded contextual correction](adr-005-apple-contextual-correction.md)
 - [ADR-006: Separate correction scope from sentence-rewrite permission](adr-006-separate-correction-scope-from-sentence-rewrites.md)
 - [ADR-007: Allow explicit contextual-model selection with external secrets](adr-007-user-selectable-contextual-models.md)
+- [ADR-008: Use Accessibility coordinates for live Bear editing](adr-008-bear-live-editing-coordinate-space.md)
