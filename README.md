@@ -108,9 +108,9 @@ product surfaces.
 
 Active research work is described in [docs/plans](docs/plans/README.md),
 including the completed controlled-editor milestones and the active Bear
-compatibility spike. Bear Phase 5 has proven guarded exact-range replacement,
-independent Change Back, stable content-free range geometry, and a
-nonactivating light-gray annotation overlay in disposable notes.
+compatibility spike. Bear Phase 6 now combines guarded exact-range replacement,
+independent Change Back, content-free range geometry, and a clickable
+nonactivating light-gray annotation with Apple Spelling alternatives.
 
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
@@ -129,9 +129,12 @@ otherwise valid words. Bear observation and exact-range replacement now exist
 as explicit test transactions. Change Back re-anchors from bounded,
 content-private context fingerprints and refuses stale or ambiguous targets;
 visible Bear corrections now produce guarded screen-space fragments and a
-click-through AppKit squiggle while offscreen, background, or stale corrections
-produce no visible overlay. Unattended cross-app correction and the clickable
-Bear correction menu are not implemented yet.
+narrow interactive AppKit squiggle while offscreen, background, or stale
+corrections produce no visible overlay. The concise Bear menu offers Change
+Back followed by verified alternatives, with no inert “Keep Existing” row. A
+guarded delayed caret repair handles Bear's asynchronous selection update
+without overriding a newer user selection. Unattended cross-app correction and
+the Phase 7 cross-version robustness matrix are not implemented yet.
 
 ## License
 

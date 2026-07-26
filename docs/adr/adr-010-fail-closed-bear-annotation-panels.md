@@ -69,3 +69,6 @@ termination always hide synchronously.
   fallback refresh adds a small amount of bounded polling.
 - Continuous rapid scrolling, typing-load measurement, and older Bear versions
   remain in the Phase 7 robustness matrix.
+
+Phase 6's intentionally narrow exception for pointer and accessibility input is
+defined in [ADR-011](adr-011-nonactivating-bear-correction-menu.md).

@@ -109,7 +109,7 @@ private struct BearOverlayPreviewControl: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(
-        "To test the real overlay, select exactly “teh” in a disposable Bear note. Typover will change only that selection to “the” and place the light-gray mark beneath it.",
+        "To test the real interaction, select exactly “teh” in a disposable Bear note. Typover will change only that selection to “the.” Click the light-gray squiggle to change it back or choose another Apple Spelling suggestion.",
         bundle: #bundle,
         comment:
           "Instructions for the bounded Bear annotation overlay preview."
@@ -167,7 +167,7 @@ extension BearOverlayPreviewStatus {
     case .preparing:
       "Checking the selected Bear text…"
     case .active:
-      "Preview active while Bear remains in front"
+      "Preview active — click the squiggle, or press Control–Option–Command–Return"
     case .bearUnavailable:
       "Open Bear and try again"
     case .selectExactTypo:

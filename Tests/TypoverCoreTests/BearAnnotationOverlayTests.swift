@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Testing
 import TypoverBearAdapter
+import TypoverCore
 
 @testable import TypoverAccessibility
 @testable import TypoverOverlay
@@ -176,30 +177,159 @@ struct BearAnnotationOverlayTests {
     )
   }
 
+  @Test("The menu is concise, ordered, deduplicated, and bounded")
+  func buildsConciseMenu() {
+    let application = overlayApplication()
+    let items = BearAnnotationMenuModel.items(
+      for: application,
+      alternatives: [
+        "the",
+        "ten",
+        "tech",
+        "tea",
+        "ten",
+        "them",
+        "then",
+        "there",
+        "extra",
+      ]
+    )
+
+    #expect(items.first?.title == "Change Back to “teh”")
+    #expect(items.first?.action == .changeBack)
+    #expect(items.count == 1 + BearAnnotationMenuModel.maximumAlternativeCount)
+    #expect(items[1].title == "Change to “ten”")
+    #expect(items[1].beginsAlternativeSection)
+    #expect(items.dropFirst(2).allSatisfy { !$0.beginsAlternativeSection })
+    #expect(items.map(\.title).allSatisfy { !$0.contains("Keep Existing") })
+  }
+
+  @Test("Unsafe alternative labels never enter the menu")
+  func filtersUnsafeAlternatives() {
+    let items = BearAnnotationMenuModel.items(
+      for: overlayApplication(),
+      alternatives: [
+        "",
+        "   ",
+        "line\nbreak",
+        String(repeating: "x", count: 161),
+      ]
+    )
+
+    #expect(items.count == 1)
+    #expect(items[0].action == .changeBack)
+  }
+
   @MainActor
-  @Test("Panels cannot activate Typover or intercept the pointer")
+  @Test("Panels stay nonactivating with a narrow accessible hit target")
   func panelsAreNonactivating() throws {
     let presenter = AppKitBearAnnotationPresenter()
     presenter.show(
       placements: [
         AccessibilityBounds(x: 100, y: 100, width: 40, height: 4),
         AccessibilityBounds(x: 200, y: 200, width: 30, height: 4),
-      ]
+      ],
+      interaction: overlayInteraction()
     )
 
     #expect(presenter.panels.count == 2)
     for panel in presenter.panels {
       #expect(panel.styleMask.contains(.nonactivatingPanel))
-      #expect(panel.ignoresMouseEvents)
+      #expect(!panel.ignoresMouseEvents)
       #expect(!panel.canBecomeKey)
       #expect(!panel.canBecomeMain)
       #expect(!panel.collectionBehavior.contains(.canJoinAllSpaces))
     }
+    #expect(presenter.panels[0].frame.width == 48)
+    #expect(presenter.panels[0].frame.height == 12)
+    #expect(
+      presenter.panels[0].contentView?.isAccessibilityElement() == true
+    )
+    #expect(
+      presenter.panels[0].contentView?.accessibilityIdentifier()
+        == "typover.bear.correction-options"
+    )
 
     presenter.hide()
     for panel in presenter.panels {
       #expect(!panel.isVisible)
     }
+  }
+
+  @MainActor
+  @Test("Change Back finishes tracking through the guarded service")
+  func changeBackFinishesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService()
+    )
+    controller.track(
+      overlayApplication(),
+      alternatives: ["ten"]
+    ) {
+      completion.didFinish = true
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenter.interaction != nil
+      }
+    )
+
+    presenter.interaction?.handler(.changeBack)
+
+    #expect(
+      await waitForBearOverlay {
+        completion.didFinish
+      }
+    )
+    #expect(!presenter.isVisible)
+  }
+
+  @MainActor
+  @Test("Choosing an alternative refreshes the menu around its new record")
+  func alternativeRefreshesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let updatedApplication = overlayApplication(replacement: "ten")
+    let service = StubBearCorrectionService(
+      alternative: BearCorrectionAlternativeApplication(
+        report: BearCorrectionRetargetReport(
+          status: .applied,
+          replacementReport: updatedApplication.report
+        ),
+        application: updatedApplication
+      )
+    )
+    let controller = testController(
+      presenter: presenter,
+      service: service
+    )
+    controller.track(
+      overlayApplication(),
+      alternatives: ["ten", "tech"]
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenter.interaction != nil
+      }
+    )
+
+    presenter.interaction?.handler(.chooseAlternative("ten"))
+
+    #expect(
+      await waitForBearOverlay {
+        presenter.interaction?.items.contains {
+          $0.action == .chooseAlternative("the")
+        } == true
+      }
+    )
+    #expect(
+      presenter.interaction?.items.contains {
+        $0.action == .chooseAlternative("ten")
+      } == false
+    )
+    controller.stop()
   }
 
   @MainActor
@@ -219,7 +349,18 @@ struct BearAnnotationOverlayTests {
       ).first
     )
     bear.activate(options: [.activateAllWindows])
-    try await Task.sleep(for: .milliseconds(500))
+    #expect(
+      await waitForBearOverlay {
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+          == BearAccessibilityProbe.bearBundleIdentifier
+        {
+          return true
+        }
+        bear.activate(options: [.activateAllWindows])
+        return false
+      }
+    )
+    try await Task.sleep(for: .milliseconds(250))
 
     let applicationElement = AXUIElementCreateApplication(
       bear.processIdentifier
@@ -231,29 +372,32 @@ struct BearAnnotationOverlayTests {
       )
     )
     let probe = BearAccessibilityProbe()
-    let focusedWindow = overlayTestElementAttribute(
-      applicationElement,
-      kAXFocusedWindowAttribute as CFString
-    )
-    let windowEditors = focusedWindow.map(probe.textAreas(in:)) ?? []
-    let applicationEditors = probe.textAreas(in: applicationElement)
-    let editorCandidates =
-      [probe.nearestTextArea(startingAt: focusedElement)]
-      + windowEditors.map(Optional.some)
-      + applicationEditors.map(Optional.some)
-    let editorMatch = editorCandidates.compactMap { $0 }.lazy.compactMap {
-      element -> (AXUIElement, NSString, NSRange)? in
-      let candidate = AXBearEditableTextClient(element: element)
-      guard let count = candidate.characterCount(),
-        let value = candidate.string(
-          in: AccessibilityTextRange(location: 0, length: count)
-        ) as NSString?
-      else {
-        return nil
-      }
-      let range = value.range(of: "Phase 2 marker: teh")
-      return range.location == NSNotFound ? nil : (element, value, range)
-    }.first
+    func matchingEditor() -> (AXUIElement, NSString, NSRange)? {
+      let focusedWindow = overlayTestElementAttribute(
+        applicationElement,
+        kAXFocusedWindowAttribute as CFString
+      )
+      let windowEditors = focusedWindow.map(probe.textAreas(in:)) ?? []
+      let applicationEditors = probe.textAreas(in: applicationElement)
+      let editorCandidates =
+        [probe.nearestTextArea(startingAt: focusedElement)]
+        + windowEditors.map(Optional.some)
+        + applicationEditors.map(Optional.some)
+      return editorCandidates.compactMap { $0 }.lazy.compactMap {
+        element -> (AXUIElement, NSString, NSRange)? in
+        let candidate = AXBearEditableTextClient(element: element)
+        guard let count = candidate.characterCount(),
+          let value = candidate.string(
+            in: AccessibilityTextRange(location: 0, length: count)
+          ) as NSString?
+        else {
+          return nil
+        }
+        let range = value.range(of: "Phase 2 marker: teh")
+        return range.location == NSNotFound ? nil : (element, value, range)
+      }.first
+    }
+    let editorMatch = matchingEditor()
     let (editorElement, _, markerRange) = try #require(editorMatch)
     #expect(
       AXUIElementSetAttributeValue(
@@ -265,6 +409,24 @@ struct BearAnnotationOverlayTests {
     try await Task.sleep(for: .milliseconds(100))
     let editor = AXBearEditableTextClient(element: editorElement)
     let originalSelection = try #require(editor.selectedRange())
+    let originalCharacterCount = try #require(editor.characterCount())
+    let liveTail = "Typover live interaction tail."
+    #expect(
+      editor.setSelectedRange(
+        AccessibilityTextRange(
+          location: originalCharacterCount,
+          length: 0
+        )
+      ) == .success
+    )
+    #expect(editor.replaceSelectedText(with: liveTail) == .success)
+    defer {
+      cleanupLiveBearOverlayFixture(
+        editor: editor,
+        tail: liveTail,
+        originalSelection: originalSelection
+      )
+    }
     let typoRange = AccessibilityTextRange(
       location: markerRange.location + markerRange.length - 3,
       length: 3
@@ -278,13 +440,34 @@ struct BearAnnotationOverlayTests {
       at: typoRange
     )
     _ = try #require(application.correctionRecord)
+    let correctedCharacterCount = try #require(editor.characterCount())
+    let interactionSelection = AccessibilityTextRange(
+      location: min(
+        typoRange.location + 8,
+        correctedCharacterCount - 2
+      ),
+      length: 0
+    )
+    #expect(editor.setSelectedRange(interactionSelection) == .success)
 
     let presenter = AppKitBearAnnotationPresenter()
     let controller = BearAnnotationOverlayController(
       adapter: adapter,
       presenter: presenter
     )
-    controller.track(application)
+    bear.activate(options: [.activateAllWindows])
+    #expect(
+      await waitForBearOverlay {
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+          == BearAccessibilityProbe.bearBundleIdentifier
+      }
+    )
+    print(
+      "Live Bear preflight:",
+      NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "none",
+      adapter.geometry(for: application).status.rawValue
+    )
+    controller.track(application, alternatives: ["tech"])
     #expect(
       await waitForBearOverlay {
         presenter.panels.contains(where: \.isVisible)
@@ -339,15 +522,200 @@ struct BearAnnotationOverlayTests {
       }
     )
 
-    let restoration = adapter.changeBack(application)
+    let firstInteraction = try #require(
+      (presenter.panels.first?.contentView as? BearSquiggleView)?.interaction
+    )
+    firstInteraction.handler(.chooseAlternative("tech"))
+    let alternativeRange = AccessibilityTextRange(
+      location: typoRange.location,
+      length: "tech".utf16.count
+    )
     #expect(
-      restoration.report.status
-        == BearCorrectionRestorationStatus.restored
+      await waitForBearOverlay {
+        editor.string(in: alternativeRange) == "tech"
+          && presenter.panels.contains(where: \.isVisible)
+          && editor.selectedRange()
+            == AccessibilityTextRange(
+              location: interactionSelection.location + 1,
+              length: 0
+            )
+      }
+    )
+
+    let alternativeInteraction = try #require(
+      (presenter.panels.first?.contentView as? BearSquiggleView)?.interaction
+    )
+    alternativeInteraction.handler(.changeBack)
+    #expect(
+      await waitForBearOverlay {
+        editor.string(in: typoRange) == "teh"
+          && !presenter.panels.contains(where: \.isVisible)
+          && editor.selectedRange() == interactionSelection
+      }
     )
     controller.stop()
-    #expect(editor.setSelectedRange(originalSelection) == .success)
   }
 
+}
+
+private func overlayApplication(
+  replacement: String = "the"
+) -> BearCorrectionApplication {
+  let correction = Correction(original: "teh", replacement: replacement)
+  return BearCorrectionApplication(
+    report: BearExactRangeReplacementReport(
+      status: .applied,
+      writeOccurred: true,
+      targetRange: AccessibilityTextRange(location: 10, length: 3),
+      replacementRange: AccessibilityTextRange(location: 10, length: 3),
+      surroundingContextVerified: true,
+      caretRestored: true
+    ),
+    correction: correction,
+    correctionRecord: CorrectionRecord(correction: correction)
+  )
+}
+
+@MainActor
+private func testController(
+  presenter: SpyBearAnnotationPresenter,
+  service: StubBearCorrectionService
+) -> BearAnnotationOverlayController {
+  BearAnnotationOverlayController(
+    adapter: service,
+    presenter: presenter,
+    invalidationMonitor: StubBearInvalidationMonitor(),
+    frontmostBundleIdentifier: {
+      BearAccessibilityProbe.bearBundleIdentifier
+    },
+    displays: {
+      [
+        BearOverlayDisplay(
+          accessibilityFrame: AccessibilityBounds(
+            x: 0,
+            y: 0,
+            width: 1_440,
+            height: 900
+          ),
+          appKitFrame: AccessibilityBounds(
+            x: 0,
+            y: 0,
+            width: 1_440,
+            height: 900
+          )
+        )
+      ]
+    },
+    fallbackRefreshInterval: .seconds(60)
+  )
+}
+
+@MainActor
+private func overlayInteraction() -> BearAnnotationInteraction {
+  BearAnnotationInteraction(
+    items: BearAnnotationMenuModel.items(
+      for: overlayApplication(),
+      alternatives: ["ten", "tech"]
+    ),
+    accessibilityLabel: "Correction options for the"
+  ) { _ in }
+}
+
+@MainActor
+private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
+  private(set) var isVisible = false
+  private(set) var interaction: BearAnnotationInteraction?
+  private(set) var placements: [AccessibilityBounds] = []
+
+  func show(
+    placements: [AccessibilityBounds],
+    interaction: BearAnnotationInteraction
+  ) {
+    isVisible = true
+    self.placements = placements
+    self.interaction = interaction
+  }
+
+  func showMenu() {}
+
+  func hide() {
+    isVisible = false
+  }
+}
+
+@MainActor
+private final class StubBearInvalidationMonitor:
+  BearAccessibilityInvalidationObserving
+{
+  func start(
+    handler _: @escaping @MainActor @Sendable (
+      BearAccessibilityInvalidationEvent
+    ) -> Void
+  ) -> Bool {
+    true
+  }
+
+  func stop() {}
+}
+
+private struct StubBearCorrectionService: BearCorrectionServicing {
+  let alternative: BearCorrectionAlternativeApplication
+
+  init(
+    alternative: BearCorrectionAlternativeApplication =
+      BearCorrectionAlternativeApplication(
+        report: BearCorrectionRetargetReport(status: .invalidated),
+        application: nil
+      )
+  ) {
+    self.alternative = alternative
+  }
+
+  func geometry(
+    for _: BearCorrectionApplication
+  ) -> BearCorrectionGeometryReport {
+    let bounds = AccessibilityBounds(
+      x: 100,
+      y: 100,
+      width: 40,
+      height: 20
+    )
+    return BearCorrectionGeometryReport(
+      status: .available,
+      bounds: bounds,
+      fragments: [bounds]
+    )
+  }
+
+  func changeBack(
+    _ application: BearCorrectionApplication
+  ) -> BearCorrectionRestoration {
+    BearCorrectionRestoration(
+      report: BearCorrectionRestorationReport(status: .restored),
+      correctionRecord: CorrectionRecord(
+        correction: application.correction,
+        disposition: .restored
+      )
+    )
+  }
+
+  func chooseAlternative(
+    _: String,
+    for _: BearCorrectionApplication
+  ) -> BearCorrectionAlternativeApplication {
+    alternative
+  }
+
+  func stabilizeSelection(
+    _: BearCorrectionSelectionStabilizationRequest
+  ) -> BearCorrectionSelectionStabilizationStatus {
+    .alreadyStable
+  }
+}
+
+@MainActor
+private final class BearOverlayCompletionSpy {
+  var didFinish = false
 }
 
 @MainActor
@@ -378,4 +746,47 @@ private func overlayTestElementAttribute(
     return nil
   }
   return unsafeDowncast(value, to: AXUIElement.self)
+}
+
+private func cleanupLiveBearOverlayFixture(
+  editor: BearEditableTextClient,
+  tail: String,
+  originalSelection: AccessibilityTextRange
+) {
+  guard let count = editor.characterCount(),
+    let value = editor.string(
+      in: AccessibilityTextRange(location: 0, length: count)
+    ) as NSString?
+  else {
+    return
+  }
+  for candidate in ["tech", "the"] {
+    let match = value.range(of: "Phase 2 marker: \(candidate)")
+    if match.location != NSNotFound {
+      let wordRange = AccessibilityTextRange(
+        location: match.location + match.length - candidate.utf16.count,
+        length: candidate.utf16.count
+      )
+      _ = editor.setSelectedRange(wordRange)
+      _ = editor.replaceSelectedText(with: "teh")
+      break
+    }
+  }
+  if let updatedCount = editor.characterCount(),
+    let updatedValue = editor.string(
+      in: AccessibilityTextRange(location: 0, length: updatedCount)
+    ) as NSString?
+  {
+    let tailRange = updatedValue.range(of: tail)
+    if tailRange.location != NSNotFound {
+      _ = editor.setSelectedRange(
+        AccessibilityTextRange(
+          location: tailRange.location,
+          length: tailRange.length
+        )
+      )
+      _ = editor.replaceSelectedText(with: "")
+    }
+  }
+  _ = editor.setSelectedRange(originalSelection)
 }

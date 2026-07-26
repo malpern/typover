@@ -349,9 +349,17 @@ application or Space. The live synthetic correction stayed aligned, hid across
 an application switch and manual supersession, returned only after fresh
 verification, and restored the fixture afterward.
 
-## Next implementation milestone: Bear Phase 6
+## Completed implementation milestone: Bear Phase 6
 
-Make the squiggle itself a narrow interactive target without activating
-Typover or disturbing Bear's caret. Its menu should offer Change Back and
-verified alternatives, dismiss without changing the note, and expose equivalent
-keyboard and VoiceOver actions.
+The squiggle is a narrow nonactivating hit target with a native menu, Change
+Back, verified alternatives, one Accessibility button, and a Bear-only keyboard
+shortcut. Guarded delayed selection stabilization handles Bear's post-edit
+caret update without overriding a newer user selection.
+
+## Next implementation milestone: Bear Phase 7
+
+Run the complete interaction robustness matrix across long notes, repeated
+typos, rapid typing, note and window switches, relaunches, appearance changes,
+Markdown constructs, attachments, and the previous supported Bear release.
+Make the opt-in fixture independent of Bear's transient search-results
+selection before treating it as an unattended gate.

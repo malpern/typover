@@ -389,6 +389,94 @@ struct BearExactRangeReplacementTests {
   }
 }
 
+@Suite("Bear correction selection stabilization")
+struct BearCorrectionSelectionStabilizationTests {
+  @Test("Bear's delayed transient caret is repaired")
+  func repairsTransientCaret() {
+    let editor = FakeBearEditableTextClient(
+      text: "alpha the omega",
+      selection: AccessibilityTextRange(location: 9, length: 0)
+    )
+
+    let status = BearCorrectionSelectionStabilizationTransaction().stabilize(
+      request(desiredLocation: 13),
+      in: editor
+    )
+
+    #expect(status == .stabilized)
+    #expect(
+      editor.selection == AccessibilityTextRange(location: 13, length: 0)
+    )
+  }
+
+  @Test("A newer user selection always wins")
+  func preservesNewerUserSelection() {
+    let editor = FakeBearEditableTextClient(
+      text: "alpha the omega",
+      selection: AccessibilityTextRange(location: 11, length: 0)
+    )
+
+    let status = BearCorrectionSelectionStabilizationTransaction().stabilize(
+      request(desiredLocation: 13),
+      in: editor
+    )
+
+    #expect(status == .userMovedSelection)
+    #expect(
+      editor.selection == AccessibilityTextRange(location: 11, length: 0)
+    )
+  }
+
+  @Test("The previous replacement end is a recognized Bear transient")
+  func repairsPreviousReplacementEnd() {
+    let editor = FakeBearEditableTextClient(
+      text: "alpha tech omega",
+      selection: AccessibilityTextRange(location: 9, length: 0)
+    )
+    let request = BearCorrectionSelectionStabilizationRequest(
+      anchor: BearCorrectionAnchor(
+        correctionRange: AccessibilityTextRange(location: 6, length: 4),
+        documentLength: "alpha tech omega".utf16.count,
+        leadingContext: "alpha ",
+        trailingContext: " omega"
+      ),
+      expectedText: "tech",
+      desiredSelection: AccessibilityTextRange(location: 14, length: 0),
+      additionalTransientSelections: [
+        AccessibilityTextRange(location: 9, length: 0)
+      ]
+    )
+
+    let status = BearCorrectionSelectionStabilizationTransaction().stabilize(
+      request,
+      in: editor
+    )
+
+    #expect(status == .stabilized)
+    #expect(
+      editor.selection == AccessibilityTextRange(location: 14, length: 0)
+    )
+  }
+
+  private func request(
+    desiredLocation: Int
+  ) -> BearCorrectionSelectionStabilizationRequest {
+    BearCorrectionSelectionStabilizationRequest(
+      anchor: BearCorrectionAnchor(
+        correctionRange: AccessibilityTextRange(location: 6, length: 3),
+        documentLength: "alpha the omega".utf16.count,
+        leadingContext: "alpha ",
+        trailingContext: " omega"
+      ),
+      expectedText: "the",
+      desiredSelection: AccessibilityTextRange(
+        location: desiredLocation,
+        length: 0
+      )
+    )
+  }
+}
+
 @Suite("Bear independent Change Back")
 struct BearCorrectionRestorationTests {
   @Test("Change Back restores only the corrected range")
@@ -524,6 +612,123 @@ struct BearCorrectionRestorationTests {
     #expect(!json.contains("the"))
   }
 
+  @Test("An alternative replaces only the anchored correction")
+  func appliesAlternative() throws {
+    let fixture = try makeAppliedFixture()
+    let selectionBefore = fixture.editor.selection
+
+    let outcome = retarget(fixture, replacement: "ten")
+
+    #expect(outcome.report.status == .applied)
+    #expect(outcome.report.writeOccurred)
+    #expect((fixture.editor.text as String).contains(" ten "))
+    #expect(fixture.editor.selection == selectionBefore)
+    #expect(outcome.correctionAnchor?.correctionRange.length == 3)
+  }
+
+  @Test("An alternative re-anchors after earlier typing")
+  func reanchorsAlternative() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(location: 0, length: 0),
+      with: "earlier "
+    )
+
+    let outcome = retarget(fixture, replacement: "ten")
+
+    #expect(outcome.report.status == .applied)
+    #expect(
+      outcome.report.matchedRange?.location
+        == fixture.anchor.correctionRange.location + 8
+    )
+    #expect((fixture.editor.text as String).contains(" ten "))
+  }
+
+  @Test("A manually superseded correction rejects an alternative")
+  func refusesAlternativeAfterSupersession() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      fixture.anchor.correctionRange,
+      with: "thy"
+    )
+
+    let outcome = retarget(fixture, replacement: "ten")
+
+    #expect(outcome.report.status == .superseded)
+    #expect(!outcome.report.writeOccurred)
+    #expect((fixture.editor.text as String).contains(" thy "))
+  }
+
+  @Test("Repeating an alternative is idempotent and refreshes its anchor")
+  func recognizesAppliedAlternative() throws {
+    let fixture = try makeAppliedFixture()
+    let first = retarget(fixture, replacement: "ten")
+    let writeCount = fixture.editor.replacementWriteCount
+    let refreshedAnchor = try #require(first.correctionAnchor)
+
+    let repeated = BearCorrectionRetargetTransaction().retarget(
+      BearCorrectionRetargetRequest(
+        anchor: refreshedAnchor,
+        expectedCurrent: "the",
+        replacement: "ten"
+      ),
+      in: fixture.editor
+    )
+
+    #expect(repeated.report.status == .alreadyApplied)
+    #expect(!repeated.report.writeOccurred)
+    #expect(fixture.editor.replacementWriteCount == writeCount)
+    #expect(repeated.correctionAnchor != nil)
+  }
+
+  @Test("The Bear adapter carries the original into an alternative record")
+  func adapterBuildsAlternativeApplication() throws {
+    let fixture = try makeAppliedFixture()
+    let correction = Correction(original: "teh", replacement: "the")
+    let application = BearCorrectionApplication(
+      report: BearExactRangeReplacementReport(
+        status: .applied,
+        writeOccurred: true,
+        targetRange: fixture.anchor.correctionRange,
+        replacementRange: fixture.anchor.correctionRange,
+        surroundingContextVerified: true,
+        caretRestored: true
+      ),
+      correction: correction,
+      correctionRecord: CorrectionRecord(correction: correction),
+      correctionAnchor: fixture.anchor
+    )
+    let replacementReport = BearExactRangeReplacementReport(
+      status: .applied,
+      writeOccurred: true,
+      targetRange: fixture.anchor.correctionRange,
+      replacementRange: fixture.anchor.correctionRange,
+      surroundingContextVerified: true,
+      caretRestored: true
+    )
+    let adapter = BearCorrectionAdapter(
+      retargeter: StubBearRetargeter(
+        outcome: BearCorrectionRetargetOutcome(
+          report: BearCorrectionRetargetReport(
+            status: .applied,
+            writeOccurred: true,
+            matchedRange: fixture.anchor.correctionRange,
+            candidateCount: 1,
+            replacementReport: replacementReport
+          ),
+          correctionAnchor: fixture.anchor
+        )
+      )
+    )
+
+    let result = adapter.chooseAlternative("ten", for: application)
+
+    #expect(result.report.status == .applied)
+    #expect(result.application?.correction.original == "teh")
+    #expect(result.application?.correction.replacement == "ten")
+    #expect(result.application?.correctionRecord?.disposition == .applied)
+  }
+
   @Test("The Bear adapter maps restoration outcomes to explicit dispositions")
   func adapterTransitionsDisposition() throws {
     let fixture = try makeAppliedFixture()
@@ -633,6 +838,20 @@ struct BearCorrectionRestorationTests {
         anchor: fixture.anchor,
         expectedReplacement: "the",
         original: "teh"
+      ),
+      in: fixture.editor
+    )
+  }
+
+  private func retarget(
+    _ fixture: AppliedFixture,
+    replacement: String
+  ) -> BearCorrectionRetargetOutcome {
+    BearCorrectionRetargetTransaction().retarget(
+      BearCorrectionRetargetRequest(
+        anchor: fixture.anchor,
+        expectedCurrent: "the",
+        replacement: replacement
       ),
       in: fixture.editor
     )
@@ -887,5 +1106,15 @@ private struct StubBearRestorer: BearCorrectionRestoring {
     _: BearCorrectionRestorationRequest
   ) -> BearCorrectionRestorationReport {
     BearCorrectionRestorationReport(status: status)
+  }
+}
+
+private struct StubBearRetargeter: BearCorrectionRetargeting {
+  let outcome: BearCorrectionRetargetOutcome
+
+  func retarget(
+    _: BearCorrectionRetargetRequest
+  ) -> BearCorrectionRetargetOutcome {
+    outcome
   }
 }

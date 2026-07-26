@@ -245,7 +245,22 @@ struct LearningSettingsView: View {
         return
       }
 
-      bearOverlayController.track(application)
+      let spellChecker = NSSpellChecker.shared
+      let wordRange = NSRange(location: 0, length: "teh".utf16.count)
+      let language = spellChecker.userPreferredLanguages.first
+      let alternatives =
+        spellChecker.guesses(
+          forWordRange: wordRange,
+          in: "teh",
+          language: language,
+          inSpellDocumentWithTag: 0
+        ) ?? []
+      bearOverlayController.track(
+        application,
+        alternatives: alternatives
+      ) {
+        bearOverlayPreviewStatus = .idle
+      }
       bearOverlayPreviewStatus = .active
     }
   }

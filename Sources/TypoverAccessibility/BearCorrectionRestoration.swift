@@ -84,19 +84,25 @@ public struct BearCorrectionRestorationReport:
   public let matchedRange: AccessibilityTextRange?
   public let candidateCount: Int
   public let replacementStatus: BearExactRangeReplacementStatus?
+  public let selectionBefore: AccessibilityTextRange?
+  public let selectionAfter: AccessibilityTextRange?
 
   public init(
     status: BearCorrectionRestorationStatus,
     writeOccurred: Bool = false,
     matchedRange: AccessibilityTextRange? = nil,
     candidateCount: Int = 0,
-    replacementStatus: BearExactRangeReplacementStatus? = nil
+    replacementStatus: BearExactRangeReplacementStatus? = nil,
+    selectionBefore: AccessibilityTextRange? = nil,
+    selectionAfter: AccessibilityTextRange? = nil
   ) {
     self.status = status
     self.writeOccurred = writeOccurred
     self.matchedRange = matchedRange
     self.candidateCount = candidateCount
     self.replacementStatus = replacementStatus
+    self.selectionBefore = selectionBefore
+    self.selectionAfter = selectionAfter
   }
 }
 
@@ -229,7 +235,9 @@ struct BearCorrectionRestorationTransaction {
       writeOccurred: replacementReport.writeOccurred,
       matchedRange: matchedRange,
       candidateCount: 1,
-      replacementStatus: replacementReport.status
+      replacementStatus: replacementReport.status,
+      selectionBefore: replacementReport.selectionBefore,
+      selectionAfter: replacementReport.selectionAfter
     )
   }
 

@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Phase 5 complete — correction interaction is next
+- Status: Phase 6 implemented — robustness matrix is next
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -484,6 +484,49 @@ Make the annotation clickable without losing the correction target. Present:
 - Choosing an alternative updates the existing correction record.
 - Dismissing the menu leaves the document unchanged.
 - Keyboard and VoiceOver users can reach equivalent actions.
+
+### Implementation result: 2026-07-25
+
+Phase 6 makes only the narrow squiggle strip interactive. Its panel remains
+borderless and nonactivating, cannot become key or main, and still hides when
+Bear is not frontmost. The primary fragment is an Accessibility button labeled
+for the current correction; wrapped secondary fragments remain pointer targets
+without becoming duplicate VoiceOver elements. Control–Option–Command–Return
+opens the same menu while Bear is frontmost.
+
+The native menu contains Change Back first, followed by at most five distinct,
+single-line Apple Spelling alternatives. It deliberately has no “Keep
+Existing” row because dismissing the menu already preserves the current text.
+Unsafe, empty, duplicate, original, and current values are filtered before the
+menu is built.
+
+Both actions use guarded Accessibility transactions rather than a stored
+offset or whole-note write. An alternative resolves the existing
+content-private anchor, verifies the current replacement, changes only that
+range, and returns a fresh anchor while preserving the originally typed word.
+Change Back uses the same independent restoration transaction established in
+Phase 3. Superseded, stale, or ambiguous corrections close the interaction
+without writing.
+
+Live Bear testing exposed a delayed selection update after an
+`AXSelectedText` replacement: Bear first accepted Typover's restored caret,
+then moved it to the edited word. Typover now performs two delayed, bounded
+selection checks. A repair occurs only when the current selection is one of
+Bear's known transient edit-end carets and the anchored text still verifies.
+Any other selection is treated as a newer user action and wins. Deterministic
+tests cover both the repair and the user-moved refusal path, along with native
+menu ordering, panel nonactivation, accessibility exposure, Change Back, and
+alternative re-anchoring.
+
+The opt-in harness exercised the real length-changing alternative path and
+found the delayed-caret behavior. Bear's transient search-results selection is
+not reliable enough to make that fixture an unattended gate yet, so the final
+repeatable live pass moves to the Phase 7 matrix.
+
+Decision: **go** for Phase 7. The interaction layer is implemented without
+weakening the bounded-write, focus, or stale-anchor rules. Phase 7 must complete
+manual keyboard, VoiceOver, dismissal, and cross-version passes against a
+normally selected disposable note.
 
 ## Phase 7: Robustness matrix
 
