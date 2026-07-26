@@ -568,6 +568,15 @@ test host could not read Bear's editor through Accessibility, so that live pass
 must be rerun from the permissioned Typover app before this matrix row is
 considered complete.
 
+The first manual preview attempt exposed a development-signing failure rather
+than a Bear range failure. Replacing and ad-hoc signing the executable changed
+Typover's designated requirement, invalidating its earlier Accessibility
+approval. Development packaging now uses a stable Apple Development identity,
+and the preview checks permission before switching applications. Permission,
+focus, selection, and write failures now produce distinct visible messages.
+The stable-signed build requires one new approval before the live matrix can
+resume.
+
 ## Bear CLI fallback evaluation
 
 Separately test Bear’s official CLI in the disposable note:

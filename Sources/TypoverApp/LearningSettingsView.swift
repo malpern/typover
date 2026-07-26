@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import SwiftUI
 import TypoverAccessibility
 import TypoverAppleIntelligence
@@ -206,6 +207,13 @@ struct LearningSettingsView: View {
   }
 
   private func previewBearOverlay() {
+    guard AXIsProcessTrusted() else {
+      let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+      _ = AXIsProcessTrustedWithOptions(options)
+      bearOverlayPreviewStatus = .accessibilityPermissionRequired
+      return
+    }
+
     bearOverlayPreviewStatus = .preparing
     let returnApplication = NSRunningApplication.current
     let bearApplication = NSRunningApplication.runningApplications(
@@ -223,9 +231,12 @@ struct LearningSettingsView: View {
       let report = await Task.detached(priority: .userInitiated) {
         probe.run()
       }.value
-      guard let selectedRange = report.selectedRange,
-        selectedRange.length == 3
-      else {
+      if let failure = BearOverlayPreviewStatus.failure(for: report) {
+        returnApplication.activate(options: [.activateAllWindows])
+        bearOverlayPreviewStatus = failure
+        return
+      }
+      guard let selectedRange = report.selectedRange else {
         returnApplication.activate(options: [.activateAllWindows])
         bearOverlayPreviewStatus = .selectExactTypo
         return
@@ -239,9 +250,11 @@ struct LearningSettingsView: View {
           at: selectedRange
         )
       }.value
-      guard application.report.isVerifiedApplication else {
+      if let failure = BearOverlayPreviewStatus.failure(
+        for: application.report
+      ) {
         returnApplication.activate(options: [.activateAllWindows])
-        bearOverlayPreviewStatus = .selectionDidNotMatch
+        bearOverlayPreviewStatus = failure
         return
       }
 
@@ -275,9 +288,51 @@ enum BearOverlayPreviewStatus: Equatable {
   case idle
   case preparing
   case active
+  case accessibilityPermissionRequired
   case bearUnavailable
+  case editorUnavailable
   case selectExactTypo
   case selectionDidNotMatch
+  case correctionFailed(BearExactRangeReplacementStatus)
+
+  static func failure(
+    for report: BearAccessibilityReport
+  ) -> BearOverlayPreviewStatus? {
+    switch report.status {
+    case .ready:
+      guard report.selectedRange?.length == 3 else {
+        return .selectExactTypo
+      }
+      return nil
+    case .accessibilityPermissionRequired:
+      return .accessibilityPermissionRequired
+    case .bearNotRunning:
+      return .bearUnavailable
+    case .focusedEditorUnavailable, .focusedElementIsNotTextArea,
+      .editorAvailableButNotFocused:
+      return .editorUnavailable
+    }
+  }
+
+  static func failure(
+    for report: BearExactRangeReplacementReport
+  ) -> BearOverlayPreviewStatus? {
+    guard !report.isVerifiedApplication else {
+      return nil
+    }
+    switch report.status {
+    case .accessibilityPermissionRequired:
+      return .accessibilityPermissionRequired
+    case .bearNotRunning:
+      return .bearUnavailable
+    case .focusedEditorUnavailable, .selectedRangeUnavailable:
+      return .editorUnavailable
+    case .preconditionFailed:
+      return .selectionDidNotMatch
+    default:
+      return .correctionFailed(report.status)
+    }
+  }
 }
 
 private struct CorrectionBehaviorSection: View {

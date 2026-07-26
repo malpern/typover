@@ -2,12 +2,64 @@ import AppKit
 import Foundation
 import SwiftUI
 import Testing
+import TypoverAccessibility
 import TypoverCore
 
 @testable import TypoverApp
 
 @MainActor
 struct LearningSettingsViewTests {
+  @Test("Bear preview reports missing Accessibility permission")
+  func reportsMissingAccessibilityPermission() {
+    let report = BearAccessibilityReport(
+      status: .accessibilityPermissionRequired,
+      accessibilityTrusted: false,
+      bearIsRunning: true
+    )
+
+    #expect(
+      BearOverlayPreviewStatus.failure(for: report)
+        == .accessibilityPermissionRequired
+    )
+  }
+
+  @Test("Bear preview distinguishes selection and editor failures")
+  func reportsSelectionAndEditorFailures() {
+    let missingSelection = BearAccessibilityReport(
+      status: .ready,
+      accessibilityTrusted: true,
+      bearIsRunning: true
+    )
+    let unfocusedEditor = BearAccessibilityReport(
+      status: .editorAvailableButNotFocused,
+      accessibilityTrusted: true,
+      bearIsRunning: true,
+      selectedRange: AccessibilityTextRange(location: 20, length: 3)
+    )
+
+    #expect(
+      BearOverlayPreviewStatus.failure(for: missingSelection)
+        == .selectExactTypo
+    )
+    #expect(
+      BearOverlayPreviewStatus.failure(for: unfocusedEditor)
+        == .editorUnavailable
+    )
+  }
+
+  @Test("Bear preview preserves the exact replacement failure")
+  func reportsReplacementFailure() {
+    let report = BearExactRangeReplacementReport(
+      status: .replacementWriteFailed,
+      targetRange: AccessibilityTextRange(location: 20, length: 3)
+    )
+
+    #expect(
+      BearOverlayPreviewStatus.failure(for: report)
+        == .correctionFailed(.replacementWriteFailed)
+    )
+  }
+
   @Test("Statistics and preferences settings render at their intended size")
   func rendersSettingsSurface() throws {
     let directory = FileManager.default.temporaryDirectory

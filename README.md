@@ -65,6 +65,19 @@ swift test
 swift run Typover
 ```
 
+Bear Accessibility development must use the stable signed app bundle rather
+than `swift run` or an ad-hoc signature:
+
+```bash
+./Scripts/build-development-app.sh
+open .build/Typover.app
+```
+
+The script uses the installed Apple Development identity so macOS can retain
+Typover’s Accessibility approval across rebuilds. Ad-hoc signing identifies
+each new executable by its changing code hash and silently invalidates the
+previous approval.
+
 Requires macOS 27 or later and Swift 6.4 or later. The research build uses
 TextKit 2 and the viewport-layout hooks introduced for `NSTextView` in macOS
 27.

@@ -168,12 +168,27 @@ extension BearOverlayPreviewStatus {
       "Checking the selected Bear text…"
     case .active:
       "Preview active — click the squiggle, or press Control–Option–Command–Return"
+    case .accessibilityPermissionRequired:
+      "Allow Typover in System Settings → Privacy & Security → Accessibility, then try again"
     case .bearUnavailable:
       "Open Bear and try again"
+    case .editorUnavailable:
+      "Click inside the Bear note, select exactly “teh,” then try again"
     case .selectExactTypo:
       "Select exactly three characters in the Bear editor, then try again"
     case .selectionDidNotMatch:
       "The selected text was not “teh”; nothing was changed"
+    case .correctionFailed(let status):
+      switch status {
+      case .alreadyApplied:
+        "The selected word was already corrected"
+      case .selectionWriteFailed, .replacementWriteFailed:
+        "Bear did not allow the selected word to be replaced; nothing was changed"
+      case .contextUnavailable, .selectionRestoreFailed, .verificationFailed:
+        "Bear changed while Typover checked the selection; nothing was changed"
+      default:
+        "Typover refused an unsafe correction; nothing was changed"
+      }
     }
   }
 
@@ -183,7 +198,10 @@ extension BearOverlayPreviewStatus {
       "scribble.variable"
     case .preparing:
       "ellipsis"
-    case .idle, .bearUnavailable, .selectExactTypo, .selectionDidNotMatch:
+    case .accessibilityPermissionRequired:
+      "lock.fill"
+    case .idle, .bearUnavailable, .editorUnavailable, .selectExactTypo,
+      .selectionDidNotMatch, .correctionFailed:
       "info.circle"
     }
   }
