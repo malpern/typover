@@ -139,7 +139,7 @@ struct BearCorrectionGeometryTransaction {
   ) -> BearCorrectionGeometryReport {
     let resolution = BearCorrectionAnchorResolver().resolve(
       anchor: request.anchor,
-      expectedLengths: [request.expectedReplacement.utf16.count],
+      expectedTexts: [request.expectedReplacement],
       in: reader
     )
 
@@ -150,12 +150,12 @@ struct BearCorrectionGeometryTransaction {
       return report(.characterCountUnavailable)
     case .contextUnavailable:
       return report(.contextUnavailable)
-    case let .invalidated(candidateCount):
+    case .invalidated(let candidateCount):
       return report(
         candidateCount > 1 ? .ambiguousAnchor : .staleAnchor,
         candidateCount: candidateCount
       )
-    case let .matched(range, text):
+    case .matched(let range, let text):
       resolvedRange = range
       resolvedText = text
     }
@@ -192,7 +192,7 @@ struct BearCorrectionGeometryTransaction {
     }
 
     switch reader.bounds(for: resolvedRange) {
-    case let .success(bounds):
+    case .success(let bounds):
       guard bounds.isUsableScreenRect else {
         return report(
           .invalidBounds,
@@ -215,7 +215,7 @@ struct BearCorrectionGeometryTransaction {
         visibleRange: visibleRange,
         candidateCount: 1
       )
-    case let .failed(errorCode):
+    case .failed(let errorCode):
       return BearCorrectionGeometryReport(
         status: .boundsQueryFailed,
         resolvedRange: resolvedRange,
@@ -250,12 +250,13 @@ struct BearCorrectionGeometryTransaction {
     }
 
     let firstResult = reader.bounds(for: firstRange)
-    let lastResult = firstRange == lastRange
+    let lastResult =
+      firstRange == lastRange
       ? firstResult
       : reader.bounds(for: lastRange)
     guard
-      case let .success(firstBounds) = firstResult,
-      case let .success(lastBounds) = lastResult,
+      case .success(let firstBounds) = firstResult,
+      case .success(let lastBounds) = lastResult,
       firstBounds.isUsableScreenRect,
       lastBounds.isUsableScreenRect
     else {
@@ -290,10 +291,10 @@ struct BearCorrectionGeometryTransaction {
         result = reader.bounds(for: range)
       }
       switch result {
-      case let .success(bounds) where bounds.isUsableScreenRect:
+      case .success(let bounds) where bounds.isUsableScreenRect:
         characterBounds.append(bounds)
-      case let .success(bounds)
-        where bounds.width == 0 && bounds.height.isFinite && bounds.height > 0:
+      case .success(let bounds)
+      where bounds.width == 0 && bounds.height.isFinite && bounds.height > 0:
         // A newline can have zero width while still separating valid lines.
         continue
       case .success:
@@ -310,7 +311,7 @@ struct BearCorrectionGeometryTransaction {
           visibleRange: visibleRange,
           candidateCount: 1
         )
-      case let .failed(errorCode):
+      case .failed(let errorCode):
         return BearCorrectionGeometryReport(
           status: .boundsQueryFailed,
           resolvedRange: resolvedRange,
@@ -388,7 +389,8 @@ struct BearCorrectionGeometryTransaction {
     _ lhs: AccessibilityBounds,
     _ rhs: AccessibilityBounds
   ) -> Bool {
-    let overlap = min(lhs.y + lhs.height, rhs.y + rhs.height)
+    let overlap =
+      min(lhs.y + lhs.height, rhs.y + rhs.height)
       - max(lhs.y, rhs.y)
     return overlap > min(lhs.height, rhs.height) * 0.5
   }
@@ -409,7 +411,7 @@ struct BearCorrectionGeometryTransaction {
     }
     var errorCode: Int32?
     for result in [firstResult, lastResult] {
-      if case let .failed(code) = result, let code {
+      if case .failed(let code) = result, let code {
         errorCode = code
         break
       }

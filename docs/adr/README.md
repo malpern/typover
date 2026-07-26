@@ -11,3 +11,4 @@
 - [ADR-009: Fragment wrapped Bear ranges before drawing annotations](adr-009-fragment-wrapped-bear-geometry.md)
 - [ADR-010: Use fail-closed nonactivating panels for Bear annotations](adr-010-fail-closed-bear-annotation-panels.md)
 - [ADR-011: Keep Bear correction menus nonactivating and transaction-backed](adr-011-nonactivating-bear-correction-menu.md)
+- [ADR-012: Preserve Bear correction anchors while typing continues](adr-012-preserve-bear-anchors-while-typing-continues.md)

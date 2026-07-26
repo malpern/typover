@@ -363,3 +363,10 @@ typos, rapid typing, note and window switches, relaunches, appearance changes,
 Markdown constructs, attachments, and the previous supported Bear release.
 Make the opt-in fixture independent of Bear's transient search-results
 selection before treating it as an unattended gate.
+
+The continued-typing slice is implemented deterministically. A unique expected
+correction remains anchored when either its leading or trailing context changes,
+so typing beside the word does not remove Change Back or alternatives. Both
+sides changed and duplicate one-sided matches fail closed. The real-Bear
+overlay harness contains the same sequence but still needs a pass from the
+permissioned app host.

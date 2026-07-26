@@ -324,9 +324,12 @@ and note length but does not retain or serialize the surrounding prose.
 
 Change Back searches two bounded Accessibility neighborhoods: the original
 location and the location adjusted by the note's net length change. It restores
-only one candidate whose leading and trailing fingerprints both match. This
-supports later typing before or after the correction without scanning or
-rewriting the whole note.
+only one candidate whose leading and trailing fingerprints both match. Phase 7
+adds a conservative fallback for continued typing immediately beside the word:
+the expected corrected text must match exactly, one surrounding fingerprint
+must still match, and the candidate must be unique. Changes on both sides or a
+duplicate candidate invalidate the interaction without scanning or rewriting
+the whole note.
 
 Deterministic tests verify restoration after edits on either side, recognition
 of an already restored word, superseding after a manual word change, and
@@ -546,6 +549,24 @@ Run the full interaction against:
 
 Track correctness, annotation alignment, replacement latency, and reasons for
 every refused correction.
+
+### Continued-typing result: 2026-07-25
+
+The deterministic Bear transaction and geometry suites now cover immediate
+typing after a correction, multiple rapid insertions, alternative selection,
+Change Back, one changed context side, two changed sides, and duplicated
+one-sided matches. Typing on one side keeps a unique expected correction
+anchored; alternative and Change Back actions preserve all newly typed text.
+Changing both surrounding sides or creating a second qualifying occurrence
+hides the annotation and performs no write.
+
+The opt-in live overlay harness now performs the same sequence against Bear:
+apply `teh` to `the`, insert a unique continuation immediately afterward,
+verify the overlay, choose a length-changing alternative, and Change Back while
+checking that the continuation remains untouched. The current command-line
+test host could not read Bear's editor through Accessibility, so that live pass
+must be rerun from the permissioned Typover app before this matrix row is
+considered complete.
 
 ## Bear CLI fallback evaluation
 

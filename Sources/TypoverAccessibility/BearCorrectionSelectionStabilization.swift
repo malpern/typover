@@ -89,7 +89,7 @@ struct BearCorrectionSelectionStabilizationTransaction {
   ) -> BearCorrectionSelectionStabilizationStatus {
     let resolution = BearCorrectionAnchorResolver().resolve(
       anchor: request.anchor,
-      expectedLengths: [request.expectedText.utf16.count],
+      expectedTexts: [request.expectedText],
       in: editor
     )
     guard case .matched(let range, let text) = resolution,

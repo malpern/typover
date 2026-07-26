@@ -411,6 +411,7 @@ struct BearAnnotationOverlayTests {
     let originalSelection = try #require(editor.selectedRange())
     let originalCharacterCount = try #require(editor.characterCount())
     let liveTail = "Typover live interaction tail."
+    let liveContinuation = " Typover-live-continued-typing."
     #expect(
       editor.setSelectedRange(
         AccessibilityTextRange(
@@ -424,6 +425,7 @@ struct BearAnnotationOverlayTests {
       cleanupLiveBearOverlayFixture(
         editor: editor,
         tail: liveTail,
+        continuation: liveContinuation,
         originalSelection: originalSelection
       )
     }
@@ -440,12 +442,18 @@ struct BearAnnotationOverlayTests {
       at: typoRange
     )
     _ = try #require(application.correctionRecord)
-    let correctedCharacterCount = try #require(editor.characterCount())
+    #expect(
+      editor.setSelectedRange(
+        AccessibilityTextRange(
+          location: typoRange.location + typoRange.length,
+          length: 0
+        )
+      ) == .success
+    )
+    #expect(editor.replaceSelectedText(with: liveContinuation) == .success)
     let interactionSelection = AccessibilityTextRange(
-      location: min(
-        typoRange.location + 8,
-        correctedCharacterCount - 2
-      ),
+      location: typoRange.location + typoRange.length
+        + liveContinuation.utf16.count,
       length: 0
     )
     #expect(editor.setSelectedRange(interactionSelection) == .success)
@@ -478,11 +486,12 @@ struct BearAnnotationOverlayTests {
       presenter.panels.filter(\.isVisible).map(\.frame)
     )
 
-    let holdSeconds = Double(
-      ProcessInfo.processInfo.environment[
-        "TYPOVER_LIVE_OVERLAY_HOLD_SECONDS"
-      ] ?? "2"
-    ) ?? 2
+    let holdSeconds =
+      Double(
+        ProcessInfo.processInfo.environment[
+          "TYPOVER_LIVE_OVERLAY_HOLD_SECONDS"
+        ] ?? "2"
+      ) ?? 2
     try await Task.sleep(for: .seconds(holdSeconds))
 
     if let finder = NSRunningApplication.runningApplications(
@@ -533,6 +542,7 @@ struct BearAnnotationOverlayTests {
     #expect(
       await waitForBearOverlay {
         editor.string(in: alternativeRange) == "tech"
+          && liveBearEditorContains(editor, liveContinuation)
           && presenter.panels.contains(where: \.isVisible)
           && editor.selectedRange()
             == AccessibilityTextRange(
@@ -549,6 +559,7 @@ struct BearAnnotationOverlayTests {
     #expect(
       await waitForBearOverlay {
         editor.string(in: typoRange) == "teh"
+          && liveBearEditorContains(editor, liveContinuation)
           && !presenter.panels.contains(where: \.isVisible)
           && editor.selectedRange() == interactionSelection
       }
@@ -648,9 +659,10 @@ private final class StubBearInvalidationMonitor:
   BearAccessibilityInvalidationObserving
 {
   func start(
-    handler _: @escaping @MainActor @Sendable (
-      BearAccessibilityInvalidationEvent
-    ) -> Void
+    handler _:
+      @escaping @MainActor @Sendable (
+        BearAccessibilityInvalidationEvent
+      ) -> Void
   ) -> Bool {
     true
   }
@@ -751,6 +763,7 @@ private func overlayTestElementAttribute(
 private func cleanupLiveBearOverlayFixture(
   editor: BearEditableTextClient,
   tail: String,
+  continuation: String,
   originalSelection: AccessibilityTextRange
 ) {
   guard let count = editor.characterCount(),
@@ -777,6 +790,22 @@ private func cleanupLiveBearOverlayFixture(
       in: AccessibilityTextRange(location: 0, length: updatedCount)
     ) as NSString?
   {
+    let continuationRange = updatedValue.range(of: continuation)
+    if continuationRange.location != NSNotFound {
+      _ = editor.setSelectedRange(
+        AccessibilityTextRange(
+          location: continuationRange.location,
+          length: continuationRange.length
+        )
+      )
+      _ = editor.replaceSelectedText(with: "")
+    }
+  }
+  if let updatedCount = editor.characterCount(),
+    let updatedValue = editor.string(
+      in: AccessibilityTextRange(location: 0, length: updatedCount)
+    ) as NSString?
+  {
     let tailRange = updatedValue.range(of: tail)
     if tailRange.location != NSNotFound {
       _ = editor.setSelectedRange(
@@ -789,4 +818,18 @@ private func cleanupLiveBearOverlayFixture(
     }
   }
   _ = editor.setSelectedRange(originalSelection)
+}
+
+private func liveBearEditorContains(
+  _ editor: BearEditableTextClient,
+  _ text: String
+) -> Bool {
+  guard let count = editor.characterCount(),
+    let value = editor.string(
+      in: AccessibilityTextRange(location: 0, length: count)
+    ) as NSString?
+  else {
+    return false
+  }
+  return value.range(of: text).location != NSNotFound
 }

@@ -142,9 +142,9 @@ struct BearCorrectionRetargetTransaction {
     }
     let resolution = BearCorrectionAnchorResolver().resolve(
       anchor: request.anchor,
-      expectedLengths: [
-        request.expectedCurrent.utf16.count,
-        request.replacement.utf16.count,
+      expectedTexts: [
+        request.expectedCurrent,
+        request.replacement,
       ],
       in: editor
     )

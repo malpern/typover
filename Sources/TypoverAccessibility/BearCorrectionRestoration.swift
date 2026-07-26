@@ -165,9 +165,9 @@ struct BearCorrectionRestorationTransaction {
     }
     let resolution = BearCorrectionAnchorResolver().resolve(
       anchor: request.anchor,
-      expectedLengths: [
-        request.original.utf16.count,
-        request.expectedReplacement.utf16.count,
+      expectedTexts: [
+        request.original,
+        request.expectedReplacement,
       ],
       in: editor
     )
@@ -178,9 +178,9 @@ struct BearCorrectionRestorationTransaction {
       return report(.characterCountUnavailable)
     case .contextUnavailable:
       return report(.contextUnavailable)
-    case let .invalidated(candidateCount):
+    case .invalidated(let candidateCount):
       return report(.invalidated, candidateCount: candidateCount)
-    case let .matched(range, text):
+    case .matched(let range, let text):
       candidate = range
       currentText = text
     }
@@ -215,21 +215,22 @@ struct BearCorrectionRestorationTransaction {
     _ replacementReport: BearExactRangeReplacementReport,
     matchedRange: AccessibilityTextRange
   ) -> BearCorrectionRestorationReport {
-    let status: BearCorrectionRestorationStatus = switch replacementReport.status {
-    case .applied: .restored
-    case .alreadyApplied: .alreadyRestored
-    case .selectedRangeUnavailable: .selectedRangeUnavailable
-    case .characterCountUnavailable: .characterCountUnavailable
-    case .contextUnavailable: .contextUnavailable
-    case .selectionWriteFailed: .selectionWriteFailed
-    case .replacementWriteFailed: .replacementWriteFailed
-    case .selectionRestoreFailed: .selectionRestoreFailed
-    case .verificationFailed: .verificationFailed
-    case .accessibilityPermissionRequired: .accessibilityPermissionRequired
-    case .bearNotRunning: .bearNotRunning
-    case .focusedEditorUnavailable: .focusedEditorUnavailable
-    case .invalidRequest, .targetOutOfBounds, .preconditionFailed: .invalidated
-    }
+    let status: BearCorrectionRestorationStatus =
+      switch replacementReport.status {
+      case .applied: .restored
+      case .alreadyApplied: .alreadyRestored
+      case .selectedRangeUnavailable: .selectedRangeUnavailable
+      case .characterCountUnavailable: .characterCountUnavailable
+      case .contextUnavailable: .contextUnavailable
+      case .selectionWriteFailed: .selectionWriteFailed
+      case .replacementWriteFailed: .replacementWriteFailed
+      case .selectionRestoreFailed: .selectionRestoreFailed
+      case .verificationFailed: .verificationFailed
+      case .accessibilityPermissionRequired: .accessibilityPermissionRequired
+      case .bearNotRunning: .bearNotRunning
+      case .focusedEditorUnavailable: .focusedEditorUnavailable
+      case .invalidRequest, .targetOutOfBounds, .preconditionFailed: .invalidated
+      }
     return BearCorrectionRestorationReport(
       status: status,
       writeOccurred: replacementReport.writeOccurred,
@@ -267,20 +268,71 @@ struct BearCorrectionAnchorResolver {
 
   func resolve(
     anchor: BearCorrectionAnchor,
-    expectedLengths: [Int],
+    expectedTexts: [String],
     in reader: BearTextReadingClient
   ) -> BearCorrectionAnchorResolution {
     guard let documentLength = reader.characterCount() else {
       return .characterCountUnavailable
     }
-    guard let candidates = anchoredCandidates(
-      anchor: anchor,
-      expectedLengths: expectedLengths,
-      documentLength: documentLength,
-      reader: reader
-    ) else {
+    let expectedTexts = Set(
+      expectedTexts.filter {
+        !$0.isEmpty
+          && $0.utf16.count <= maximumOrdinaryCorrectionLength
+      }
+    )
+    guard !expectedTexts.isEmpty else {
+      return .invalidated(candidateCount: 0)
+    }
+    let expectedLengths = Set(expectedTexts.map(\.utf16.count))
+
+    guard
+      let exactExpectedCandidates = exactlyAnchoredCandidates(
+        anchor: anchor,
+        candidateLengths: expectedLengths,
+        documentLength: documentLength,
+        reader: reader
+      )
+    else {
       return .contextUnavailable
     }
+    if !exactExpectedCandidates.isEmpty {
+      return resolve(
+        exactExpectedCandidates,
+        reader: reader
+      )
+    }
+
+    guard
+      let oneSidedCandidates = oneSidedExpectedCandidates(
+        anchor: anchor,
+        expectedTexts: expectedTexts,
+        documentLength: documentLength,
+        reader: reader
+      )
+    else {
+      return .contextUnavailable
+    }
+    if !oneSidedCandidates.isEmpty {
+      return resolve(oneSidedCandidates, reader: reader)
+    }
+
+    guard
+      let supersededCandidates = exactlyAnchoredCandidates(
+        anchor: anchor,
+        candidateLengths: Set(1...maximumOrdinaryCorrectionLength),
+        documentLength: documentLength,
+        reader: reader
+      )
+    else {
+      return .contextUnavailable
+    }
+    return resolve(supersededCandidates, reader: reader)
+  }
+
+  private func resolve(
+    _ candidates: Set<AccessibilityTextRange>,
+    reader: BearTextReadingClient
+  ) -> BearCorrectionAnchorResolution {
     guard candidates.count == 1, let candidate = candidates.first else {
       return .invalidated(candidateCount: candidates.count)
     }
@@ -290,62 +342,46 @@ struct BearCorrectionAnchorResolver {
     return .matched(range: candidate, text: text)
   }
 
-  private func anchoredCandidates(
+  private func exactlyAnchoredCandidates(
     anchor: BearCorrectionAnchor,
-    expectedLengths: [Int],
+    candidateLengths: Set<Int>,
     documentLength: Int,
     reader: BearTextReadingClient
   ) -> Set<AccessibilityTextRange>? {
-    let lengthDelta = documentLength - anchor.documentLength
-    let centers = Set([
-      anchor.correctionRange.location,
-      anchor.correctionRange.location + lengthDelta,
-    ])
-    let maximumCandidateLength = max(
-      maximumOrdinaryCorrectionLength,
-      expectedLengths.max() ?? 0
-    )
     var matches = Set<AccessibilityTextRange>()
-
-    for center in centers {
-      let searchStart = max(
-        0,
-        center - searchRadius - anchor.leadingContextLength
-      )
-      let searchEnd = min(
-        documentLength,
-        center + searchRadius + maximumCandidateLength
-          + anchor.trailingContextLength
-      )
-      guard searchEnd >= searchStart else {
-        continue
-      }
-      let searchRange = AccessibilityTextRange(
-        location: searchStart,
-        length: searchEnd - searchStart
-      )
+    let validLengths = candidateLengths.filter {
+      $0 > 0 && $0 <= maximumOrdinaryCorrectionLength
+    }
+    guard !validLengths.isEmpty else {
+      return matches
+    }
+    for searchRange in searchRanges(
+      anchor: anchor,
+      documentLength: documentLength,
+      maximumCandidateLength: validLengths.max() ?? 0
+    ) {
       guard let searchText = reader.string(in: searchRange) else {
         return nil
       }
       matches.formUnion(
-        candidates(
+        exactlyAnchoredCandidates(
           in: searchText,
-          globalStart: searchStart,
+          globalStart: searchRange.location,
           documentLength: documentLength,
           anchor: anchor,
-          maximumCandidateLength: maximumCandidateLength
+          candidateLengths: validLengths
         )
       )
     }
     return matches
   }
 
-  private func candidates(
+  private func exactlyAnchoredCandidates(
     in searchText: String,
     globalStart: Int,
     documentLength: Int,
     anchor: BearCorrectionAnchor,
-    maximumCandidateLength: Int
+    candidateLengths: Set<Int>
   ) -> Set<AccessibilityTextRange> {
     let text = searchText as NSString
     var matches = Set<AccessibilityTextRange>()
@@ -368,23 +404,19 @@ struct BearCorrectionAnchorResolver {
             length: anchor.leadingContextLength
           )
         )
-        guard BearCorrectionAnchor.fingerprint(leading)
-          == anchor.leadingContextFingerprint
+        guard
+          BearCorrectionAnchor.fingerprint(leading)
+            == anchor.leadingContextFingerprint
         else {
           continue
         }
       }
 
-      let availableLength = text.length - localStart
-        - anchor.trailingContextLength
-      guard availableLength > 0 else {
-        continue
-      }
-      for candidateLength in 1...min(
-        maximumCandidateLength,
-        availableLength
-      ) {
+      for candidateLength in candidateLengths {
         let localEnd = localStart + candidateLength
+        guard localEnd + anchor.trailingContextLength <= text.length else {
+          continue
+        }
         let candidateEnd = globalStart + localEnd
         if anchor.trailingContextLength == 0 {
           guard candidateEnd == documentLength else {
@@ -397,8 +429,9 @@ struct BearCorrectionAnchorResolver {
               length: anchor.trailingContextLength
             )
           )
-          guard BearCorrectionAnchor.fingerprint(trailing)
-            == anchor.trailingContextFingerprint
+          guard
+            BearCorrectionAnchor.fingerprint(trailing)
+              == anchor.trailingContextFingerprint
           else {
             continue
           }
@@ -412,5 +445,145 @@ struct BearCorrectionAnchorResolver {
       }
     }
     return matches
+  }
+
+  private func oneSidedExpectedCandidates(
+    anchor: BearCorrectionAnchor,
+    expectedTexts: Set<String>,
+    documentLength: Int,
+    reader: BearTextReadingClient
+  ) -> Set<AccessibilityTextRange>? {
+    var matches = Set<AccessibilityTextRange>()
+    for searchRange in searchRanges(
+      anchor: anchor,
+      documentLength: documentLength,
+      maximumCandidateLength: expectedTexts.map(\.utf16.count).max() ?? 0
+    ) {
+      guard let searchText = reader.string(in: searchRange) else {
+        return nil
+      }
+      let text = searchText as NSString
+      for expectedText in expectedTexts {
+        let expectedLength = expectedText.utf16.count
+        guard expectedLength > 0, expectedLength <= text.length else {
+          continue
+        }
+        var searchLocation = 0
+        while searchLocation <= text.length - expectedLength {
+          let found = text.range(
+            of: expectedText,
+            options: [],
+            range: NSRange(
+              location: searchLocation,
+              length: text.length - searchLocation
+            )
+          )
+          guard found.location != NSNotFound else {
+            break
+          }
+          let candidate = AccessibilityTextRange(
+            location: searchRange.location + found.location,
+            length: found.length
+          )
+          if leadingContextMatches(
+            anchor: anchor,
+            candidate: candidate,
+            searchText: text,
+            searchStart: searchRange.location
+          )
+            || trailingContextMatches(
+              anchor: anchor,
+              candidate: candidate,
+              documentLength: documentLength,
+              searchText: text,
+              searchStart: searchRange.location
+            )
+          {
+            matches.insert(candidate)
+          }
+          searchLocation = found.location + max(1, found.length)
+        }
+      }
+    }
+    return matches
+  }
+
+  private func leadingContextMatches(
+    anchor: BearCorrectionAnchor,
+    candidate: AccessibilityTextRange,
+    searchText: NSString,
+    searchStart: Int
+  ) -> Bool {
+    if anchor.leadingContextLength == 0 {
+      return candidate.location == 0
+    }
+    let localStart = candidate.location - searchStart
+    guard localStart >= anchor.leadingContextLength else {
+      return false
+    }
+    let leading = searchText.substring(
+      with: NSRange(
+        location: localStart - anchor.leadingContextLength,
+        length: anchor.leadingContextLength
+      )
+    )
+    return BearCorrectionAnchor.fingerprint(leading)
+      == anchor.leadingContextFingerprint
+  }
+
+  private func trailingContextMatches(
+    anchor: BearCorrectionAnchor,
+    candidate: AccessibilityTextRange,
+    documentLength: Int,
+    searchText: NSString,
+    searchStart: Int
+  ) -> Bool {
+    let candidateEnd = candidate.location + candidate.length
+    if anchor.trailingContextLength == 0 {
+      return candidateEnd == documentLength
+    }
+    let localEnd = candidateEnd - searchStart
+    guard localEnd + anchor.trailingContextLength <= searchText.length else {
+      return false
+    }
+    let trailing = searchText.substring(
+      with: NSRange(
+        location: localEnd,
+        length: anchor.trailingContextLength
+      )
+    )
+    return BearCorrectionAnchor.fingerprint(trailing)
+      == anchor.trailingContextFingerprint
+  }
+
+  private func searchRanges(
+    anchor: BearCorrectionAnchor,
+    documentLength: Int,
+    maximumCandidateLength: Int
+  ) -> Set<AccessibilityTextRange> {
+    let lengthDelta = documentLength - anchor.documentLength
+    let centers = Set([
+      anchor.correctionRange.location,
+      anchor.correctionRange.location + lengthDelta,
+    ])
+    return Set(
+      centers.compactMap { center in
+        let searchStart = max(
+          0,
+          center - searchRadius - anchor.leadingContextLength
+        )
+        let searchEnd = min(
+          documentLength,
+          center + searchRadius + maximumCandidateLength
+            + anchor.trailingContextLength
+        )
+        guard searchEnd >= searchStart else {
+          return nil
+        }
+        return AccessibilityTextRange(
+          location: searchStart,
+          length: searchEnd - searchStart
+        )
+      })
   }
 }

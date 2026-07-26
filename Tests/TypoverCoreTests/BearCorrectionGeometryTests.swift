@@ -69,8 +69,8 @@ struct BearCorrectionGeometryTests {
     #expect(fixture.reader.boundsQueryCount == 0)
   }
 
-  @Test("Changed nearby context invalidates geometry")
-  func refusesStaleAnchor() {
+  @Test("One changed context side preserves unique geometry")
+  func acceptsOneChangedSide() {
     let fixture = makeFixture()
     fixture.reader.userReplace(
       AccessibilityTextRange(
@@ -82,8 +82,86 @@ struct BearCorrectionGeometryTests {
 
     let report = geometry(fixture)
 
+    #expect(report.status == .available)
+    #expect(report.resolvedRange == fixture.anchor.correctionRange)
+    #expect(fixture.reader.boundsQueryCount > 0)
+  }
+
+  @Test("Changes on both context sides hide stale geometry")
+  func refusesTwoChangedSides() {
+    let fixture = makeFixture()
+    fixture.reader.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location - 2,
+        length: 1
+      ),
+      with: "x"
+    )
+    fixture.reader.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 2,
+        length: 1
+      ),
+      with: "y"
+    )
+
+    let report = geometry(fixture)
+
     #expect(report.status == .staleAnchor)
     #expect(report.candidateCount == 0)
+    #expect(fixture.reader.boundsQueryCount == 0)
+  }
+
+  @Test("Typing immediately after a correction keeps its geometry")
+  func remainsVisibleWhileTypingContinues() {
+    let fixture = makeFixture()
+    fixture.reader.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 1,
+        length: 0
+      ),
+      with: "newly typed "
+    )
+    fixture.reader.visibleRangeValue = AccessibilityTextRange(
+      location: 0,
+      length: fixture.reader.text.length
+    )
+
+    let report = geometry(fixture)
+
+    #expect(report.status == .available)
+    #expect(report.resolvedRange == fixture.anchor.correctionRange)
+  }
+
+  @Test("Duplicated one-sided matches remain ambiguous")
+  func refusesAmbiguousOneSidedAnchor() {
+    let fixture = makeFixture()
+    fixture.reader.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 1,
+        length: 0
+      ),
+      with: "changed "
+    )
+    fixture.reader.userReplace(
+      AccessibilityTextRange(
+        location: fixture.reader.text.length,
+        length: 0
+      ),
+      with: String(repeating: "a", count: 39) + " the different"
+    )
+    fixture.reader.visibleRangeValue = AccessibilityTextRange(
+      location: 0,
+      length: fixture.reader.text.length
+    )
+
+    let report = geometry(fixture)
+
+    #expect(report.status == .ambiguousAnchor)
+    #expect(report.candidateCount > 1)
     #expect(fixture.reader.boundsQueryCount == 0)
   }
 
@@ -368,11 +446,12 @@ struct BearCorrectionGeometryTests {
     let editor = AXBearEditableTextClient(element: editorElement)
     let originalSelection = try #require(editor.selectedRange())
     let characterCount = try #require(editor.characterCount())
-    let text = try #require(
-      editor.string(
-        in: AccessibilityTextRange(location: 0, length: characterCount)
-      )
-    ) as NSString
+    let text =
+      try #require(
+        editor.string(
+          in: AccessibilityTextRange(location: 0, length: characterCount)
+        )
+      ) as NSString
     let markers = [
       "GEOM-TOP",
       "GEOM-HEADING",

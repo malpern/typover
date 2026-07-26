@@ -560,7 +560,8 @@ struct BearCorrectionRestorationTests {
   @Test("Duplicated surrounding context is ambiguous and never edited")
   func refusesAmbiguousAnchor() throws {
     let fixture = try makeAppliedFixture()
-    let duplicate = String(repeating: "a", count: 39)
+    let duplicate =
+      String(repeating: "a", count: 39)
       + " the "
       + String(repeating: "z", count: 39)
     fixture.editor.userReplace(
@@ -580,8 +581,8 @@ struct BearCorrectionRestorationTests {
     #expect(fixture.editor.text as String == textBefore)
   }
 
-  @Test("Changed nearby context invalidates the anchor without editing")
-  func refusesStaleAnchor() throws {
+  @Test("One changed context side keeps a unique correction anchored")
+  func acceptsOneChangedSide() throws {
     let fixture = try makeAppliedFixture()
     fixture.editor.userReplace(
       AccessibilityTextRange(
@@ -589,6 +590,32 @@ struct BearCorrectionRestorationTests {
         length: 1
       ),
       with: "x"
+    )
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(report.writeOccurred)
+    #expect((fixture.editor.text as String).contains("x teh "))
+  }
+
+  @Test("Changes on both context sides invalidate without editing")
+  func refusesTwoChangedSides() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location - 2,
+        length: 1
+      ),
+      with: "x"
+    )
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 2,
+        length: 1
+      ),
+      with: "y"
     )
     let textBefore = fixture.editor.text as String
 
@@ -598,6 +625,50 @@ struct BearCorrectionRestorationTests {
     #expect(report.candidateCount == 0)
     #expect(!report.writeOccurred)
     #expect(fixture.editor.text as String == textBefore)
+  }
+
+  @Test("Typing immediately after a correction preserves Change Back")
+  func restoresWhileTypingContinues() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 1,
+        length: 0
+      ),
+      with: "newly typed "
+    )
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(
+      (fixture.editor.text as String).contains(" teh newly typed ")
+    )
+  }
+
+  @Test("Rapid continued typing remains outside the restored range")
+  func restoresAfterRapidTyping() throws {
+    let fixture = try makeAppliedFixture()
+    var insertionLocation =
+      fixture.anchor.correctionRange.location
+      + fixture.anchor.correctionRange.length + 1
+    for chunk in ["rapid ", "typing ", "continues "] {
+      fixture.editor.userReplace(
+        AccessibilityTextRange(location: insertionLocation, length: 0),
+        with: chunk
+      )
+      insertionLocation += chunk.utf16.count
+    }
+
+    let report = restore(fixture)
+
+    #expect(report.status == .restored)
+    #expect(
+      (fixture.editor.text as String).contains(
+        " teh rapid typing continues "
+      )
+    )
   }
 
   @Test("Stored anchors contain fingerprints rather than surrounding prose")
@@ -642,6 +713,26 @@ struct BearCorrectionRestorationTests {
         == fixture.anchor.correctionRange.location + 8
     )
     #expect((fixture.editor.text as String).contains(" ten "))
+  }
+
+  @Test("An alternative remains available while typing continues")
+  func appliesAlternativeWhileTypingContinues() throws {
+    let fixture = try makeAppliedFixture()
+    fixture.editor.userReplace(
+      AccessibilityTextRange(
+        location: fixture.anchor.correctionRange.location
+          + fixture.anchor.correctionRange.length + 1,
+        length: 0
+      ),
+      with: "newly typed "
+    )
+
+    let outcome = retarget(fixture, replacement: "ten")
+
+    #expect(outcome.report.status == .applied)
+    #expect(
+      (fixture.editor.text as String).contains(" ten newly typed ")
+    )
   }
 
   @Test("A manually superseded correction rejects an alternative")
@@ -803,7 +894,8 @@ struct BearCorrectionRestorationTests {
   }
 
   private func makeAppliedFixture() throws -> AppliedFixture {
-    let originalDocument = String(repeating: "a", count: 60)
+    let originalDocument =
+      String(repeating: "a", count: 60)
       + " teh "
       + String(repeating: "z", count: 60)
     let editor = FakeBearEditableTextClient(
@@ -888,10 +980,12 @@ private func performBearUndoMenuAction() throws -> Bool {
           == "Edit"
     }
   )
-  guard AXUIElementPerformAction(
-    editMenu,
-    kAXPressAction as CFString
-  ) == .success else {
+  guard
+    AXUIElementPerformAction(
+      editMenu,
+      kAXPressAction as CFString
+    ) == .success
+  else {
     return false
   }
 
