@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import OSLog
 
 public enum BearAccessibilityInvalidationEvent: String, Sendable {
   case selectionChanged
@@ -53,6 +54,10 @@ public protocol BearAccessibilityInvalidationObserving: AnyObject {
 public final class BearAccessibilityInvalidationMonitor:
   BearAccessibilityInvalidationObserving
 {
+  private let logger = Logger(
+    subsystem: "com.malpern.typover",
+    category: "BearAccessibilityObserver"
+  )
   private var observer: AXObserver?
   private var registrations: [(element: AXUIElement, name: String)] = []
   private var callbackBox: BearAccessibilityInvalidationCallbackBox?
@@ -71,33 +76,47 @@ public final class BearAccessibilityInvalidationMonitor:
   ) -> Bool {
     stop()
 
-    guard AXIsProcessTrusted(),
+    guard AXIsProcessTrusted() else {
+      logger.notice("Bear observer unavailable: Accessibility trust missing")
+      return false
+    }
+    guard
       let runningApplication = NSRunningApplication.runningApplications(
         withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
       ).first
     else {
+      logger.notice("Bear observer unavailable: Bear is not running")
       return false
     }
 
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
-    guard
-      let focusedElement = copyElementAttribute(
-        applicationElement,
-        kAXFocusedUIElementAttribute as CFString
-      ),
-      let editorElement = BearAccessibilityProbe().nearestTextArea(
-        startingAt: focusedElement
+    let probe = BearAccessibilityProbe()
+    let focusedElement = copyElementAttribute(
+      applicationElement,
+      kAXFocusedUIElementAttribute as CFString
+    )
+    let focusedWindow = copyElementAttribute(
+      applicationElement,
+      kAXFocusedWindowAttribute as CFString
+    )
+    let inactiveEditor = focusedWindow.flatMap { window -> AXUIElement? in
+      let candidates = probe.textAreas(in: window)
+      return candidates.count == 1 ? candidates.first : nil
+    }
+    let editorElement = focusedElement.flatMap {
+      probe.nearestTextArea(startingAt: $0)
+    } ?? inactiveEditor
+    if editorElement == nil {
+      logger.notice(
+        "Bear observer waiting for an unambiguous editor focus"
       )
-    else {
-      return false
     }
 
-    let windowElement = copyElementAttribute(
-      editorElement,
-      kAXWindowAttribute as CFString
-    )
+    let windowElement = focusedWindow ?? editorElement.flatMap {
+      copyElementAttribute($0, kAXWindowAttribute as CFString)
+    }
     var createdObserver: AXObserver?
     let observerError = AXObserverCreate(
       runningApplication.processIdentifier,
@@ -105,6 +124,9 @@ public final class BearAccessibilityInvalidationMonitor:
       &createdObserver
     )
     guard observerError == .success, let createdObserver else {
+      logger.notice(
+        "Bear observer unavailable: AXObserverCreate failed with code \(observerError.rawValue)"
+      )
       return false
     }
 
@@ -113,12 +135,20 @@ public final class BearAccessibilityInvalidationMonitor:
     )
     let callbackPointer = Unmanaged.passUnretained(callbackBox).toOpaque()
     var targets: [(element: AXUIElement, name: String)] = [
-      (editorElement, kAXSelectedTextChangedNotification as String),
-      (editorElement, kAXValueChangedNotification as String),
-      (editorElement, kAXLayoutChangedNotification as String),
       (applicationElement, kAXFocusedUIElementChangedNotification as String),
       (applicationElement, kAXFocusedWindowChangedNotification as String),
     ]
+    if let editorElement {
+      targets.append(
+        (editorElement, kAXSelectedTextChangedNotification as String)
+      )
+      targets.append(
+        (editorElement, kAXValueChangedNotification as String)
+      )
+      targets.append(
+        (editorElement, kAXLayoutChangedNotification as String)
+      )
+    }
     if let windowElement {
       targets.append(
         (windowElement, kAXWindowMovedNotification as String)
@@ -136,16 +166,25 @@ public final class BearAccessibilityInvalidationMonitor:
         callbackPointer
       ) == .success
     }
-    let requiredNotifications = Set([
-      kAXSelectedTextChangedNotification as String,
-      kAXValueChangedNotification as String,
+    var requiredNotifications = Set([
       kAXFocusedUIElementChangedNotification as String,
       kAXFocusedWindowChangedNotification as String,
     ])
+    if editorElement != nil {
+      requiredNotifications.insert(
+        kAXSelectedTextChangedNotification as String
+      )
+      requiredNotifications.insert(kAXValueChangedNotification as String)
+    }
     let registeredNotifications = Set(
       successfulRegistrations.map(\.name)
     )
     guard requiredNotifications.isSubset(of: registeredNotifications) else {
+      let missingNotificationCount = requiredNotifications
+        .subtracting(registeredNotifications).count
+      logger.notice(
+        "Bear observer unavailable: \(missingNotificationCount) required notifications could not be registered"
+      )
       for registration in successfulRegistrations {
         AXObserverRemoveNotification(
           createdObserver,

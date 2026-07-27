@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-07-26
+- Updated: 2026-07-27
 - Current milestone: 1 — Bear word-correction beta
 
 ## Goal
@@ -38,6 +38,13 @@ nonactivating clickable overlay, continued typing, and automatic word-level
 Apple Spelling. Up to 24 recent Bear corrections can remain independently
 reversible. The feature remains opt-in because most automatic-writing scenarios
 still need permissioned installed-app validation.
+
+Bear focus recovery now has a safe two-stage observer. Typover can wait on
+content-free application focus notifications when Bear has not exposed an
+unambiguous note body, then attach value and selection observation only after a
+native editor is available. This closes the gap where entering the note after a
+title or search field had been focused could otherwise leave automatic
+correction dormant.
 
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and

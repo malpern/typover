@@ -1,7 +1,7 @@
 # Bear Phase 7 robustness matrix
 
 - Status: In progress
-- Last updated: 2026-07-26
+- Last updated: 2026-07-27
 - Fixture: `Typover Bear Phase 2 — 2026-07-25`
 - Current environment: Bear 2.8.1 (14428), macOS 27.0
 
@@ -25,7 +25,7 @@ Accessibility behavior.
 
 | Scenario | Deterministic evidence | Permissioned live evidence | Expected result |
 |---|---|---|---|
-| Stable fixture selection | 5 launcher tests pass | One exact CLI title match verified; app-host launcher rerun pending | One exact title opens by note ID; every ambiguous or missing state stops |
+| Stable fixture selection | 5 launcher tests pass | Passed again on 2026-07-27: one exact title opened by stable note ID with `--edit` | One exact title opens by note ID; every ambiguous or missing state stops |
 | Short note baseline | Exact-range, geometry, overlay, menu tests pass | Passed on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
 | Long note | Bounded-read and earlier-position tests pass | Geometry matrix passed on 2026-07-25; interaction pending | No whole-note read or write; annotation remains aligned |
 | Repeated typo | Ambiguous-anchor tests pass | Passed on 2026-07-26 | Act only on the uniquely anchored occurrence or refuse |
@@ -59,6 +59,23 @@ For each live row, record:
 
 No row is complete if the final text, selection, or annotation position was not
 visually or programmatically verified after the interaction.
+
+## Fixture and observer recovery pass: 2026-07-27
+
+The app-host fixture launcher again resolved exactly one disposable title and
+opened that note by stable ID with Bear's `--edit` option. A separate non-edit
+open reproduced Bear focusing a title or search surface instead of the native
+note body. The installed Typover build now remains safely armed with only
+application-level focus notifications in that state and upgrades to full editor
+observation after the body receives focus.
+
+The opt-in overlay journey rendered the synthetic correction, hid it while
+Finder was frontmost, restored it when Bear returned, applied an alternative,
+and restored the original text through Change Back. Repeated runs exposed
+timing variance in the test host's panel visibility and caret-settling
+assertions, so the complete overlay journey remains an opt-in diagnostic rather
+than a release gate. No wrong-range write or fixture loss occurred; the fixture
+was restored to `teh` after each run.
 
 ## Permissioned app-host pass: 2026-07-26
 

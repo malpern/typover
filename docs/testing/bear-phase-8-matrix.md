@@ -1,7 +1,7 @@
 # Bear Phase 8 automatic-correction matrix
 
 - Status: Automatic multi-correction safety slice implemented
-- Updated: 2026-07-26
+- Updated: 2026-07-27
 - Default: Off
 - Engine: Apple Spelling, on device
 
@@ -79,6 +79,33 @@ automatic observer was ready after Bear became frontmost. Deterministic
 evidence is not recorded as a permissioned live-app pass. Composition,
 Undo/Redo, shifted punctuation, and the multi-annotation path still require
 observation in the installed apps.
+
+## Editor-focus recovery pass: 2026-07-27
+
+The installed app now distinguishes “Bear is frontmost” from “Bear's note body
+is focused.” Bear's official CLI and ordinary navigation can initially leave
+focus in a title or search field, and in that state Bear may expose either one
+inactive text area or no safely identifiable text area. Previously Typover
+retried for a short period and then had no observer left to notice a later click
+into the note body.
+
+Typover now installs a content-free, application-level waiting observer when no
+editor can be identified unambiguously. That observer registers only Bear focus
+and window notifications. It does not read text and cannot authorize a
+correction. When the native note body becomes focused, Typover restarts from a
+fresh baseline, registers the editor value and selection notifications, and
+then begins boundary monitoring. Stage-specific logs now distinguish missing
+Accessibility trust, Bear absence, observer creation failure, notification
+registration failure, and the safe waiting-for-editor state.
+
+The signed build was deployed to `/Applications/Typover.app`. In Bear 2.8.1 on
+macOS 27.0 it logged the waiting state after a non-edit fixture open, then
+upgraded to **Bear automatic observation ready** after the same fixture was
+opened for editing. The content-free live capability probe then passed with one
+focused `AXTextArea`, bounded range access, exact-range write support, geometry,
+and every required notification. Computer Use continued to time out while
+enumerating Bear's complete accessibility tree, so this pass does not advance
+the remaining ordinary-keystroke rows.
 
 ## Privacy and safety boundary
 

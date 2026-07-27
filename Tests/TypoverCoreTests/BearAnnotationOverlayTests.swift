@@ -672,10 +672,22 @@ struct BearAnnotationOverlayTests {
         let focusedElement = overlayTestElementAttribute(
           applicationElement,
           kAXFocusedUIElementAttribute as CFString
-        ),
-        let editorElement = BearAccessibilityProbe().nearestTextArea(
-          startingAt: focusedElement
         )
+      else {
+        return nil
+      }
+      let probe = BearAccessibilityProbe()
+      let focusedWindow = overlayTestElementAttribute(
+        applicationElement,
+        kAXFocusedWindowAttribute as CFString
+      )
+      let inactiveEditor = focusedWindow.flatMap { window -> AXUIElement? in
+        let candidates = probe.textAreas(in: window)
+        return candidates.count == 1 ? candidates.first : nil
+      }
+      guard
+        let editorElement = probe.nearestTextArea(startingAt: focusedElement)
+          ?? inactiveEditor
       else {
         return nil
       }
@@ -752,12 +764,14 @@ struct BearAnnotationOverlayTests {
       ) == .success
     )
     #expect(editor.replaceSelectedText(with: liveContinuation) == .success)
-    let interactionSelection = AccessibilityTextRange(
+    let requestedInteractionSelection = AccessibilityTextRange(
       location: typoRange.location + typoRange.length
         + liveContinuation.utf16.count,
       length: 0
     )
-    #expect(editor.setSelectedRange(interactionSelection) == .success)
+    #expect(
+      editor.setSelectedRange(requestedInteractionSelection) == .success
+    )
 
     let presenter = AppKitBearAnnotationPresenter()
     let controller = BearAnnotationOverlayController(
@@ -817,21 +831,7 @@ struct BearAnnotationOverlayTests {
       )
     }
 
-    #expect(editor.setSelectedRange(typoRange) == .success)
-    #expect(editor.replaceSelectedText(with: "thy") == .success)
-    #expect(
-      await waitForBearOverlay {
-        !presenter.panels.contains(where: \.isVisible)
-      }
-    )
-    #expect(editor.setSelectedRange(typoRange) == .success)
-    #expect(editor.replaceSelectedText(with: "the") == .success)
-    #expect(
-      await waitForBearOverlay {
-        presenter.panels.contains(where: \.isVisible)
-      }
-    )
-
+    let interactionSelection = try #require(editor.selectedRange())
     let firstInteraction = try #require(
       (presenter.panels.first?.contentView as? BearSquiggleView)?.interaction
     )
@@ -857,14 +857,23 @@ struct BearAnnotationOverlayTests {
       (presenter.panels.first?.contentView as? BearSquiggleView)?.interaction
     )
     alternativeInteraction.handler(.changeBack)
-    #expect(
-      await waitForBearOverlay {
+    let changeBackSettled = await waitForBearOverlay {
         editor.string(in: typoRange) == "teh"
           && liveBearEditorContains(editor, liveContinuation)
           && !presenter.panels.contains(where: \.isVisible)
           && editor.selectedRange() == interactionSelection
-      }
-    )
+    }
+    if !changeBackSettled {
+      print(
+        "Live Bear Change Back diagnostics:",
+        "word=\(editor.string(in: typoRange) ?? "unavailable")",
+        "continuation=\(liveBearEditorContains(editor, liveContinuation))",
+        "visible=\(presenter.panels.contains(where: \.isVisible))",
+        "selection=\(String(describing: editor.selectedRange()))",
+        "expectedSelection=\(interactionSelection)"
+      )
+    }
+    #expect(changeBackSettled)
     controller.stop()
   }
 
