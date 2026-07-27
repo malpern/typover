@@ -5,7 +5,7 @@
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The deterministic gate passes with 216 tests in 24 suites. The signed
+The deterministic gate passes with 217 tests in 24 suites. The signed
 development build is deployed to `/Applications/Typover.app`, and automatic
 Bear correction is enabled locally for the live pass. The installed interaction
 rows remain pending until ordinary Bear keystrokes can be exercised and
@@ -16,6 +16,9 @@ Mutation is now gated to the environment actually under validation: Bear
 version, missing Bear bundle metadata, or any missing required Accessibility
 notification disables automatic mutation and produces an explicit status.
 The support claim will widen only after another version passes this matrix.
+If typed-boundary monitoring is temporarily unavailable, Typover stops its
+Bear observer, reports the unavailable state, and retries from a fresh baseline
+on the next application activation.
 
 The automatic coordinator also keeps session-only, content-free counts for
 boundary inputs, Bear value changes, applied corrections, safe skips, and
@@ -56,7 +59,7 @@ also passes in Bear.
 ## Input-safety pass: 2026-07-26
 
 The signed development app containing the input-intent safety changes is
-deployed to `/Applications/Typover.app`. The deterministic gate passes 216
+deployed to `/Applications/Typover.app`. The deterministic gate passes 217
 tests. It now distinguishes a literal typed boundary from Command-Z and
 Shift-Command-Z, and any later Undo/Redo key disarms an earlier boundary before
 Bear's value change is considered. Shifted punctuation uses the actual typed

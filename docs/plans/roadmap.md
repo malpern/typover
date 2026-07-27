@@ -85,6 +85,8 @@ Back action, and alternatives.
   contract disables mutation rather than attempting a best guess.
 - [x] Define the initial support claim narrowly as Bear 2.8.1 on macOS 27.0,
   the environment currently under installed-app validation.
+- [x] Make temporary observer and typed-boundary monitoring failures explicit
+  and recover from a fresh baseline on the next application lifecycle event.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria

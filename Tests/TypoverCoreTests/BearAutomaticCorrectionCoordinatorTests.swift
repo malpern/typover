@@ -462,6 +462,36 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.status == .observing)
   }
 
+  @Test("Input monitoring failure is explicit and recovers on activation")
+  func recoversInputMonitoring() async throws {
+    let fixture = try Fixture()
+    fixture.inputMonitor.startResults = [false, true]
+    fixture.reader.result = .ready(snapshot(text: "", caret: 0))
+
+    fixture.coordinator.setEnabled(true)
+
+    #expect(fixture.coordinator.status == .inputMonitoringUnavailable)
+    #expect(fixture.monitor.startCount == 1)
+    #expect(fixture.inputMonitor.startCount == 1)
+    #expect(fixture.coordinator.diagnostics.snapshot.refusals == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .inputMonitoringUnavailable
+    )
+
+    fixture.workspaceNotificationCenter.post(
+      name: NSWorkspace.didActivateApplicationNotification,
+      object: nil
+    )
+
+    #expect(
+      await waitUntil {
+        fixture.inputMonitor.startCount == 2
+          && fixture.coordinator.status == .observing
+      }
+    )
+  }
+
   @Test("Typing transition requires unchanged bounded context")
   func rejectsChangedContext() {
     let previous = snapshot(
@@ -550,6 +580,7 @@ private final class Fixture {
   let inputMonitor = TestTypingInputMonitor()
   let store: CorrectionLearningStore
   let coordinator: BearAutomaticCorrectionCoordinator
+  let workspaceNotificationCenter = NotificationCenter()
   private let directory: URL
 
   init(
@@ -582,7 +613,7 @@ private final class Fixture {
       settleDelay: .milliseconds(1),
       maximumBoundaryPairingDelay: maximumBoundaryPairingDelay,
       observationRestartDelay: .milliseconds(1),
-      workspaceNotificationCenter: NotificationCenter()
+      workspaceNotificationCenter: workspaceNotificationCenter
     )
   }
 
@@ -605,11 +636,16 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
     (@MainActor @Sendable (BearTypingInputIntent) -> Void)?
   private(set) var startCount = 0
   private(set) var stopCount = 0
+  var startResults: [Bool] = []
 
   func start(
     handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
   ) -> Bool {
     startCount += 1
+    if !startResults.isEmpty, !startResults.removeFirst() {
+      self.handler = nil
+      return false
+    }
     self.handler = handler
     return true
   }
