@@ -20,14 +20,14 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(!BearTypingInput.isCompletionBoundary(""))
     #expect(
       BearTypingInput.intent(characters: " ", modifiers: [])
-        == .completionBoundary
+        == .completionBoundary(" ")
     )
     #expect(
       BearTypingInput.intent(
         characters: "?",
         charactersIgnoringModifiers: "/",
         modifiers: [.shift]
-      ) == .completionBoundary
+      ) == .completionBoundary("?")
     )
     #expect(
       BearTypingInput.intent(
@@ -385,8 +385,30 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(
       BearTypingTransition.completedWord(
         from: previous,
-        to: current
+        to: current,
+        expectedBoundary: " "
       ) == nil
+    )
+  }
+
+  @Test("The inserted boundary must match the observed key")
+  func rejectsMismatchedBoundary() {
+    let previous = snapshot(text: "teh", caret: 3)
+    let current = snapshot(text: "teh.", caret: 4)
+
+    #expect(
+      BearTypingTransition.completedWord(
+        from: previous,
+        to: current,
+        expectedBoundary: " "
+      ) == nil
+    )
+    #expect(
+      BearTypingTransition.completedWord(
+        from: previous,
+        to: current,
+        expectedBoundary: "."
+      ) != nil
     )
   }
 
@@ -503,8 +525,8 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
     handler = nil
   }
 
-  func emitBoundary() {
-    handler?(.completionBoundary)
+  func emitBoundary(_ character: String = " ") {
+    handler?(.completionBoundary(character))
   }
 
   func emitUndoOrRedo() {

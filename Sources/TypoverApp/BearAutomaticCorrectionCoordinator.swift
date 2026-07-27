@@ -91,7 +91,7 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
 }
 
 enum BearTypingInputIntent: Equatable {
-  case completionBoundary
+  case completionBoundary(String)
   case undoOrRedo
   case other
 }
@@ -137,7 +137,7 @@ enum BearTypingInput {
     else {
       return .other
     }
-    return .completionBoundary
+    return .completionBoundary(characters ?? "")
   }
 }
 
@@ -149,15 +149,18 @@ struct VerifiedBearTypingCompletion: Equatable {
 enum BearTypingTransition {
   static func completedWord(
     from previous: BearTypingContextSnapshot,
-    to current: BearTypingContextSnapshot
+    to current: BearTypingContextSnapshot,
+    expectedBoundary: String
   ) -> VerifiedBearTypingCompletion? {
     guard
+      expectedBoundary.utf16.count == 1,
       current.documentLength == previous.documentLength + 1,
       current.caretLocation == previous.caretLocation + 1,
       current.leadingRange.location + current.leadingRange.length
         == current.caretLocation,
       current.leadingText.utf16.count == current.leadingRange.length,
       current.leadingRange.length > 0,
+      insertedBoundary(in: current) == expectedBoundary,
       boundedLeadingTextMatches(previous: previous, current: current),
       boundedTrailingTextMatches(previous: previous, current: current),
       let word = CompletedWordDetector.immediatelyBeforeCaret(
@@ -173,6 +176,21 @@ enum BearTypingTransition {
       targetRange: AccessibilityTextRange(
         location: current.leadingRange.location + word.range.location,
         length: word.range.length
+      )
+    )
+  }
+
+  private static func insertedBoundary(
+    in snapshot: BearTypingContextSnapshot
+  ) -> String? {
+    guard snapshot.leadingText.utf16.count > 0 else {
+      return nil
+    }
+    return utf16Substring(
+      snapshot.leadingText,
+      range: NSRange(
+        location: snapshot.leadingText.utf16.count - 1,
+        length: 1
       )
     )
   }
@@ -379,7 +397,7 @@ final class BearAutomaticCorrectionCoordinator {
     }
     guard typingInputMonitor.start(handler: { [weak self] intent in
       self?.pendingInputIntent = intent
-      if intent == .completionBoundary {
+      if case .completionBoundary = intent {
         self?.diagnostics.recordBoundaryInput()
         self?.pendingBoundaryObservedAt = self?.clock.now
         self?.logger.debug("Completion boundary key observed")
@@ -482,18 +500,24 @@ final class BearAutomaticCorrectionCoordinator {
   private func evaluateSettledChange() {
     let valueChangeWasObserved = pendingValueChange
     let boundaryObservedAt = pendingBoundaryObservedAt
+    let pendingBoundaryCharacter: String?
+    if case .completionBoundary(let character) = pendingInputIntent {
+      pendingBoundaryCharacter = character
+    } else {
+      pendingBoundaryCharacter = nil
+    }
     let boundaryPairingElapsed = boundaryObservedAt.map {
       $0.duration(to: clock.now)
     }
     let valueChangeWasTypedBoundary =
       pendingValueChange
-        && pendingInputIntent == .completionBoundary
+        && pendingBoundaryCharacter != nil
         && boundaryPairingElapsed.map {
           $0 <= maximumBoundaryPairingDelay
         } == true
     let valueChangeHadStaleBoundary =
       pendingValueChange
-        && pendingInputIntent == .completionBoundary
+        && pendingBoundaryCharacter != nil
         && boundaryObservedAt != nil
         && !valueChangeWasTypedBoundary
     let mayBeRedundantAutomaticValueChange =
@@ -545,7 +569,8 @@ final class BearAutomaticCorrectionCoordinator {
     guard
       let completion = BearTypingTransition.completedWord(
         from: previousSnapshot,
-        to: currentSnapshot
+        to: currentSnapshot,
+        expectedBoundary: pendingBoundaryCharacter ?? ""
       )
     else {
       diagnostics.recordSafeSkip(.contextChanged)
