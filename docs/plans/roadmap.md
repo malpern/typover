@@ -304,8 +304,8 @@ cross-version results, and repeatable local benchmarks.
 ## Immediate next slice
 
 Physically type the repeated-`teh` rapid sequence in the disposable Bear
-fixture against the deployed fixed-deadline build, then inspect the private
-trace. If ordinary typing still produces coalesced safe misses, implement the
-bounded idle catch-up pass before continuing the rest of the Phase 8 matrix.
-Keep sentence-level Bear work out of scope until the word-level exit criteria
-are satisfied.
+fixture against the deployed overlay-debounce build, then inspect the private
+trace. If removing per-squiggle geometry pressure still leaves realistic
+coalesced safe misses, implement the bounded idle catch-up pass before
+continuing the rest of the Phase 8 matrix. Keep sentence-level Bear work out of
+scope until the word-level exit criteria are satisfied.

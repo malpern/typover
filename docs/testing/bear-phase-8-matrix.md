@@ -1,6 +1,6 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Rapid-typing synchronization fix deployed; manual retest pending
+- Status: Overlay-scaling fix deployed; rapid manual retest pending
 - Updated: 2026-07-27
 - Default: Off
 - Engine: Apple Spelling, on device
@@ -50,7 +50,7 @@ also passes in Bear.
 | Bounded context changes | Passed | Pending | Refuse without writing |
 | Change Back | Passed with learning | Pending | Restore only the word and suppress the same learned correction |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
-| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, and coalesced-change refusal | Two pre-fix runs dropped later words; fixed build pending physical-keyboard retest | Preserve all later input; safe miss if events truly coalesce |
+| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, and debounced overlay geometry | Fixed-deadline run applied 4 of 14; overlay-scaling fix pending physical-keyboard retest | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
 | Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
@@ -141,6 +141,22 @@ delivered to Bear as one coalesced edit, while its individual key action does
 not appear in Typover's global `NSEvent` monitor. Both paths correctly produce
 no automatic correction, but neither reproduces physical keyboard input. The
 fixed build therefore still requires a manual repeated-`teh` pass.
+
+The physical fixed-deadline retest applied 4 of 14 rapid entries. The trace
+showed the first three corrections completing normally, followed by bounded
+context reads delayed by 200–885 milliseconds. Each tracked squiggle owned an
+independent Bear observer and a 125-millisecond fallback geometry poll, so the
+Accessibility workload grew with every successful correction and competed with
+the automatic-correction reader.
+
+Production overlay sessions now debounce geometry work for 180 milliseconds
+after Bear text changes and use a two-second fallback interval. A value change
+hides the potentially stale squiggle immediately; after typing pauses, each
+still-valid correction re-anchors and reappears. Correction detection remains
+independent and continues during the debounce. The focused overlay suite passes
+21 tests, including a rapid-notification regression, and the focused automatic
+suite passes all 23 tests. The deployed build needs the same physical sequence
+before deciding whether bounded idle catch-up is still required.
 
 For this single-user development phase, an opt-in local private trace can log
 the actual bounded Bear context, input intents, Accessibility event order,

@@ -42,12 +42,15 @@ public final class BearAnnotationOverlayController {
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let displays: @MainActor @Sendable () -> [BearOverlayDisplay]
   private let fallbackRefreshInterval: Duration
+  private let textChangeRefreshDelay: Duration
   private let selectionStabilizationDelays: [Duration]
   private let handlesKeyboardShortcut: Bool
 
   private var application: BearCorrectionApplication?
   private var refreshGeneration = 0
   private var refreshTask: Task<Void, Never>?
+  private var textChangeRefreshTask: Task<Void, Never>?
+  private var pendingTextChangeMayInvalidateAnchor = false
   private var fallbackTask: Task<Void, Never>?
   private var interactionTask: Task<Void, Never>?
   private var selectionStabilizationTask: Task<Void, Never>?
@@ -73,6 +76,7 @@ public final class BearAnnotationOverlayController {
     },
     fallbackRefreshInterval: Duration =
       BearAnnotationOverlayController.fallbackRefreshInterval,
+    textChangeRefreshDelay: Duration = .zero,
     handlesKeyboardShortcut: Bool = true,
     selectionStabilizationDelays: [Duration] = [
       .milliseconds(40),
@@ -85,6 +89,7 @@ public final class BearAnnotationOverlayController {
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.displays = displays
     self.fallbackRefreshInterval = fallbackRefreshInterval
+    self.textChangeRefreshDelay = textChangeRefreshDelay
     self.handlesKeyboardShortcut = handlesKeyboardShortcut
     self.selectionStabilizationDelays = selectionStabilizationDelays
   }
@@ -139,6 +144,9 @@ public final class BearAnnotationOverlayController {
     refreshGeneration += 1
     refreshTask?.cancel()
     refreshTask = nil
+    textChangeRefreshTask?.cancel()
+    textChangeRefreshTask = nil
+    pendingTextChangeMayInvalidateAnchor = false
     fallbackTask?.cancel()
     fallbackTask = nil
     interactionTask?.cancel()
@@ -241,6 +249,12 @@ public final class BearAnnotationOverlayController {
   private func handle(
     _ event: BearAccessibilityInvalidationEvent
   ) {
+    if event == .valueChanged || event == .selectionChanged {
+      scheduleTextChangeRefresh(event)
+      return
+    }
+
+    cancelTextChangeRefresh()
     let invalidatesGeometry = event != .selectionChanged
     refresh(
       hideFirst: invalidatesGeometry,
@@ -249,6 +263,56 @@ public final class BearAnnotationOverlayController {
     if event == .focusedElementChanged || event == .focusedWindowChanged {
       restartInvalidationMonitor()
     }
+  }
+
+  private func scheduleTextChangeRefresh(
+    _ event: BearAccessibilityInvalidationEvent
+  ) {
+    pendingTextChangeMayInvalidateAnchor =
+      pendingTextChangeMayInvalidateAnchor || event == .valueChanged
+    if event == .valueChanged {
+      presenter.hide()
+    }
+    refreshGeneration += 1
+    refreshTask?.cancel()
+    refreshTask = nil
+    textChangeRefreshTask?.cancel()
+
+    guard textChangeRefreshDelay != .zero else {
+      let finishIfInvalidated = pendingTextChangeMayInvalidateAnchor
+      pendingTextChangeMayInvalidateAnchor = false
+      textChangeRefreshTask = nil
+      refresh(
+        hideFirst: false,
+        finishIfInvalidated: finishIfInvalidated
+      )
+      return
+    }
+
+    let delay = textChangeRefreshDelay
+    textChangeRefreshTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: delay)
+      } catch {
+        return
+      }
+      guard let self else {
+        return
+      }
+      self.textChangeRefreshTask = nil
+      let finishIfInvalidated = self.pendingTextChangeMayInvalidateAnchor
+      self.pendingTextChangeMayInvalidateAnchor = false
+      self.refresh(
+        hideFirst: false,
+        finishIfInvalidated: finishIfInvalidated
+      )
+    }
+  }
+
+  private func cancelTextChangeRefresh() {
+    textChangeRefreshTask?.cancel()
+    textChangeRefreshTask = nil
+    pendingTextChangeMayInvalidateAnchor = false
   }
 
   private func restartInvalidationMonitor() {
@@ -270,7 +334,10 @@ public final class BearAnnotationOverlayController {
         } catch {
           return
         }
-        self?.refresh(hideFirst: false)
+        guard let self, self.textChangeRefreshTask == nil else {
+          continue
+        }
+        self.refresh(hideFirst: false)
       }
     }
   }

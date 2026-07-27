@@ -565,6 +565,40 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Rapid text changes debounce overlay geometry work")
+  func rapidTextChangesDebounceGeometry() async throws {
+    let presenter = SpyBearAnnotationPresenter()
+    let monitor = StubBearInvalidationMonitor()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      invalidationMonitor: monitor,
+      textChangeRefreshDelay: .milliseconds(100)
+    )
+
+    controller.track(overlayApplication())
+    #expect(
+      await waitForBearOverlay {
+        presenter.showCount == 1
+      }
+    )
+
+    monitor.send(.valueChanged)
+    try await Task.sleep(for: .milliseconds(60))
+    monitor.send(.selectionChanged)
+    try await Task.sleep(for: .milliseconds(60))
+    #expect(presenter.showCount == 1)
+    #expect(!presenter.isVisible)
+
+    #expect(
+      await waitForBearOverlay(timeout: .milliseconds(100)) {
+        presenter.showCount == 2
+      }
+    )
+    controller.stop()
+  }
+
+  @MainActor
   @Test("Bear termination ends the interaction permanently")
   func bearTerminationFinishesTracking() async {
     let presenter = SpyBearAnnotationPresenter()
@@ -903,7 +937,8 @@ private func testController(
   service: StubBearCorrectionService,
   invalidationMonitor: StubBearInvalidationMonitor =
     StubBearInvalidationMonitor(),
-  handlesKeyboardShortcut: Bool = true
+  handlesKeyboardShortcut: Bool = true,
+  textChangeRefreshDelay: Duration = .zero
 ) -> BearAnnotationOverlayController {
   BearAnnotationOverlayController(
     adapter: service,
@@ -931,6 +966,7 @@ private func testController(
       ]
     },
     fallbackRefreshInterval: .seconds(60),
+    textChangeRefreshDelay: textChangeRefreshDelay,
     handlesKeyboardShortcut: handlesKeyboardShortcut
   )
 }
@@ -955,6 +991,7 @@ private func overlayInteraction(
 @MainActor
 private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
   private(set) var isVisible = false
+  private(set) var showCount = 0
   private(set) var interaction: BearAnnotationInteraction?
   private(set) var placements: [AccessibilityBounds] = []
 
@@ -963,6 +1000,7 @@ private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
     interaction: BearAnnotationInteraction
   ) {
     isVisible = true
+    showCount += 1
     self.placements = placements
     self.interaction = interaction
   }

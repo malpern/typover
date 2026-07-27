@@ -27,6 +27,8 @@ public final class BearAnnotationOverlayCollectionController {
     ) {
       BearAnnotationOverlayController(
         adapter: adapter,
+        fallbackRefreshInterval: .seconds(2),
+        textChangeRefreshDelay: .milliseconds(180),
         handlesKeyboardShortcut: false
       )
     }
