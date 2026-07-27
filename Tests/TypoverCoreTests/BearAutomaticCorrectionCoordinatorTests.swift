@@ -142,6 +142,28 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.diagnostics.snapshot.refusals == 1)
   }
 
+  @Test("Disabling stops observation and re-enabling starts fresh")
+  func disablesAndReenablesObservation() throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+    let monitorStopsAfterEnable = fixture.monitor.stopCount
+    let inputStopsAfterEnable = fixture.inputMonitor.stopCount
+
+    fixture.coordinator.setEnabled(false)
+
+    #expect(fixture.coordinator.status == .disabled)
+    #expect(fixture.monitor.stopCount == monitorStopsAfterEnable + 1)
+    #expect(fixture.inputMonitor.stopCount == inputStopsAfterEnable + 1)
+    #expect(fixture.tracker.stopCount == 1)
+
+    fixture.coordinator.setEnabled(true)
+
+    #expect(fixture.coordinator.status == .observing)
+    #expect(fixture.monitor.startCount == 2)
+    #expect(fixture.inputMonitor.startCount == 2)
+  }
+
   @Test("Consecutive typed words create consecutive annotations")
   func correctsConsecutiveWords() async throws {
     let fixture = try Fixture()
@@ -438,6 +460,7 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   private var handler:
     (@MainActor @Sendable (BearTypingInputIntent) -> Void)?
   private(set) var startCount = 0
+  private(set) var stopCount = 0
 
   func start(
     handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
@@ -448,6 +471,7 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   }
 
   func stop() {
+    stopCount += 1
     handler = nil
   }
 
@@ -477,6 +501,7 @@ private final class TestInvalidationMonitor:
 {
   var startResults: [Bool] = []
   private(set) var startCount = 0
+  private(set) var stopCount = 0
   private var handler:
     (
       @MainActor @Sendable (
@@ -500,6 +525,7 @@ private final class TestInvalidationMonitor:
   }
 
   func stop() {
+    stopCount += 1
     handler = nil
   }
 
@@ -603,6 +629,7 @@ private final class TestCorrectionApplicator:
 @MainActor
 private final class TestAnnotationTracker: BearAnnotationTracking {
   var applications: [BearCorrectionApplication] = []
+  private(set) var stopCount = 0
   private var onResolution:
     (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
@@ -621,6 +648,7 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
   }
 
   func stop() {
+    stopCount += 1
     applications = []
     onResolution = nil
   }

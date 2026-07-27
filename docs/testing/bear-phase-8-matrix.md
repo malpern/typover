@@ -5,7 +5,7 @@
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The deterministic gate passes with 210 tests in 24 suites. The signed
+The deterministic gate passes with 211 tests in 24 suites. The signed
 development build is deployed to `/Applications/Typover.app`, and automatic
 Bear correction is enabled locally for the live pass. The installed interaction
 rows remain pending until ordinary Bear keystrokes can be exercised and
@@ -40,7 +40,7 @@ also passes in Bear.
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Exact-range and anchor suites pass | Pending | Preserve all later input; safe miss if events coalesce |
 | Switch notes or windows | Existing Phase 7 lifecycle tests pass | Pending | Reattach only to the newly focused Bear editor |
-| Typover disabled | Coordinator policy implemented | Pending | Stop observation and hide the active Typover annotation |
+| Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; independent actions and 24-session bound | Pending | Keep each valid correction independently reversible |
@@ -49,7 +49,7 @@ also passes in Bear.
 ## Input-safety pass: 2026-07-26
 
 The signed development app containing the input-intent safety changes is
-deployed to `/Applications/Typover.app`. The deterministic gate passes 210
+deployed to `/Applications/Typover.app`. The deterministic gate passes 211
 tests. It now distinguishes a literal typed boundary from Command-Z and
 Shift-Command-Z, and any later Undo/Redo key disarms an earlier boundary before
 Bear's value change is considered. Shifted punctuation uses the actual typed
