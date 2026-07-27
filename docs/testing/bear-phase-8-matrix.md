@@ -19,9 +19,10 @@ The support claim will widen only after another version passes this matrix.
 
 The automatic coordinator also keeps session-only, content-free counts for
 boundary inputs, Bear value changes, applied corrections, safe skips, and
-refusals. It samples correction-to-visible-annotation latency without retaining
-the original word, replacement, surrounding text, note identity, or document
-content. Settings exposes only the applied, skipped, and refused totals.
+refusals. It samples correction-to-visible-annotation latency and successful
+menu-action-to-verified-change latency without retaining the original word,
+replacement, surrounding text, note identity, or document content. Settings
+exposes only the content-free totals and timing summaries.
 
 A completion key authorizes a Bear value change for at most 750 milliseconds.
 If the matching Accessibility change arrives later, Typover records a safe

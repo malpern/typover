@@ -26,6 +26,9 @@ struct BearAutomaticCorrectionDiagnosticsSnapshot: Equatable, Sendable {
   let correctionToAnnotationSampleCount: Int
   let medianCorrectionToAnnotationMilliseconds: Double
   let p95CorrectionToAnnotationMilliseconds: Double
+  let interactionLatencySampleCount: Int
+  let medianInteractionLatencyMilliseconds: Double
+  let p95InteractionLatencyMilliseconds: Double
   let lastOutcome: BearAutomaticCorrectionDiagnosticOutcome?
 }
 
@@ -40,6 +43,7 @@ final class BearAutomaticCorrectionDiagnostics {
   private(set) var lastOutcome: BearAutomaticCorrectionDiagnosticOutcome?
 
   private var correctionToAnnotationMilliseconds: [Double] = []
+  private var interactionLatencyMilliseconds: [Double] = []
   private let maximumLatencySamples = 200
 
   var snapshot: BearAutomaticCorrectionDiagnosticsSnapshot {
@@ -51,8 +55,23 @@ final class BearAutomaticCorrectionDiagnostics {
       refusals: refusals,
       correctionToAnnotationSampleCount:
         correctionToAnnotationMilliseconds.count,
-      medianCorrectionToAnnotationMilliseconds: percentile(0.5),
-      p95CorrectionToAnnotationMilliseconds: percentile(0.95),
+      medianCorrectionToAnnotationMilliseconds: percentile(
+        0.5,
+        in: correctionToAnnotationMilliseconds
+      ),
+      p95CorrectionToAnnotationMilliseconds: percentile(
+        0.95,
+        in: correctionToAnnotationMilliseconds
+      ),
+      interactionLatencySampleCount: interactionLatencyMilliseconds.count,
+      medianInteractionLatencyMilliseconds: percentile(
+        0.5,
+        in: interactionLatencyMilliseconds
+      ),
+      p95InteractionLatencyMilliseconds: percentile(
+        0.95,
+        in: interactionLatencyMilliseconds
+      ),
       lastOutcome: lastOutcome
     )
   }
@@ -93,6 +112,11 @@ final class BearAutomaticCorrectionDiagnostics {
     }
   }
 
+  func recordInteractionLatency(_ elapsed: Duration) {
+    interactionLatencyMilliseconds.append(Self.milliseconds(elapsed))
+    trimSamples(&interactionLatencyMilliseconds)
+  }
+
   func reset() {
     boundaryInputs = 0
     valueChanges = 0
@@ -101,18 +125,28 @@ final class BearAutomaticCorrectionDiagnostics {
     refusals = 0
     lastOutcome = nil
     correctionToAnnotationMilliseconds.removeAll(keepingCapacity: true)
+    interactionLatencyMilliseconds.removeAll(keepingCapacity: true)
   }
 
-  private func percentile(_ percentile: Double) -> Double {
-    guard !correctionToAnnotationMilliseconds.isEmpty else {
+  private func percentile(
+    _ percentile: Double,
+    in samples: [Double]
+  ) -> Double {
+    guard !samples.isEmpty else {
       return 0
     }
-    let sorted = correctionToAnnotationMilliseconds.sorted()
+    let sorted = samples.sorted()
     let index = min(
       sorted.count - 1,
       max(0, Int(ceil(percentile * Double(sorted.count))) - 1)
     )
     return sorted[index]
+  }
+
+  private func trimSamples(_ samples: inout [Double]) {
+    if samples.count > maximumLatencySamples {
+      samples.removeFirst(samples.count - maximumLatencySamples)
+    }
   }
 
   private static func milliseconds(_ duration: Duration) -> Double {

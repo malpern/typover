@@ -34,6 +34,12 @@ valid active-typing, correction-latency, or steady-state energy baseline.
 
 ## Remaining samples
 
+Typover now records both timing paths in memory for the current session:
+completion boundary to tracked annotation, and correction-menu choice to a
+verified Change Back or alternative replacement. Settings reports the median
+for each path; the diagnostics retain at most 200 samples and no writing.
+Installed samples remain pending.
+
 - correction boundary to visible squiggle while typing naturally in Bear;
 - squiggle click to verified Change Back and alternative replacement;
 - sustained typing with several recent annotations;

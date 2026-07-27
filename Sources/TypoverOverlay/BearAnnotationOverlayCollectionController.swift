@@ -55,6 +55,9 @@ public final class BearAnnotationOverlayCollectionController {
   public func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives: [String] = [],
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )? = nil,
     onResolution: (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )? = nil,
@@ -72,6 +75,7 @@ public final class BearAnnotationOverlayCollectionController {
     controller.trackWithResolution(
       application,
       alternatives: alternatives,
+      onInteractionLatency: onInteractionLatency,
       onResolution: onResolution,
       onFinished: { [weak self, weak controller] in
         guard let self, let controller else {

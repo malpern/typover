@@ -184,6 +184,19 @@ private struct BearAutomaticCorrectionControl: View {
           .foregroundStyle(.secondary)
           .padding(.leading, 20)
         }
+
+        if diagnostics.snapshot.interactionLatencySampleCount > 0 {
+          Text(
+            "Typical menu-to-verified-change time: \(diagnostics.snapshot.medianInteractionLatencyMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
+            bundle: #bundle,
+            comment:
+              "Median elapsed time from choosing a Bear correction menu action until its exact replacement is verified."
+          )
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .padding(.leading, 20)
+        }
       }
     }
   }

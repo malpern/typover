@@ -434,6 +434,14 @@ struct BearAutomaticCorrectionCoordinatorTests {
         == .suppressed
     )
     #expect(fixture.engine.responses == [.reverted])
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.interactionLatencySampleCount
+        == 1
+    )
+    #expect(
+      fixture.coordinator.diagnostics.snapshot
+        .medianInteractionLatencyMilliseconds == 42
+    )
   }
 
   @Test("Observation retries while Bear's focused editor is attaching")
@@ -770,26 +778,37 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
     (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )?
+  private var onInteractionLatency:
+    (@MainActor @Sendable (Duration) -> Void)?
 
   func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives _: [String],
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )?,
     onResolution: (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )?,
     onFinished _: (@MainActor @Sendable () -> Void)?
   ) {
     applications.append(application)
+    self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
   }
 
   func stop() {
     stopCount += 1
     applications = []
+    onInteractionLatency = nil
     onResolution = nil
   }
 
-  func resolve(_ resolution: BearAnnotationResolution) {
+  func resolve(
+    _ resolution: BearAnnotationResolution,
+    interactionLatency: Duration = .milliseconds(42)
+  ) {
+    onInteractionLatency?(interactionLatency)
     onResolution?(resolution)
   }
 }

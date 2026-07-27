@@ -54,6 +54,8 @@ public final class BearAnnotationOverlayController {
   private var workspaceObservers: [NSObjectProtocol] = []
   private var keyboardMonitor: Any?
   private var alternatives: [String] = []
+  private var onInteractionLatency:
+    (@MainActor @Sendable (Duration) -> Void)?
   private var onFinished: (@MainActor @Sendable () -> Void)?
   private var onResolution: (@MainActor @Sendable (BearAnnotationResolution) -> Void)?
 
@@ -99,6 +101,7 @@ public final class BearAnnotationOverlayController {
     trackWithResolution(
       application,
       alternatives: alternatives,
+      onInteractionLatency: nil,
       onResolution: nil,
       onFinished: onFinished
     )
@@ -107,6 +110,9 @@ public final class BearAnnotationOverlayController {
   public func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives: [String] = [],
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )? = nil,
     onResolution: (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )? = nil,
@@ -115,6 +121,7 @@ public final class BearAnnotationOverlayController {
     stop()
     self.application = application
     self.alternatives = alternatives
+    self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
     self.onFinished = onFinished
     installWorkspaceObservers()
@@ -143,6 +150,7 @@ public final class BearAnnotationOverlayController {
     removeKeyboardMonitor()
     presenter.hide()
     alternatives = []
+    onInteractionLatency = nil
     onResolution = nil
     onFinished = nil
   }
@@ -277,6 +285,7 @@ public final class BearAnnotationOverlayController {
     refreshGeneration += 1
     refreshTask?.cancel()
     let adapter = adapter
+    let interactionStartedAt = ContinuousClock().now
     interactionTask?.cancel()
     interactionTask = Task { [weak self] in
       switch action {
@@ -291,6 +300,9 @@ public final class BearAnnotationOverlayController {
         }
         switch result.report.status {
         case .restored, .alreadyRestored:
+          self.onInteractionLatency?(
+            interactionStartedAt.duration(to: ContinuousClock().now)
+          )
           self.onResolution?(.changedBack)
           if result.report.writeOccurred,
             let anchor = application.correctionAnchor,
@@ -336,6 +348,9 @@ public final class BearAnnotationOverlayController {
           return
         }
         if let updatedApplication = result.application {
+          self.onInteractionLatency?(
+            interactionStartedAt.duration(to: ContinuousClock().now)
+          )
           self.onResolution?(.choseAlternative(replacement))
           self.alternatives.insert(
             application.correction.replacement,

@@ -320,6 +320,9 @@ struct BearAnnotationOverlayTests {
     controller.trackWithResolution(
       overlayApplication(),
       alternatives: ["ten"],
+      onInteractionLatency: { elapsed in
+        completion.interactionLatency = elapsed
+      },
       onResolution: { outcome in
         resolution.value = outcome
       },
@@ -342,6 +345,8 @@ struct BearAnnotationOverlayTests {
     )
     #expect(!presenter.isVisible)
     #expect(resolution.value == .changedBack)
+    #expect(completion.interactionLatency != nil)
+    #expect(completion.interactionLatency ?? .zero >= .zero)
   }
 
   @MainActor
@@ -1054,6 +1059,7 @@ private struct StubBearCorrectionService: BearCorrectionServicing {
 @MainActor
 private final class BearOverlayCompletionSpy {
   var didFinish = false
+  var interactionLatency: Duration?
 }
 
 @MainActor

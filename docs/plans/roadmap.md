@@ -76,8 +76,9 @@ Back action, and alternatives.
 - [ ] Measure correction-to-squiggle latency, interaction latency, safe misses,
   refusals, false changes, memory, energy, and recovery behavior without
   logging writing. Session-only applied, safe-skip, refusal, and
-  correction-to-annotation measurements are implemented; installed latency,
-  interaction latency, active memory and energy, and recovery samples remain.
+  correction-to-annotation and menu-to-verified-change measurements are
+  implemented; installed timing, active memory and energy, and recovery
+  samples remain.
   A locked/waiting idle sanity check is recorded in
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility

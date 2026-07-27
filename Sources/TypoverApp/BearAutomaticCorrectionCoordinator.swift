@@ -35,6 +35,9 @@ protocol BearAnnotationTracking: AnyObject {
   func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives: [String],
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )?,
     onResolution: (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )?,
@@ -614,6 +617,9 @@ final class BearAutomaticCorrectionCoordinator {
     annotationTracker.trackWithResolution(
       application,
       alternatives: proposal.alternatives,
+      onInteractionLatency: { [weak self] elapsed in
+        self?.diagnostics.recordInteractionLatency(elapsed)
+      },
       onResolution: { [weak self] resolution in
         self?.record(resolution, for: proposal)
       },
