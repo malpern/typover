@@ -253,6 +253,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let learningStore: CorrectionLearningStore
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let settleDelay: Duration
+  private let maximumBoundaryPairingDelay: Duration
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let clock = ContinuousClock()
@@ -306,6 +307,7 @@ final class BearAutomaticCorrectionCoordinator {
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     },
     settleDelay: Duration = .milliseconds(35),
+    maximumBoundaryPairingDelay: Duration = .milliseconds(750),
     observationRestartDelay: Duration = .milliseconds(250),
     workspaceNotificationCenter: NotificationCenter =
       NSWorkspace.shared.notificationCenter
@@ -321,6 +323,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.diagnostics = diagnostics
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
+    self.maximumBoundaryPairingDelay = maximumBoundaryPairingDelay
     self.observationRestartDelay = observationRestartDelay
     self.workspaceNotificationCenter = workspaceNotificationCenter
     installWorkspaceObservers()
@@ -478,9 +481,21 @@ final class BearAutomaticCorrectionCoordinator {
 
   private func evaluateSettledChange() {
     let valueChangeWasObserved = pendingValueChange
-    let valueChangeWasTypedBoundary =
-      pendingValueChange && pendingInputIntent == .completionBoundary
     let boundaryObservedAt = pendingBoundaryObservedAt
+    let boundaryPairingElapsed = boundaryObservedAt.map {
+      $0.duration(to: clock.now)
+    }
+    let valueChangeWasTypedBoundary =
+      pendingValueChange
+        && pendingInputIntent == .completionBoundary
+        && boundaryPairingElapsed.map {
+          $0 <= maximumBoundaryPairingDelay
+        } == true
+    let valueChangeHadStaleBoundary =
+      pendingValueChange
+        && pendingInputIntent == .completionBoundary
+        && boundaryObservedAt != nil
+        && !valueChangeWasTypedBoundary
     let mayBeRedundantAutomaticValueChange =
       suppressesNextRedundantAutomaticValueChange
     pendingValueChange = false
@@ -512,6 +527,10 @@ final class BearAutomaticCorrectionCoordinator {
     }
     if valueChangeWasObserved {
       diagnostics.recordValueChange()
+    }
+    if valueChangeHadStaleBoundary {
+      diagnostics.recordSafeSkip(.staleBoundaryInput)
+      return
     }
     guard valueChangeWasTypedBoundary else {
       if valueChangeWasObserved {
@@ -576,7 +595,7 @@ final class BearAutomaticCorrectionCoordinator {
       onFinished: nil
     )
     diagnostics.recordApplied(
-      elapsed: boundaryObservedAt.map { $0.duration(to: clock.now) }
+      elapsed: boundaryPairingElapsed
     )
     logger.notice("Automatic correction applied")
     rebaseline()

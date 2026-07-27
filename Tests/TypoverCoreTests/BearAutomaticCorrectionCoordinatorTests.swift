@@ -246,6 +246,30 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
   }
 
+  @Test("A stale completion key cannot authorize a later value change")
+  func ignoresStaleBoundaryInput() async throws {
+    let fixture = try Fixture(maximumBoundaryPairingDelay: .zero)
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 2
+      }
+    )
+
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.tracker.applications.isEmpty)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .staleBoundaryInput
+    )
+  }
+
   @Test("Undo or Redo clears an armed completion boundary")
   func undoRedoDisarmsBoundary() async throws {
     let fixture = try Fixture()
@@ -412,7 +436,10 @@ private final class Fixture {
   let coordinator: BearAutomaticCorrectionCoordinator
   private let directory: URL
 
-  init(environmentSupport: BearEnvironmentSupport = .supported) throws {
+  init(
+    environmentSupport: BearEnvironmentSupport = .supported,
+    maximumBoundaryPairingDelay: Duration = .seconds(10)
+  ) throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -437,6 +464,7 @@ private final class Fixture {
         BearAccessibilityProbe.bearBundleIdentifier
       },
       settleDelay: .milliseconds(1),
+      maximumBoundaryPairingDelay: maximumBoundaryPairingDelay,
       observationRestartDelay: .milliseconds(1),
       workspaceNotificationCenter: NotificationCenter()
     )

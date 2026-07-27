@@ -6,6 +6,7 @@ enum BearAutomaticCorrectionDiagnosticOutcome: String, Equatable, Sendable {
   case unarmedValueChange
   case contextUnavailable
   case baselineUnavailable
+  case staleBoundaryInput
   case contextChanged
   case noSuggestion
   case learnedSuppression

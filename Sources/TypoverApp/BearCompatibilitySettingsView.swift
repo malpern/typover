@@ -200,6 +200,8 @@ extension BearAutomaticCorrectionDiagnosticOutcome {
       "The last correction was refused because the editor context was unavailable"
     case .baselineUnavailable:
       "The last correction was skipped while Typover established a safe baseline"
+    case .staleBoundaryInput:
+      "The last change was skipped because its typing signal arrived too late"
     case .contextChanged:
       "The last correction was skipped because the surrounding edit changed"
     case .noSuggestion:
