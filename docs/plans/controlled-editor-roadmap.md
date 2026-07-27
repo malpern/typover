@@ -1,7 +1,7 @@
 # Controlled-editor roadmap
 
 - Status: Active
-- Updated: 2026-07-25
+- Updated: 2026-07-26
 - Principle: Make the reference interaction highly functional before investing
   in Bear integration.
 
@@ -381,3 +381,46 @@ interaction, and a fresh correction succeeds after relaunch without restarting
 Typover. Full dark visual review, full VoiceOver navigation, and the previous
 Bear release remain. Typover relaunch and functional correction with VoiceOver
 enabled and in Dark appearance have passed.
+
+The permissioned app host has also passed repeated-typo selection and the
+one-sided edit cases. From a synthetic `teh teh`, only the selected occurrence
+changed. Text inserted immediately before or after a tracked correction kept
+the gray annotation with that word. Changing both context sides hid the old
+interaction and made no write. An explicit new manual preview now supersedes a
+hidden active preview, so a missed Bear value-change notification cannot block
+the next diagnostic correction.
+
+## Planned implementation milestone: Bear Phase 8 — automatic correction
+
+Turn the proven Bear transaction and overlay into the normal writing
+experience. With Typover running in the background, a writer should type in
+Bear without selecting text or invoking **Preview Selected Bear Typo**. Typover
+should detect an eligible completed word or sentence, apply the smallest safe
+correction, and leave the clickable light-gray squiggle in place.
+
+- [ ] Observe the focused Bear editor only while Bear is frontmost and its
+      Accessibility capabilities still match the supported contract.
+- [ ] Detect completed words at natural boundaries and run sentence-level work
+      asynchronously after punctuation without blocking continued typing.
+- [ ] Reuse the existing correction engine, exact-range transaction, bounded
+      context fingerprints, overlay, alternatives, and Change Back behavior.
+- [ ] Start with Apple's local spelling and model paths by default. Use a cloud
+      model only when the writer explicitly selected it in Preferences; never
+      add an automatic network fallback.
+- [ ] Suppress automatic correction during paste, marked-text composition,
+      active selections, Undo/Redo, bulk edits, unsupported focus states, and
+      any ambiguous or stale range.
+- [ ] Cancel work when typing changes the captured target, while allowing a
+      verified correction to remain anchored as the writer continues after it.
+- [ ] Add an explicit Bear automatic-correction switch and a visible paused or
+      unavailable state; disabling it must stop observation and hide previews.
+- [ ] Keep note text session-only and bounded. Do not persist document content,
+      read or write a whole note, or require a Bear API token.
+- [ ] Measure typing latency, false changes, safe misses, resource use, and
+      recovery across the complete Phase 7 matrix before enabling the feature
+      by default.
+
+Phase 8 is complete only when the installed app performs a correction during
+ordinary Bear typing, keeps keyboard focus and the caret in Bear, displays the
+gray squiggle, supports immediate Change Back, and never requires the manual
+preview command.

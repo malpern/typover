@@ -28,11 +28,11 @@ Accessibility behavior.
 | Stable fixture selection | 5 launcher tests pass | One exact CLI title match verified; app-host launcher rerun pending | One exact title opens by note ID; every ambiguous or missing state stops |
 | Short note baseline | Exact-range, geometry, overlay, menu tests pass | Passed on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
 | Long note | Bounded-read and earlier-position tests pass | Geometry matrix passed on 2026-07-25; interaction pending | No whole-note read or write; annotation remains aligned |
-| Repeated typo | Ambiguous-anchor tests pass | Pending | Act only on the uniquely anchored occurrence or refuse |
+| Repeated typo | Ambiguous-anchor tests pass | Passed on 2026-07-26 | Act only on the uniquely anchored occurrence or refuse |
 | Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Passed on 2026-07-26, including live Revert with an adjacent synthetic tail | Preserve newly typed text and keep a unique correction anchored |
-| Edit before correction | Re-anchoring tests pass | Pending | Shift to the unique anchor without changing intervening text |
-| Edit after correction | Re-anchoring tests pass | Pending | Keep the correction anchored; preserve later text |
-| Change both context sides | Invalidated-anchor tests pass | Pending | Hide and refuse without writing |
+| Edit before correction | Re-anchoring tests pass | Passed on 2026-07-26 | Shift to the unique anchor without changing intervening text |
+| Edit after correction | Re-anchoring tests pass | Passed on 2026-07-26 | Keep the correction anchored; preserve later text |
+| Change both context sides | Invalidated-anchor tests pass | Passed with safe invalidation and explicit-preview recovery on 2026-07-26 | Hide and refuse without writing |
 | Multiple Bear windows | Secondary-window geometry passed | Passed on 2026-07-26 | Follow only the focused editor; never annotate another window |
 | Switch notes while pending | Focus invalidation and stale-anchor policies pass | Passed on 2026-07-26 | Hide immediately; refuse unless the active editor uniquely verifies |
 | Manual supersession | Terminal value-change lifecycle tests pass | Passed after fix on 2026-07-26 | Hide, end the old session, and allow a fresh correction |
@@ -155,3 +155,25 @@ separate Phase 4 geometry window hid the correction and did not annotate or
 change that note. Returning to the main window resumed the still-valid
 interaction at its original editor. The full deterministic suite then passed
 with 193 tests in 23 suites.
+
+## Repeated typo and edited-anchor pass: 2026-07-26
+
+The disposable repeated-word line was temporarily changed from `the the` to
+`teh teh`. Selecting the first occurrence and invoking the installed preview
+changed only that occurrence, producing `the teh`. The second typo and the
+separate Phase 2 marker were unchanged, and the repeated-word line was restored.
+
+After a fresh marker correction, inserting bounded synthetic text immediately
+before or after the corrected word produced `pre-the` and `the-post`. In each
+one-sided case the gray annotation remained with the corrected word and no
+neighboring text changed. The fixture was reset between independent scenarios.
+
+Changing both sides produced `pre-the-post`. Typover hid the old annotation and
+made no corrective write. This live path also exposed a diagnostic-harness
+recovery problem: if Bear misses the expected value-change notification, the
+hidden preview can remain logically active and a deliberate new preview was
+previously ignored. **Preview Selected Bear Typo** now supersedes an existing
+active preview while still rejecting a duplicate request during preparation.
+After deployment, restoring the marker to `teh` and requesting a new preview
+changed it to `the` without restarting Typover. The complete fixture was then
+restored.

@@ -619,6 +619,16 @@ without restarting Typover, performed a fresh correction after Bear relaunched
 and the disposable note was reopened. Focused lifecycle tests and the full
 193-test, 23-suite run pass.
 
+Repeated and edited-anchor interaction now passes in the installed app. In a
+temporary `teh teh` line, only the selected occurrence changed. A correction
+remained visually anchored after bounded text was inserted immediately before
+or after it, while changing both context sides hid the interaction and made no
+write. Bear can miss a value-change notification in this synthetic sequence,
+so an explicit new preview now supersedes an existing active preview instead of
+being ignored. Duplicate requests while a preview is still preparing remain
+blocked. The deployed recovery path accepted a fresh correction without a
+Typover restart, and the disposable fixture was restored.
+
 Manual supersession exposed and then verified a lifecycle fix. A stale or
 ambiguous geometry result after an actual Bear value-change now ends the old
 preview session and notifies the shared coordinator. A stale result caused only
@@ -652,6 +662,27 @@ and the preview checks permission before switching applications. Permission,
 focus, selection, and write failures now produce distinct visible messages.
 The stable-signed build requires one new approval before the live matrix can
 resume.
+
+## Phase 8: Automatic in-editor correction
+
+Phase 7 proves that a single guarded transaction remains safe across real Bear
+editing and lifecycle changes. Phase 8 makes that transaction automatic. With
+Typover running in the background, normal Bear typing should trigger eligible
+word or sentence corrections without text selection or a preview command, then
+show the same persistent light-gray squiggle and reversible menu.
+
+The automatic observer must stay narrower than the transaction it drives. It
+may inspect only the focused Bear editor and bounded text near a completed
+target. It must pause for paste, marked-text composition, active selections,
+Undo/Redo, bulk changes, unsupported focus, ambiguous context, or any target
+that changed while a proposal was being prepared. Apple remains the local
+default; a network model runs only after an explicit provider choice.
+
+The manual **Preview Selected Bear Typo** command remains a diagnostic harness,
+not the shipping interaction. Phase 8 succeeds only when a writer can type
+naturally, receive a safe automatic correction, continue writing without a
+caret or focus jump, and use the gray squiggle to Change Back or choose another
+correction.
 
 ## Bear CLI fallback evaluation
 

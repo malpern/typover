@@ -9,6 +9,16 @@ import TypoverCore
 
 @MainActor
 struct LearningSettingsViewTests {
+  @Test("A new Bear preview supersedes only an active interaction")
+  func previewRequestActions() {
+    #expect(BearOverlayPreviewStatus.idle.previewRequestAction == .start)
+    #expect(
+      BearOverlayPreviewStatus.editorUnavailable.previewRequestAction == .start
+    )
+    #expect(BearOverlayPreviewStatus.active.previewRequestAction == .supersede)
+    #expect(BearOverlayPreviewStatus.preparing.previewRequestAction == .ignore)
+  }
+
   @Test("Bear preview reports missing Accessibility permission")
   func reportsMissingAccessibilityPermission() {
     let report = BearAccessibilityReport(

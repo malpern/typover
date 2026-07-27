@@ -31,9 +31,16 @@ final class BearOverlayPreviewCoordinator {
   }
 
   func previewSelectedTypo() {
-    guard status != .preparing, status != .active else {
-      logger.notice("Preview ignored because another preview is active")
+    switch status.previewRequestAction {
+    case .ignore:
+      logger.notice("Preview ignored because another preview is preparing")
       return
+    case .supersede:
+      bearOverlayController.stop()
+      status = .idle
+      logger.notice("Preview superseded the existing interaction")
+    case .start:
+      break
     }
     guard AXIsProcessTrusted() else {
       let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -134,7 +141,24 @@ final class BearOverlayPreviewCoordinator {
   }
 }
 
+enum BearOverlayPreviewRequestAction: Equatable {
+  case start
+  case supersede
+  case ignore
+}
+
 extension BearOverlayPreviewStatus {
+  var previewRequestAction: BearOverlayPreviewRequestAction {
+    switch self {
+    case .preparing:
+      .ignore
+    case .active:
+      .supersede
+    default:
+      .start
+    }
+  }
+
   fileprivate var diagnosticCode: String {
     switch self {
     case .idle:
