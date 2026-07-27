@@ -94,6 +94,11 @@ Back action, and alternatives.
   the environment currently under installed-app validation.
 - [x] Make temporary observer and typed-boundary monitoring failures explicit
   and recover from a fresh baseline on the next application lifecycle event.
+- [ ] Replace the temporary single-user private Bear trace before broader beta
+  testing. The development trace may contain the actual bounded text around the
+  caret in local unified logs. The beta design must default off, provide an
+  explicit in-app consent and retention explanation, support export and delete,
+  redact or hash text by default, cap retention, and never upload automatically.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria

@@ -226,6 +226,50 @@ struct BearAutomaticCorrectionCoordinatorTests {
     ])
   }
 
+  @Test("The next ordinary key does not erase a pending boundary")
+  func preservesBoundaryWhileRapidTypingContinues() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.inputMonitor.emitOther()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    #expect(
+      fixture.applicator.requests.first?.range
+        == AccessibilityTextRange(location: 0, length: 3)
+    )
+  }
+
+  @Test("A coalesced next character still fails closed")
+  func refusesBoundaryCoalescedWithRapidTyping() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh t", caret: 5))
+    fixture.inputMonitor.emitBoundary()
+    fixture.inputMonitor.emitOther()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+      }
+    )
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
+    )
+  }
+
   @Test("A pasted or coalesced insertion is ignored")
   func ignoresBulkInsertion() async throws {
     let fixture = try Fixture()
@@ -661,6 +705,10 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
 
   func emitUndoOrRedo() {
     handler?(.undoOrRedo)
+  }
+
+  func emitOther() {
+    handler?(.other)
   }
 }
 

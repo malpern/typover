@@ -144,6 +144,10 @@ enum BearTypingInput {
   }
 }
 
+enum BearAutomaticCorrectionPrivateDiagnostics {
+  static let defaultsKey = "bear-private-diagnostics-enabled"
+}
+
 struct VerifiedBearTypingCompletion: Equatable {
   let word: CompletedWord
   let targetRange: AccessibilityTextRange
@@ -277,6 +281,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let maximumBoundaryPairingDelay: Duration
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
+  private let privateDiagnosticsEnabled: @MainActor @Sendable () -> Bool
   private let clock = ContinuousClock()
   private let logger = Logger(
     subsystem: "com.malpern.typover",
@@ -330,6 +335,11 @@ final class BearAutomaticCorrectionCoordinator {
     settleDelay: Duration = .milliseconds(35),
     maximumBoundaryPairingDelay: Duration = .milliseconds(750),
     observationRestartDelay: Duration = .milliseconds(250),
+    privateDiagnosticsEnabled: @escaping @MainActor @Sendable () -> Bool = {
+      UserDefaults.standard.bool(
+        forKey: BearAutomaticCorrectionPrivateDiagnostics.defaultsKey
+      )
+    },
     workspaceNotificationCenter: NotificationCenter =
       NSWorkspace.shared.notificationCenter
   ) {
@@ -346,6 +356,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.settleDelay = settleDelay
     self.maximumBoundaryPairingDelay = maximumBoundaryPairingDelay
     self.observationRestartDelay = observationRestartDelay
+    self.privateDiagnosticsEnabled = privateDiagnosticsEnabled
     self.workspaceNotificationCenter = workspaceNotificationCenter
     installWorkspaceObservers()
   }
@@ -399,14 +410,26 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     guard typingInputMonitor.start(handler: { [weak self] intent in
-      self?.pendingInputIntent = intent
-      if case .completionBoundary = intent {
-        self?.diagnostics.recordBoundaryInput()
-        self?.pendingBoundaryObservedAt = self?.clock.now
-        self?.logger.debug("Completion boundary key observed")
-      } else if intent == .undoOrRedo {
-        self?.pendingBoundaryObservedAt = nil
-        self?.logger.debug("Undo or Redo input observed; correction disarmed")
+      guard let self else {
+        return
+      }
+      self.tracePrivate("input intent=\(intent.traceLabel)")
+      switch intent {
+      case .completionBoundary:
+        self.pendingInputIntent = intent
+        self.diagnostics.recordBoundaryInput()
+        self.pendingBoundaryObservedAt = self.clock.now
+        self.logger.debug("Completion boundary key observed")
+      case .undoOrRedo:
+        self.pendingInputIntent = intent
+        self.pendingBoundaryObservedAt = nil
+        self.logger.debug("Undo or Redo input observed; correction disarmed")
+      case .other:
+        // Bear can deliver the value-change notification for a completed word
+        // after the writer has already pressed the first key of the next word.
+        // Keep the boundary armed; exact transition verification still rejects
+        // a coalesced or otherwise changed context.
+        break
       }
     }) else {
       invalidationMonitor.stop()
@@ -445,11 +468,14 @@ final class BearAutomaticCorrectionCoordinator {
     switch event {
     case .valueChanged:
       logger.debug("Bear value change observed")
+      tracePrivate("accessibility event=valueChanged")
       pendingValueChange = true
       scheduleSettledRead()
     case .selectionChanged:
+      tracePrivate("accessibility event=selectionChanged")
       scheduleSettledRead()
     case .focusedElementChanged, .focusedWindowChanged:
+      tracePrivate("accessibility event=focusChanged")
       scheduleObservationRestart()
     case .layoutChanged, .windowMoved, .windowResized:
       break
@@ -532,6 +558,9 @@ final class BearAutomaticCorrectionCoordinator {
 
     let result = contextReader.read()
     guard case .ready(let currentSnapshot) = result else {
+      tracePrivate(
+        "evaluation result=\(result.traceLabel) valueChange=\(valueChangeWasObserved) boundary=\(pendingBoundaryCharacter.debugDescription)"
+      )
       if valueChangeWasObserved {
         diagnostics.recordValueChange()
       }
@@ -546,9 +575,13 @@ final class BearAutomaticCorrectionCoordinator {
     let previousSnapshot = lastSnapshot
     lastSnapshot = currentSnapshot
     status = .observing
+    tracePrivate(
+      "evaluation valueChange=\(valueChangeWasObserved) boundary=\(pendingBoundaryCharacter.debugDescription) ageMs=\(boundaryPairingElapsed.traceMilliseconds) previous={\(previousSnapshot.traceDescription)} current={\(currentSnapshot.traceDescription)}"
+    )
     if mayBeRedundantAutomaticValueChange,
       currentSnapshot == previousSnapshot
     {
+      tracePrivate("outcome=redundantAutomaticValueChange")
       logger.debug("Ignoring Typover's redundant Bear value change")
       return
     }
@@ -556,16 +589,19 @@ final class BearAutomaticCorrectionCoordinator {
       diagnostics.recordValueChange()
     }
     if valueChangeHadStaleBoundary {
+      tracePrivate("outcome=staleBoundaryInput")
       diagnostics.recordSafeSkip(.staleBoundaryInput)
       return
     }
     guard valueChangeWasTypedBoundary else {
       if valueChangeWasObserved {
+        tracePrivate("outcome=unarmedValueChange")
         diagnostics.recordSafeSkip(.unarmedValueChange)
       }
       return
     }
     guard let previousSnapshot else {
+      tracePrivate("outcome=baselineUnavailable")
       diagnostics.recordSafeSkip(.baselineUnavailable)
       return
     }
@@ -576,6 +612,7 @@ final class BearAutomaticCorrectionCoordinator {
         expectedBoundary: pendingBoundaryCharacter ?? ""
       )
     else {
+      tracePrivate("outcome=contextChanged")
       diagnostics.recordSafeSkip(.contextChanged)
       return
     }
@@ -584,16 +621,19 @@ final class BearAutomaticCorrectionCoordinator {
         for: completion.word.text
       )
     else {
+      tracePrivate("outcome=noSuggestion word=\(completion.word.text.debugDescription)")
       diagnostics.recordSafeSkip(.noSuggestion)
       return
     }
     guard
       let proposal = learningStore.applyingPreference(to: engineProposal)
     else {
+      tracePrivate("outcome=learnedSuppression")
       diagnostics.recordSafeSkip(.learnedSuppression)
       return
     }
     guard proposal.correction.original == completion.word.text else {
+      tracePrivate("outcome=proposalMismatch")
       diagnostics.recordRefusal(.proposalMismatch)
       return
     }
@@ -604,6 +644,9 @@ final class BearAutomaticCorrectionCoordinator {
       at: completion.targetRange
     )
     guard application.report.isVerifiedApplication else {
+      tracePrivate(
+        "outcome=replacementRefused status=\(application.report.status.rawValue)"
+      )
       diagnostics.recordRefusal(.replacementRefused)
       logger.notice(
         "Automatic correction refused: \(application.report.status.rawValue, privacy: .public)"
@@ -628,6 +671,9 @@ final class BearAutomaticCorrectionCoordinator {
     diagnostics.recordApplied(
       elapsed: boundaryPairingElapsed
     )
+    tracePrivate(
+      "outcome=applied original=\(proposal.correction.original.debugDescription) replacement=\(proposal.correction.replacement.debugDescription) range=\(completion.targetRange.location):\(completion.targetRange.length)"
+    )
     logger.notice("Automatic correction applied")
     rebaseline()
   }
@@ -636,10 +682,19 @@ final class BearAutomaticCorrectionCoordinator {
     let result = contextReader.read()
     if case .ready(let snapshot) = result {
       lastSnapshot = snapshot
+      tracePrivate("baseline snapshot={\(snapshot.traceDescription)}")
     } else {
       lastSnapshot = nil
+      tracePrivate("baseline result=\(result.traceLabel)")
     }
     updateStatus(for: result)
+  }
+
+  private func tracePrivate(_ message: String) {
+    guard privateDiagnosticsEnabled() else {
+      return
+    }
+    logger.notice("PRIVATE_DIAGNOSTIC \(message, privacy: .public)")
   }
 
   private func updateStatus(for result: BearTypingContextReadResult) {
@@ -711,5 +766,71 @@ final class BearAutomaticCorrectionCoordinator {
         }
       }
     }
+  }
+}
+
+private extension BearTypingInputIntent {
+  var traceLabel: String {
+    switch self {
+    case .completionBoundary(let character):
+      "completionBoundary(\(character.debugDescription))"
+    case .undoOrRedo:
+      "undoOrRedo"
+    case .other:
+      "other"
+    }
+  }
+}
+
+private extension BearTypingContextReadResult {
+  var traceLabel: String {
+    switch self {
+    case .ready:
+      "ready"
+    case .accessibilityPermissionRequired:
+      "accessibilityPermissionRequired"
+    case .bearNotRunning:
+      "bearNotRunning"
+    case .bearNotFrontmost:
+      "bearNotFrontmost"
+    case .focusedEditorUnavailable:
+      "focusedEditorUnavailable"
+    case .selectionActive:
+      "selectionActive"
+    case .contextUnavailable:
+      "contextUnavailable"
+    }
+  }
+}
+
+private extension BearTypingContextSnapshot {
+  var traceDescription: String {
+    "caret=\(caretLocation) documentLength=\(documentLength) leadingRange=\(leadingRange.location):\(leadingRange.length) leading=\(leadingText.debugDescription) trailing=\(trailingText.debugDescription)"
+  }
+}
+
+private extension Optional where Wrapped == BearTypingContextSnapshot {
+  var traceDescription: String {
+    switch self {
+    case .some(let snapshot):
+      snapshot.traceDescription
+    case .none:
+      "none"
+    }
+  }
+}
+
+private extension Optional where Wrapped == Duration {
+  var traceMilliseconds: String {
+    guard let duration = self else {
+      return "none"
+    }
+    let components = duration.components
+    let milliseconds =
+      Double(components.seconds) * 1_000
+      + Double(components.attoseconds) / 1_000_000_000_000_000
+    return milliseconds.formatted(
+      .number.precision(.fractionLength(3))
+    )
   }
 }
