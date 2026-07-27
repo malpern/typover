@@ -266,6 +266,7 @@ final class BearAutomaticCorrectionCoordinator {
   private var pendingValueChange = false
   private var pendingInputIntent: BearTypingInputIntent = .other
   private var pendingBoundaryObservedAt: ContinuousClock.Instant?
+  private var suppressesNextRedundantAutomaticValueChange = false
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
@@ -410,6 +411,7 @@ final class BearAutomaticCorrectionCoordinator {
     pendingValueChange = false
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
+    suppressesNextRedundantAutomaticValueChange = false
   }
 
   private func handle(_ event: BearAccessibilityInvalidationEvent) {
@@ -419,7 +421,6 @@ final class BearAutomaticCorrectionCoordinator {
     switch event {
     case .valueChanged:
       logger.debug("Bear value change observed")
-      diagnostics.recordValueChange()
       pendingValueChange = true
       scheduleSettledRead()
     case .selectionChanged:
@@ -480,12 +481,18 @@ final class BearAutomaticCorrectionCoordinator {
     let valueChangeWasTypedBoundary =
       pendingValueChange && pendingInputIntent == .completionBoundary
     let boundaryObservedAt = pendingBoundaryObservedAt
+    let mayBeRedundantAutomaticValueChange =
+      suppressesNextRedundantAutomaticValueChange
     pendingValueChange = false
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
+    suppressesNextRedundantAutomaticValueChange = false
 
     let result = contextReader.read()
     guard case .ready(let currentSnapshot) = result else {
+      if valueChangeWasObserved {
+        diagnostics.recordValueChange()
+      }
       if valueChangeWasTypedBoundary {
         diagnostics.recordRefusal(.contextUnavailable)
       }
@@ -497,6 +504,15 @@ final class BearAutomaticCorrectionCoordinator {
     let previousSnapshot = lastSnapshot
     lastSnapshot = currentSnapshot
     status = .observing
+    if mayBeRedundantAutomaticValueChange,
+      currentSnapshot == previousSnapshot
+    {
+      logger.debug("Ignoring Typover's redundant Bear value change")
+      return
+    }
+    if valueChangeWasObserved {
+      diagnostics.recordValueChange()
+    }
     guard valueChangeWasTypedBoundary else {
       if valueChangeWasObserved {
         diagnostics.recordSafeSkip(.unarmedValueChange)
@@ -548,6 +564,7 @@ final class BearAutomaticCorrectionCoordinator {
       rebaseline()
       return
     }
+    suppressesNextRedundantAutomaticValueChange = true
 
     learningStore.recordApplied(proposal)
     annotationTracker.trackWithResolution(

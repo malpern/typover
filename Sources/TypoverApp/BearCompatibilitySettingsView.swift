@@ -171,6 +171,19 @@ private struct BearAutomaticCorrectionControl: View {
             .foregroundStyle(.secondary)
             .padding(.leading, 20)
         }
+
+        if diagnostics.snapshot.correctionToAnnotationSampleCount > 0 {
+          Text(
+            "Typical correction-to-squiggle time: \(diagnostics.snapshot.medianCorrectionToAnnotationMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
+            bundle: #bundle,
+            comment:
+              "Median elapsed time from a typed completion boundary to a visible Typover annotation."
+          )
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .padding(.leading, 20)
+        }
       }
     }
   }

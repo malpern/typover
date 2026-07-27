@@ -77,6 +77,16 @@ struct BearAutomaticCorrectionCoordinatorTests {
       fixture.coordinator.diagnostics.snapshot
         .correctionToAnnotationSampleCount == 1
     )
+
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 4
+      }
+    )
+    #expect(fixture.coordinator.diagnostics.snapshot.valueChanges == 1)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 0)
+    #expect(fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied)
   }
 
   @Test("Only the validated Bear and macOS versions are supported")
