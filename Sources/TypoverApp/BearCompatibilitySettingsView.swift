@@ -8,6 +8,7 @@ struct BearCompatibilitySection: View {
   let isObserving: Bool
   let automaticCorrectionEnabled: Bool
   let automaticCorrectionStatus: BearAutomaticCorrectionStatus
+  let automaticCorrectionDiagnostics: BearAutomaticCorrectionDiagnostics
   let overlayPreviewStatus: BearOverlayPreviewStatus
   let onAutomaticCorrectionChanged: @MainActor @Sendable (Bool) -> Void
   let onCheck: () -> Void
@@ -36,6 +37,7 @@ struct BearCompatibilitySection: View {
         BearAutomaticCorrectionControl(
           isEnabled: automaticCorrectionEnabled,
           status: automaticCorrectionStatus,
+          diagnostics: automaticCorrectionDiagnostics,
           onChanged: onAutomaticCorrectionChanged
         )
 
@@ -115,6 +117,7 @@ struct BearCompatibilitySection: View {
 private struct BearAutomaticCorrectionControl: View {
   let isEnabled: Bool
   let status: BearAutomaticCorrectionStatus
+  let diagnostics: BearAutomaticCorrectionDiagnostics
   let onChanged: @MainActor @Sendable (Bool) -> Void
 
   var body: some View {
@@ -151,7 +154,55 @@ private struct BearAutomaticCorrectionControl: View {
           .font(.callout)
           .foregroundStyle(.secondary)
           .padding(.leading, 20)
+
+        Text(
+          "This session: \(diagnostics.correctionsApplied.formatted()) applied, \(diagnostics.safeSkips.formatted()) skipped safely, \(diagnostics.refusals.formatted()) refused. No writing is recorded.",
+          bundle: #bundle,
+          comment:
+            "Content-free Bear correction diagnostics. The first value is applied corrections, the second is safe skips, and the third is refusals."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.leading, 20)
+
+        if let lastOutcome = diagnostics.lastOutcome {
+          Label(lastOutcome.message, systemImage: "info.circle")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 20)
+        }
       }
+    }
+  }
+}
+
+extension BearAutomaticCorrectionDiagnosticOutcome {
+  fileprivate var message: LocalizedStringResource {
+    switch self {
+    case .applied:
+      "The last eligible correction was applied"
+    case .unarmedValueChange:
+      "The last change was skipped because no typed boundary was observed"
+    case .contextUnavailable:
+      "The last correction was refused because the editor context was unavailable"
+    case .baselineUnavailable:
+      "The last correction was skipped while Typover established a safe baseline"
+    case .contextChanged:
+      "The last correction was skipped because the surrounding edit changed"
+    case .noSuggestion:
+      "Apple Spelling had no suggestion for the last completed word"
+    case .learnedSuppression:
+      "The last correction was skipped because you previously chose Change Back"
+    case .proposalMismatch:
+      "The last correction was refused because its source no longer matched"
+    case .replacementRefused:
+      "The last correction was refused because exact-range verification failed"
+    case .capabilityUnavailable:
+      "Automatic correction is waiting for Bear’s required editor capabilities"
+    case .inputMonitoringUnavailable:
+      "Automatic correction cannot observe typed boundaries"
+    case .unsupportedEnvironment:
+      "Automatic correction is unavailable in this Bear or macOS version"
     }
   }
 }

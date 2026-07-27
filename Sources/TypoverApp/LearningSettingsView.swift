@@ -72,6 +72,8 @@ struct LearningSettingsView: View {
             behaviorSettings.bearAutomaticCorrectionEnabled,
           automaticCorrectionStatus:
             bearAutomaticCorrectionCoordinator.status,
+          automaticCorrectionDiagnostics:
+            bearAutomaticCorrectionCoordinator.diagnostics,
           overlayPreviewStatus: bearOverlayPreviewCoordinator.status,
           onAutomaticCorrectionChanged: { enabled in
             behaviorSettings.bearAutomaticCorrectionEnabled = enabled

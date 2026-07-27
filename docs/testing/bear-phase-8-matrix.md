@@ -17,6 +17,12 @@ version, missing Bear bundle metadata, or any missing required Accessibility
 notification disables automatic mutation and produces an explicit status.
 The support claim will widen only after another version passes this matrix.
 
+The automatic coordinator also keeps session-only, content-free counts for
+boundary inputs, Bear value changes, applied corrections, safe skips, and
+refusals. It samples correction-to-visible-annotation latency without retaining
+the original word, replacement, surrounding text, note identity, or document
+content. Settings exposes only the applied, skipped, and refused totals.
+
 This matrix covers the transition from the manual Bear preview harness to
 automatic correction during ordinary typing. Deterministic checks establish
 policy and transaction behavior. A row is not complete until the installed app

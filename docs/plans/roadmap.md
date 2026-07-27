@@ -73,9 +73,11 @@ Back action, and alternatives.
   - attachment-adjacent correction;
   - final Dark appearance review; and
   - full spoken VoiceOver navigation.
-- Measure correction-to-squiggle latency, interaction latency, safe misses,
+- [ ] Measure correction-to-squiggle latency, interaction latency, safe misses,
   refusals, false changes, memory, energy, and recovery behavior without
-  logging writing.
+  logging writing. Session-only applied, safe-skip, refusal, and
+  correction-to-annotation measurements are implemented; installed latency,
+  interaction latency, memory, energy, and recovery samples remain.
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
 - [x] Define the initial support claim narrowly as Bear 2.8.1 on macOS 27.0,

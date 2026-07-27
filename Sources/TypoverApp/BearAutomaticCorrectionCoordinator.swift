@@ -241,6 +241,7 @@ enum BearTypingTransition {
 @Observable
 final class BearAutomaticCorrectionCoordinator {
   private(set) var status: BearAutomaticCorrectionStatus = .disabled
+  let diagnostics: BearAutomaticCorrectionDiagnostics
 
   private let contextReader: any BearTypingContextReading
   private let invalidationMonitor: any BearAccessibilityInvalidationObserving
@@ -254,6 +255,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let settleDelay: Duration
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
+  private let clock = ContinuousClock()
   private let logger = Logger(
     subsystem: "com.malpern.typover",
     category: "BearAutomaticCorrection"
@@ -263,6 +265,7 @@ final class BearAutomaticCorrectionCoordinator {
   private var lastSnapshot: BearTypingContextSnapshot?
   private var pendingValueChange = false
   private var pendingInputIntent: BearTypingInputIntent = .other
+  private var pendingBoundaryObservedAt: ContinuousClock.Instant?
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
@@ -296,6 +299,8 @@ final class BearAutomaticCorrectionCoordinator {
     typingInputMonitor: any BearTypingInputMonitoring,
     environmentChecker: any BearEnvironmentChecking,
     learningStore: CorrectionLearningStore,
+    diagnostics: BearAutomaticCorrectionDiagnostics =
+      BearAutomaticCorrectionDiagnostics(),
     frontmostBundleIdentifier: @escaping @MainActor @Sendable () -> String? = {
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     },
@@ -312,6 +317,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.typingInputMonitor = typingInputMonitor
     self.environmentChecker = environmentChecker
     self.learningStore = learningStore
+    self.diagnostics = diagnostics
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
     self.observationRestartDelay = observationRestartDelay
@@ -361,6 +367,7 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     guard invalidationMonitor.start(handler: handle) else {
+      diagnostics.recordRefusal(.capabilityUnavailable)
       updateStatus(for: contextReader.read())
       logger.notice("Bear observer attachment deferred")
       scheduleObservationRetry()
@@ -369,13 +376,17 @@ final class BearAutomaticCorrectionCoordinator {
     guard typingInputMonitor.start(handler: { [weak self] intent in
       self?.pendingInputIntent = intent
       if intent == .completionBoundary {
+        self?.diagnostics.recordBoundaryInput()
+        self?.pendingBoundaryObservedAt = self?.clock.now
         self?.logger.debug("Completion boundary key observed")
       } else if intent == .undoOrRedo {
+        self?.pendingBoundaryObservedAt = nil
         self?.logger.debug("Undo or Redo input observed; correction disarmed")
       }
     }) else {
       invalidationMonitor.stop()
       status = .inputMonitoringUnavailable
+      diagnostics.recordRefusal(.inputMonitoringUnavailable)
       logger.error("Typing input monitor unavailable")
       return
     }
@@ -398,6 +409,7 @@ final class BearAutomaticCorrectionCoordinator {
     settleTask = nil
     pendingValueChange = false
     pendingInputIntent = .other
+    pendingBoundaryObservedAt = nil
   }
 
   private func handle(_ event: BearAccessibilityInvalidationEvent) {
@@ -407,6 +419,7 @@ final class BearAutomaticCorrectionCoordinator {
     switch event {
     case .valueChanged:
       logger.debug("Bear value change observed")
+      diagnostics.recordValueChange()
       pendingValueChange = true
       scheduleSettledRead()
     case .selectionChanged:
@@ -463,8 +476,19 @@ final class BearAutomaticCorrectionCoordinator {
   }
 
   private func evaluateSettledChange() {
+    let valueChangeWasObserved = pendingValueChange
+    let valueChangeWasTypedBoundary =
+      pendingValueChange && pendingInputIntent == .completionBoundary
+    let boundaryObservedAt = pendingBoundaryObservedAt
+    pendingValueChange = false
+    pendingInputIntent = .other
+    pendingBoundaryObservedAt = nil
+
     let result = contextReader.read()
     guard case .ready(let currentSnapshot) = result else {
+      if valueChangeWasTypedBoundary {
+        diagnostics.recordRefusal(.contextUnavailable)
+      }
       lastSnapshot = nil
       updateStatus(for: result)
       return
@@ -473,25 +497,41 @@ final class BearAutomaticCorrectionCoordinator {
     let previousSnapshot = lastSnapshot
     lastSnapshot = currentSnapshot
     status = .observing
-    let valueChangeWasTypedBoundary =
-      pendingValueChange && pendingInputIntent == .completionBoundary
-    pendingValueChange = false
-    pendingInputIntent = .other
     guard valueChangeWasTypedBoundary else {
+      if valueChangeWasObserved {
+        diagnostics.recordSafeSkip(.unarmedValueChange)
+      }
+      return
+    }
+    guard let previousSnapshot else {
+      diagnostics.recordSafeSkip(.baselineUnavailable)
       return
     }
     guard
-      let previousSnapshot,
       let completion = BearTypingTransition.completedWord(
         from: previousSnapshot,
         to: currentSnapshot
-      ),
+      )
+    else {
+      diagnostics.recordSafeSkip(.contextChanged)
+      return
+    }
+    guard
       let engineProposal = correctionEngine.proposal(
         for: completion.word.text
-      ),
-      let proposal = learningStore.applyingPreference(to: engineProposal),
-      proposal.correction.original == completion.word.text
+      )
     else {
+      diagnostics.recordSafeSkip(.noSuggestion)
+      return
+    }
+    guard
+      let proposal = learningStore.applyingPreference(to: engineProposal)
+    else {
+      diagnostics.recordSafeSkip(.learnedSuppression)
+      return
+    }
+    guard proposal.correction.original == completion.word.text else {
+      diagnostics.recordRefusal(.proposalMismatch)
       return
     }
 
@@ -501,6 +541,7 @@ final class BearAutomaticCorrectionCoordinator {
       at: completion.targetRange
     )
     guard application.report.isVerifiedApplication else {
+      diagnostics.recordRefusal(.replacementRefused)
       logger.notice(
         "Automatic correction refused: \(application.report.status.rawValue, privacy: .public)"
       )
@@ -516,6 +557,9 @@ final class BearAutomaticCorrectionCoordinator {
         self?.record(resolution, for: proposal)
       },
       onFinished: nil
+    )
+    diagnostics.recordApplied(
+      elapsed: boundaryObservedAt.map { $0.duration(to: clock.now) }
     )
     logger.notice("Automatic correction applied")
     rebaseline()
@@ -560,6 +604,7 @@ final class BearAutomaticCorrectionCoordinator {
       status = .unsupportedMacOSVersion(installed: installed)
     }
     logger.error("Bear automatic correction blocked by support policy")
+    diagnostics.recordRefusal(.unsupportedEnvironment)
     return false
   }
 

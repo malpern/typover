@@ -70,6 +70,13 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(request.range == AccessibilityTextRange(location: 0, length: 3))
     #expect(fixture.tracker.applications.count == 1)
     #expect(fixture.store.statistics().correctionsApplied == 1)
+    #expect(fixture.coordinator.diagnostics.snapshot.boundaryInputs == 1)
+    #expect(fixture.coordinator.diagnostics.snapshot.valueChanges == 1)
+    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot
+        .correctionToAnnotationSampleCount == 1
+    )
   }
 
   @Test("Only the validated Bear and macOS versions are supported")
@@ -122,6 +129,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
     #expect(fixture.monitor.startCount == 0)
     #expect(fixture.inputMonitor.startCount == 0)
+    #expect(fixture.coordinator.diagnostics.snapshot.refusals == 1)
   }
 
   @Test("Consecutive typed words create consecutive annotations")
@@ -178,6 +186,10 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
     #expect(fixture.applicator.requests.isEmpty)
     #expect(fixture.tracker.applications.isEmpty)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
+    )
   }
 
   @Test("A boundary inserted without a matching keystroke is ignored")
@@ -195,6 +207,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
 
     #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .unarmedValueChange
+    )
   }
 
   @Test("Undo or Redo clears an armed completion boundary")
