@@ -72,6 +72,58 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.store.statistics().correctionsApplied == 1)
   }
 
+  @Test("Only the validated Bear and macOS versions are supported")
+  func validatesSupportedEnvironment() {
+    let policy = BearSupportPolicy.current
+    #expect(
+      policy.evaluate(
+        bearVersion: "2.8.1",
+        operatingSystemVersion: OperatingSystemVersion(
+          majorVersion: 27,
+          minorVersion: 0,
+          patchVersion: 1
+        )
+      ) == .supported
+    )
+    #expect(
+      policy.evaluate(
+        bearVersion: "2.8.2",
+        operatingSystemVersion: OperatingSystemVersion(
+          majorVersion: 27,
+          minorVersion: 0,
+          patchVersion: 0
+        )
+      ) == .unsupportedBearVersion(installed: "2.8.2")
+    )
+    #expect(
+      policy.evaluate(
+        bearVersion: "2.8.1",
+        operatingSystemVersion: OperatingSystemVersion(
+          majorVersion: 27,
+          minorVersion: 1,
+          patchVersion: 0
+        )
+      ) == .unsupportedMacOSVersion(installed: "27.1.0")
+    )
+  }
+
+  @Test("Unsupported environments never attach mutation observers")
+  func blocksUnsupportedEnvironment() throws {
+    let fixture = try Fixture(
+      environmentSupport: .unsupportedBearVersion(installed: "2.8.2")
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+
+    fixture.coordinator.setEnabled(true)
+
+    #expect(
+      fixture.coordinator.status
+        == .unsupportedBearVersion(installed: "2.8.2")
+    )
+    #expect(fixture.monitor.startCount == 0)
+    #expect(fixture.inputMonitor.startCount == 0)
+  }
+
   @Test("Consecutive typed words create consecutive annotations")
   func correctsConsecutiveWords() async throws {
     let fixture = try Fixture()
@@ -311,7 +363,7 @@ private final class Fixture {
   let coordinator: BearAutomaticCorrectionCoordinator
   private let directory: URL
 
-  init() throws {
+  init(environmentSupport: BearEnvironmentSupport = .supported) throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -328,6 +380,9 @@ private final class Fixture {
       correctionApplicator: applicator,
       annotationTracker: tracker,
       typingInputMonitor: inputMonitor,
+      environmentChecker: TestBearEnvironmentChecker(
+        result: environmentSupport
+      ),
       learningStore: store,
       frontmostBundleIdentifier: {
         BearAccessibilityProbe.bearBundleIdentifier
@@ -340,6 +395,14 @@ private final class Fixture {
 
   deinit {
     try? FileManager.default.removeItem(at: directory)
+  }
+}
+
+private struct TestBearEnvironmentChecker: BearEnvironmentChecking {
+  let result: BearEnvironmentSupport
+
+  func support() -> BearEnvironmentSupport {
+    result
   }
 }
 

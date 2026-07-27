@@ -12,6 +12,9 @@ enum BearAutomaticCorrectionStatus: Equatable {
   case waitingForBear
   case observing
   case pausedForSelection
+  case bearVersionUnavailable
+  case unsupportedBearVersion(installed: String)
+  case unsupportedMacOSVersion(installed: String)
   case accessibilityPermissionRequired
   case editorUnavailable
   case inputMonitoringUnavailable
@@ -245,6 +248,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let correctionApplicator: any BearCorrectionApplying
   private let annotationTracker: any BearAnnotationTracking
   private let typingInputMonitor: any BearTypingInputMonitoring
+  private let environmentChecker: any BearEnvironmentChecking
   private let learningStore: CorrectionLearningStore
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let settleDelay: Duration
@@ -278,6 +282,7 @@ final class BearAutomaticCorrectionCoordinator {
         adapter: correctionAdapter
       ),
       typingInputMonitor: AppKitBearTypingInputMonitor(),
+      environmentChecker: SystemBearEnvironmentChecker(),
       learningStore: learningStore
     )
   }
@@ -289,6 +294,7 @@ final class BearAutomaticCorrectionCoordinator {
     correctionApplicator: any BearCorrectionApplying,
     annotationTracker: any BearAnnotationTracking,
     typingInputMonitor: any BearTypingInputMonitoring,
+    environmentChecker: any BearEnvironmentChecking,
     learningStore: CorrectionLearningStore,
     frontmostBundleIdentifier: @escaping @MainActor @Sendable () -> String? = {
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
@@ -304,6 +310,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.correctionApplicator = correctionApplicator
     self.annotationTracker = annotationTracker
     self.typingInputMonitor = typingInputMonitor
+    self.environmentChecker = environmentChecker
     self.learningStore = learningStore
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
@@ -348,6 +355,9 @@ final class BearAutomaticCorrectionCoordinator {
         == BearAccessibilityProbe.bearBundleIdentifier
     else {
       status = .waitingForBear
+      return
+    }
+    guard validateSupportedEnvironment() else {
       return
     }
     guard invalidationMonitor.start(handler: handle) else {
@@ -534,6 +544,23 @@ final class BearAutomaticCorrectionCoordinator {
     case .focusedEditorUnavailable, .contextUnavailable:
       status = .editorUnavailable
     }
+  }
+
+  private func validateSupportedEnvironment() -> Bool {
+    switch environmentChecker.support() {
+    case .supported:
+      return true
+    case .bearNotRunning:
+      status = .waitingForBear
+    case .bearVersionUnavailable:
+      status = .bearVersionUnavailable
+    case .unsupportedBearVersion(let installed):
+      status = .unsupportedBearVersion(installed: installed)
+    case .unsupportedMacOSVersion(let installed):
+      status = .unsupportedMacOSVersion(installed: installed)
+    }
+    logger.error("Bear automatic correction blocked by support policy")
+    return false
   }
 
   private func record(

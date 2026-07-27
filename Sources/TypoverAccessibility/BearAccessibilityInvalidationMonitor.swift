@@ -136,7 +136,23 @@ public final class BearAccessibilityInvalidationMonitor:
         callbackPointer
       ) == .success
     }
-    guard !successfulRegistrations.isEmpty else {
+    let requiredNotifications = Set([
+      kAXSelectedTextChangedNotification as String,
+      kAXValueChangedNotification as String,
+      kAXFocusedUIElementChangedNotification as String,
+      kAXFocusedWindowChangedNotification as String,
+    ])
+    let registeredNotifications = Set(
+      successfulRegistrations.map(\.name)
+    )
+    guard requiredNotifications.isSubset(of: registeredNotifications) else {
+      for registration in successfulRegistrations {
+        AXObserverRemoveNotification(
+          createdObserver,
+          registration.element,
+          registration.name as CFString
+        )
+      }
       return false
     }
 

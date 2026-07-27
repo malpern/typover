@@ -167,6 +167,12 @@ extension BearAutomaticCorrectionStatus {
       "Ready in the focused Bear note"
     case .pausedForSelection:
       "Paused while text is selected"
+    case .bearVersionUnavailable:
+      "Typover could not identify this Bear version"
+    case .unsupportedBearVersion(let installed):
+      "Bear \(installed) is not supported; this beta supports Bear 2.8.1"
+    case .unsupportedMacOSVersion(let installed):
+      "macOS \(installed) is not supported; this beta supports macOS 27.0"
     case .accessibilityPermissionRequired:
       "Allow Typover in Privacy & Security → Accessibility"
     case .editorUnavailable:
@@ -182,6 +188,9 @@ extension BearAutomaticCorrectionStatus {
       "checkmark.circle.fill"
     case .accessibilityPermissionRequired:
       "lock.fill"
+    case .bearVersionUnavailable, .unsupportedBearVersion,
+      .unsupportedMacOSVersion:
+      "exclamationmark.triangle.fill"
     case .pausedForSelection:
       "pause.circle"
     case .disabled, .waitingForBear, .editorUnavailable,

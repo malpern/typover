@@ -76,10 +76,10 @@ Back action, and alternatives.
 - Measure correction-to-squiggle latency, interaction latency, safe misses,
   refusals, false changes, memory, energy, and recovery behavior without
   logging writing.
-- Add capability and version gating so an unknown Bear Accessibility contract
-  disables mutation rather than attempting a best guess.
-- Define the initial support claim narrowly around the Bear and macOS versions
-  actually validated.
+- [x] Add capability and version gating so an unknown Bear Accessibility
+  contract disables mutation rather than attempting a best guess.
+- [x] Define the initial support claim narrowly as Bear 2.8.1 on macOS 27.0,
+  the environment currently under installed-app validation.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria
