@@ -77,7 +77,9 @@ Back action, and alternatives.
   refusals, false changes, memory, energy, and recovery behavior without
   logging writing. Session-only applied, safe-skip, refusal, and
   correction-to-annotation measurements are implemented; installed latency,
-  interaction latency, memory, energy, and recovery samples remain.
+  interaction latency, active memory and energy, and recovery samples remain.
+  A locked/waiting idle sanity check is recorded in
+  [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
 - [x] Define the initial support claim narrowly as Bear 2.8.1 on macOS 27.0,
