@@ -376,5 +376,6 @@ overlay harness contains the same sequence. The permissioned app host has now
 passed baseline correction, adjacent continued typing, note switching, safe
 return, manual supersession, a fresh second correction, and Revert while
 preserving an adjacent synthetic typing tail. Multiple-window interaction,
-relaunches, dark appearance, full VoiceOver navigation, and the previous Bear
-release remain.
+Bear relaunch, full dark visual review, full VoiceOver navigation, and the
+previous Bear release remain. Typover relaunch and functional correction with
+VoiceOver enabled and in Dark appearance have passed.

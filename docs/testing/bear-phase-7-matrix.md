@@ -37,10 +37,10 @@ Accessibility behavior.
 | Switch notes while pending | Focus invalidation and stale-anchor policies pass | Passed on 2026-07-26 | Hide immediately; refuse unless the active editor uniquely verifies |
 | Manual supersession | Terminal value-change lifecycle tests pass | Passed after fix on 2026-07-26 | Hide, end the old session, and allow a fresh correction |
 | Bear relaunch | Bear-not-running and focus-unavailable states pass | Pending | Hide old annotation; never reuse a stale interaction |
-| Typover relaunch | Correction state is intentionally session-scoped | Pending | No stale annotation returns after relaunch |
+| Typover relaunch | Correction state is intentionally session-scoped | Passed on 2026-07-26 | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
-| Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed on 2026-07-26; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
-| Dark appearance | Native color behavior is deterministic | Pending | Menu remains native; squiggle remains subtle and legible |
+| Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed; correction also passed with VoiceOver enabled; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
+| Dark appearance | Native color behavior is deterministic | Functional correction and relaunch passed on 2026-07-26; final visual/menu contrast review pending | Menu remains native; squiggle remains subtle and legible |
 | Scroll during refresh | Offscreen and partial-visibility tests pass | Geometry matrix passed; in-flight interaction pending | Hide before movement and redraw only after verified geometry |
 | Markdown constructs | Wrapped and formatted geometry tests pass | Heading, list, link, code, and wrap geometry passed | Accessibility coordinates remain authoritative |
 | Attachment-adjacent text | Exact-range policy passes | Geometry passed; interaction pending | Never touch attachment data or replace the whole note |
@@ -108,3 +108,26 @@ then restored to `teh`. Computer Use selects one Typover window at a time, so
 the ordinary editor window was closed during this check; this did not activate
 the correction panel or alter the Bear transaction. Full spoken VoiceOver
 navigation remains a separate manual row.
+
+## VoiceOver, relaunch, and dark-appearance pass: 2026-07-26
+
+The Mac began with VoiceOver off. With VoiceOver temporarily enabled, the
+installed Typover app still changed only the selected synthetic `teh` to `the`
+in Bear and kept Bear active. The synthetic marker was restored, and VoiceOver
+was returned to its original off state.
+
+Computer Use cannot forward VoiceOver's global `VO` keyboard commands or
+address VoiceOver's Window Chooser directly. Therefore this is evidence that
+the correction path coexists with the running screen reader, not evidence of a
+completed spoken-navigation journey. A person must still verify Window Chooser
+discovery, the announced label and help, menu traversal, dismissal, and focus
+return using VoiceOver itself.
+
+The Mac's appearance began on Auto. In temporary Dark appearance, Typover was
+quit while the disposable marker was unchanged; no stale annotation returned.
+After relaunch, a fresh correction changed the exact marker from `teh` to `the`
+and the dark Bear surface retained the secondary gray annotation treatment.
+The marker was restored to `teh`, and the appearance setting was returned to
+Auto. Native-menu contrast and the annotation's final human legibility remain
+manual visual checks, so the dark row is recorded as a functional rather than
+complete visual pass.

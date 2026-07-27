@@ -593,6 +593,18 @@ action target until the menu closes and uses a stable Objective-C selector;
 focused tests cover the window hierarchy and actual AppKit action dispatch.
 Full spoken VoiceOver navigation remains pending.
 
+VoiceOver-on coexistence has now been checked in the permissioned app: with the
+screen reader running, Typover still corrected only the selected synthetic word
+and kept Bear active. Computer Use cannot issue global VoiceOver commands or
+operate its Window Chooser, so the spoken journey remains an explicit manual
+test rather than an inferred pass. VoiceOver was restored to its original off
+state after the fixture was returned to `teh`.
+
+A Typover relaunch in temporary Dark appearance also passed functionally. No
+stale annotation returned after quit, and a fresh post-relaunch correction
+changed only the exact marker. The Mac was returned to its original Auto
+appearance. Human review of dark annotation and menu contrast remains pending.
+
 Manual supersession exposed and then verified a lifecycle fix. A stale or
 ambiguous geometry result after an actual Bear value-change now ends the old
 preview session and notifies the shared coordinator. A stale result caused only
