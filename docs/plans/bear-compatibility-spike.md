@@ -704,8 +704,10 @@ individual mark. Successful Change Back and alternative actions report into
 Typover's local preference and statistics store.
 
 The preference remains disabled by default while marked-text composition,
-Undo/Redo classification, long-note performance, and the installed
-multi-annotation path are still being validated.
+Undo/Redo behavior, long-note performance, and the installed multi-annotation
+path are still being validated. Composition-changing transitions now fail
+closed, and Command-Z or Shift-Command-Z explicitly disarms a pending boundary;
+both still require permissioned live-app verification.
 
 ## Bear CLI fallback evaluation
 

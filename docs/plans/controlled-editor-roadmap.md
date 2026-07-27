@@ -392,7 +392,7 @@ interaction and made no write. An explicit new manual preview now supersedes a
 hidden active preview, so a missed Bear value-change notification cannot block
 the next diagnostic correction.
 
-## Planned implementation milestone: Bear Phase 8 — automatic correction
+## Current implementation milestone: Bear Phase 8 — automatic correction
 
 Turn the proven Bear transaction and overlay into the normal writing
 experience. With Typover running in the background, a writer should type in
@@ -400,23 +400,24 @@ Bear without selecting text or invoking **Preview Selected Bear Typo**. Typover
 should detect an eligible completed word or sentence, apply the smallest safe
 correction, and leave the clickable light-gray squiggle in place.
 
-- [ ] Observe the focused Bear editor only while Bear is frontmost and its
+- [x] Observe the focused Bear editor only while Bear is frontmost and its
       Accessibility capabilities still match the supported contract.
-- [ ] Detect completed words at natural boundaries and run sentence-level work
-      asynchronously after punctuation without blocking continued typing.
-- [ ] Reuse the existing correction engine, exact-range transaction, bounded
+- [x] Detect completed words at natural boundaries.
+- [ ] Run sentence-level work asynchronously after punctuation without
+      blocking continued typing.
+- [x] Reuse the existing correction engine, exact-range transaction, bounded
       context fingerprints, overlay, alternatives, and Change Back behavior.
-- [ ] Start with Apple's local spelling and model paths by default. Use a cloud
-      model only when the writer explicitly selected it in Preferences; never
-      add an automatic network fallback.
-- [ ] Suppress automatic correction during paste, marked-text composition,
+- [x] Start the word path with Apple Spelling on device. Use a cloud model only
+      when the writer explicitly selected it in Preferences; never add an
+      automatic network fallback.
+- [x] Suppress word correction during paste, marked-text composition,
       active selections, Undo/Redo, bulk edits, unsupported focus states, and
       any ambiguous or stale range.
-- [ ] Cancel work when typing changes the captured target, while allowing a
+- [x] Cancel work when typing changes the captured target, while allowing a
       verified correction to remain anchored as the writer continues after it.
-- [ ] Add an explicit Bear automatic-correction switch and a visible paused or
+- [x] Add an explicit Bear automatic-correction switch and a visible paused or
       unavailable state; disabling it must stop observation and hide previews.
-- [ ] Keep note text session-only and bounded. Do not persist document content,
+- [x] Keep note text session-only and bounded. Do not persist document content,
       read or write a whole note, or require a Bear API token.
 - [ ] Measure typing latency, false changes, safe misses, resource use, and
       recovery across the complete Phase 7 matrix before enabling the feature
@@ -444,12 +445,15 @@ is eligible only when all of these independent signals agree:
 
 This deliberately turns rapid coalesced edits into safe misses. Paste, bulk
 replacement, selection edits, focus ambiguity, missing Accessibility support,
-and context drift do not reach the correction transaction. A verified proposal
+and context drift do not reach the correction transaction. A composition
+update or commit that changes anything besides one literal boundary character
+also fails the transition. Command-Z and Shift-Command-Z explicitly disarm a
+pending boundary before their value change is evaluated. A verified proposal
 uses the existing exact-range Bear adapter and gray-squiggle overlay. Change
 Back and alternative choices feed the existing local learning store.
 
-The current slice tracks one most-recent Bear correction at a time and handles
-word-level Apple Spelling only. Sentence-level contextual correction, marked
-text verification, multiple simultaneous annotations, Undo/Redo classification,
+The current slice tracks up to 24 recent, independently reversible Bear
+corrections and handles word-level Apple Spelling only. Sentence-level
+contextual correction, permissioned live composition and Undo/Redo checks,
 performance measurement, and full live-matrix validation remain before Phase 8
 can be considered complete or enabled by default.

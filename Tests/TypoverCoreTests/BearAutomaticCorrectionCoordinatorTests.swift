@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import TypoverAccessibility
@@ -17,6 +18,34 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(BearTypingInput.isCompletionBoundary("."))
     #expect(!BearTypingInput.isCompletionBoundary("x"))
     #expect(!BearTypingInput.isCompletionBoundary(""))
+    #expect(
+      BearTypingInput.intent(characters: " ", modifiers: [])
+        == .completionBoundary
+    )
+    #expect(
+      BearTypingInput.intent(
+        characters: "?",
+        charactersIgnoringModifiers: "/",
+        modifiers: [.shift]
+      ) == .completionBoundary
+    )
+    #expect(
+      BearTypingInput.intent(
+        characters: "Ω",
+        charactersIgnoringModifiers: "z",
+        modifiers: [.command]
+      ) == .undoOrRedo
+    )
+    #expect(
+      BearTypingInput.intent(
+        characters: "Z",
+        modifiers: [.command, .shift]
+      ) == .undoOrRedo
+    )
+    #expect(
+      BearTypingInput.intent(characters: " ", modifiers: [.option])
+        == .other
+    )
   }
 
   @Test("A verified typed boundary corrects the completed word")
@@ -114,6 +143,45 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
 
     #expect(fixture.applicator.requests.isEmpty)
+  }
+
+  @Test("Undo or Redo clears an armed completion boundary")
+  func undoRedoDisarmsBoundary() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.inputMonitor.emitUndoOrRedo()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 2
+      }
+    )
+
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.tracker.applications.isEmpty)
+  }
+
+  @Test("A composition commit that changes text is ignored")
+  func ignoresCompositionCommit() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 2
+      }
+    )
+
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.tracker.applications.isEmpty)
   }
 
   @Test("A selection pauses observation without applying a correction")
@@ -277,11 +345,12 @@ private final class Fixture {
 
 @MainActor
 private final class TestTypingInputMonitor: BearTypingInputMonitoring {
-  private var handler: (@MainActor @Sendable (Bool) -> Void)?
+  private var handler:
+    (@MainActor @Sendable (BearTypingInputIntent) -> Void)?
   private(set) var startCount = 0
 
   func start(
-    handler: @escaping @MainActor @Sendable (Bool) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
   ) -> Bool {
     startCount += 1
     self.handler = handler
@@ -293,7 +362,11 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   }
 
   func emitBoundary() {
-    handler?(true)
+    handler?(.completionBoundary)
+  }
+
+  func emitUndoOrRedo() {
+    handler?(.undoOrRedo)
   }
 }
 

@@ -48,7 +48,7 @@ extension BearAnnotationOverlayCollectionController: BearAnnotationTracking {}
 protocol BearTypingInputMonitoring: AnyObject {
   @discardableResult
   func start(
-    handler: @escaping @MainActor @Sendable (Bool) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
   ) -> Bool
   func stop()
 }
@@ -58,7 +58,7 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
   private var eventMonitor: Any?
 
   func start(
-    handler: @escaping @MainActor @Sendable (Bool) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
   ) -> Bool {
     stop()
     eventMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -67,17 +67,13 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
       let modifiers = event.modifierFlags.intersection(
         .deviceIndependentFlagsMask
       )
-      let disallowedModifiers: NSEvent.ModifierFlags = [
-        .command,
-        .control,
-        .option,
-      ]
-      let isUnmodifiedBoundary =
-        modifiers.isDisjoint(
-          with: disallowedModifiers
-        ) && event.characters.map(BearTypingInput.isCompletionBoundary) == true
+      let intent = BearTypingInput.intent(
+        characters: event.characters,
+        charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+        modifiers: modifiers
+      )
       Task { @MainActor in
-        handler(isUnmodifiedBoundary)
+        handler(intent)
       }
     }
     return eventMonitor != nil
@@ -89,6 +85,12 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
       self.eventMonitor = nil
     }
   }
+}
+
+enum BearTypingInputIntent: Equatable {
+  case completionBoundary
+  case undoOrRedo
+  case other
 }
 
 enum BearTypingInput {
@@ -104,6 +106,35 @@ enum BearTypingInput {
       CharacterSet.whitespacesAndNewlines.contains(scalar)
         || punctuationBoundaries.contains(scalar)
     }
+  }
+
+  static func intent(
+    characters: String?,
+    charactersIgnoringModifiers: String? = nil,
+    modifiers: NSEvent.ModifierFlags
+  ) -> BearTypingInputIntent {
+    let normalizedCharacters =
+      (charactersIgnoringModifiers ?? characters)?.lowercased()
+    if modifiers.contains(.command),
+       !modifiers.contains(.control),
+       !modifiers.contains(.option),
+       normalizedCharacters == "z"
+    {
+      return .undoOrRedo
+    }
+
+    let disallowedModifiers: NSEvent.ModifierFlags = [
+      .command,
+      .control,
+      .option,
+    ]
+    guard
+      modifiers.isDisjoint(with: disallowedModifiers),
+      characters.map(isCompletionBoundary) == true
+    else {
+      return .other
+    }
+    return .completionBoundary
   }
 }
 
@@ -227,7 +258,7 @@ final class BearAutomaticCorrectionCoordinator {
   private var isEnabled = false
   private var lastSnapshot: BearTypingContextSnapshot?
   private var pendingValueChange = false
-  private var pendingTypedBoundary = false
+  private var pendingInputIntent: BearTypingInputIntent = .other
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
@@ -325,10 +356,12 @@ final class BearAutomaticCorrectionCoordinator {
       scheduleObservationRetry()
       return
     }
-    guard typingInputMonitor.start(handler: { [weak self] isBoundary in
-      self?.pendingTypedBoundary = isBoundary
-      if isBoundary {
+    guard typingInputMonitor.start(handler: { [weak self] intent in
+      self?.pendingInputIntent = intent
+      if intent == .completionBoundary {
         self?.logger.debug("Completion boundary key observed")
+      } else if intent == .undoOrRedo {
+        self?.logger.debug("Undo or Redo input observed; correction disarmed")
       }
     }) else {
       invalidationMonitor.stop()
@@ -354,7 +387,7 @@ final class BearAutomaticCorrectionCoordinator {
     settleTask?.cancel()
     settleTask = nil
     pendingValueChange = false
-    pendingTypedBoundary = false
+    pendingInputIntent = .other
   }
 
   private func handle(_ event: BearAccessibilityInvalidationEvent) {
@@ -431,9 +464,9 @@ final class BearAutomaticCorrectionCoordinator {
     lastSnapshot = currentSnapshot
     status = .observing
     let valueChangeWasTypedBoundary =
-      pendingValueChange && pendingTypedBoundary
+      pendingValueChange && pendingInputIntent == .completionBoundary
     pendingValueChange = false
-    pendingTypedBoundary = false
+    pendingInputIntent = .other
     guard valueChangeWasTypedBoundary else {
       return
     }
