@@ -160,8 +160,8 @@ baseline correction, adjacent continued typing, note switching, safe return,
 manual supersession, a fresh second correction, and accessible Revert while
 preserving newly typed adjacent text. Automatic Bear correction now passes the
 first ordinary `teh` plus Space live check. Installed multi-correction,
-composition, Undo/Redo classification, and the remaining robustness matrix are
-still in progress.
+composition, Undo/Redo behavior, and the remaining robustness matrix still need
+permissioned live checks; their deterministic safety coverage passes.
 
 ## License
 

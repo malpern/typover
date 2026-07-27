@@ -1,8 +1,10 @@
 # Bear compatibility spike
 
-- Status: Phase 8 in progress — automatic multi-correction tracking implemented
+- Status: Supporting engineering plan; automatic multi-correction tracking
+  implemented
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
+- Active sequencing: [Typover roadmap](roadmap.md)
 
 ## Goal
 

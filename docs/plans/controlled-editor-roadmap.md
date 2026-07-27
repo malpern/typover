@@ -1,9 +1,10 @@
-# Controlled-editor roadmap
+# Controlled-editor milestone record
 
-- Status: Active
+- Status: Reference implementation complete; retained as implementation history
 - Updated: 2026-07-26
-- Principle: Make the reference interaction highly functional before investing
-  in Bear integration.
+- Active sequencing: [Typover roadmap](roadmap.md)
+- Principle: The controlled editor defines the reference interaction used to
+  evaluate external integrations.
 
 ## Goal
 
@@ -358,7 +359,11 @@ Back, verified alternatives, one Accessibility button, and a Bear-only keyboard
 shortcut. Guarded delayed selection stabilization handles Bear's post-edit
 caret update without overriding a newer user selection.
 
-## Next implementation milestone: Bear Phase 7
+## Remaining Phase 7 evidence
+
+This evidence is now part of
+[Milestone 1 in the active roadmap](roadmap.md#milestone-1-bear-word-correction-beta),
+not a separate implementation stream.
 
 Run the complete interaction robustness matrix across long notes, repeated
 typos, rapid typing, note and window switches, relaunches, appearance changes,
@@ -392,7 +397,7 @@ interaction and made no write. An explicit new manual preview now supersedes a
 hidden active preview, so a missed Bear value-change notification cannot block
 the next diagnostic correction.
 
-## Current implementation milestone: Bear Phase 8 — automatic correction
+## Bear Phase 8 implementation evidence — automatic correction
 
 Turn the proven Bear transaction and overlay into the normal writing
 experience. With Typover running in the background, a writer should type in
