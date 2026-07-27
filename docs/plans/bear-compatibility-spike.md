@@ -605,6 +605,20 @@ stale annotation returned after quit, and a fresh post-relaunch correction
 changed only the exact marker. The Mac was returned to its original Auto
 appearance. Human review of dark annotation and menu contrast remains pending.
 
+Multiple-window interaction now passes in the installed app. A correction made
+in the Phase 2 note's main Bear window hid when the separate Phase 4 geometry
+window became active, did not appear over or change that editor, and resumed
+only when the original window returned.
+
+Bear relaunch testing exposed a different stale-session defect: the old
+annotation hid after Bear quit, but the shared coordinator remained active and
+ignored the next preview command. The overlay controller now treats termination
+of Bear itself as terminal while preserving the interaction when an unrelated
+app terminates. The fixed installed app logged completion on Bear quit and,
+without restarting Typover, performed a fresh correction after Bear relaunched
+and the disposable note was reopened. Focused lifecycle tests and the full
+193-test, 23-suite run pass.
+
 Manual supersession exposed and then verified a lifecycle fix. A stale or
 ambiguous geometry result after an actual Bear value-change now ends the old
 preview session and notifies the shared coordinator. A stale result caused only

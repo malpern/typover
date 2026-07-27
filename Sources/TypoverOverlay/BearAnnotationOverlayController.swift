@@ -410,22 +410,42 @@ public final class BearAnnotationOverlayController {
         forName: name,
         object: nil,
         queue: .main
-      ) { [weak self] _ in
+      ) { [weak self] notification in
+        let name = notification.name
+        let bundleIdentifier =
+          (notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+          as? NSRunningApplication)?.bundleIdentifier
         Task { @MainActor in
-          guard let self else { return }
-          self.presenter.hide()
-          self.refreshGeneration += 1
-          self.refreshTask?.cancel()
-          if self.isBearFrontmost {
-            self.restartInvalidationMonitor()
-            self.refresh(hideFirst: false)
-          } else {
-            self.selectionStabilizationTask?.cancel()
-            self.selectionStabilizationTask = nil
-            self.invalidationMonitor.stop()
-          }
+          self?.handleWorkspaceApplicationEvent(
+            name: name,
+            bundleIdentifier: bundleIdentifier
+          )
         }
       }
+    }
+  }
+
+  func handleWorkspaceApplicationEvent(
+    name: Notification.Name,
+    bundleIdentifier: String?
+  ) {
+    if name == NSWorkspace.didTerminateApplicationNotification,
+      bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
+    {
+      finishTracking()
+      return
+    }
+
+    presenter.hide()
+    refreshGeneration += 1
+    refreshTask?.cancel()
+    if isBearFrontmost {
+      restartInvalidationMonitor()
+      refresh(hideFirst: false)
+    } else {
+      selectionStabilizationTask?.cancel()
+      selectionStabilizationTask = nil
+      invalidationMonitor.stop()
     }
   }
 

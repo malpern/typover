@@ -375,7 +375,9 @@ sides changed and duplicate one-sided matches fail closed. The real-Bear
 overlay harness contains the same sequence. The permissioned app host has now
 passed baseline correction, adjacent continued typing, note switching, safe
 return, manual supersession, a fresh second correction, and Revert while
-preserving an adjacent synthetic typing tail. Multiple-window interaction,
-Bear relaunch, full dark visual review, full VoiceOver navigation, and the
-previous Bear release remain. Typover relaunch and functional correction with
-VoiceOver enabled and in Dark appearance have passed.
+preserving an adjacent synthetic typing tail. Multiple-window interaction and
+Bear relaunch now pass as well. Bear termination explicitly ends the old
+interaction, and a fresh correction succeeds after relaunch without restarting
+Typover. Full dark visual review, full VoiceOver navigation, and the previous
+Bear release remain. Typover relaunch and functional correction with VoiceOver
+enabled and in Dark appearance have passed.

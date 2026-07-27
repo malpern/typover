@@ -33,10 +33,10 @@ Accessibility behavior.
 | Edit before correction | Re-anchoring tests pass | Pending | Shift to the unique anchor without changing intervening text |
 | Edit after correction | Re-anchoring tests pass | Pending | Keep the correction anchored; preserve later text |
 | Change both context sides | Invalidated-anchor tests pass | Pending | Hide and refuse without writing |
-| Multiple Bear windows | Secondary-window geometry passed | Interaction pending | Follow only the focused editor; never annotate another window |
+| Multiple Bear windows | Secondary-window geometry passed | Passed on 2026-07-26 | Follow only the focused editor; never annotate another window |
 | Switch notes while pending | Focus invalidation and stale-anchor policies pass | Passed on 2026-07-26 | Hide immediately; refuse unless the active editor uniquely verifies |
 | Manual supersession | Terminal value-change lifecycle tests pass | Passed after fix on 2026-07-26 | Hide, end the old session, and allow a fresh correction |
-| Bear relaunch | Bear-not-running and focus-unavailable states pass | Pending | Hide old annotation; never reuse a stale interaction |
+| Bear relaunch | Bear termination lifecycle tests pass | Passed after fix on 2026-07-26 | Hide old annotation; never reuse a stale interaction |
 | Typover relaunch | Correction state is intentionally session-scoped | Passed on 2026-07-26 | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
 | Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed; correction also passed with VoiceOver enabled; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
@@ -74,11 +74,15 @@ On Bear 2.8.1 and macOS 27.0, the installed, stable-signed Typover app:
    inserted;
 3. hid the annotation when another note became active and retained the session
    when the original uniquely verifying note returned;
-4. restored the disposable marker after each experiment; and
+4. restored the disposable marker after each experiment;
 5. successfully started a second correction after the first correction was
-   manually superseded; and
+   manually superseded;
 6. changed `the` back to `teh` while preserving a synthetic tail typed directly
-   after the corrected word.
+   after the corrected word;
+7. hid the correction when a detached Bear editor became active and resumed it
+   only after the original editor returned; and
+8. ended the preview when Bear quit, then started a fresh correction after Bear
+   relaunched without restarting Typover.
 
 The observed correction was present in the first capture about 1.6 seconds
 after the menu action. That number includes Computer Use activation and capture
@@ -131,3 +135,23 @@ The marker was restored to `teh`, and the appearance setting was returned to
 Auto. Native-menu contrast and the annotation's final human legibility remain
 manual visual checks, so the dark row is recorded as a functional rather than
 complete visual pass.
+
+## Bear relaunch and multiple-window pass: 2026-07-26
+
+The first Bear relaunch pass showed that the old annotation stayed hidden, but
+also exposed a lifecycle defect: Typover still considered the invisible preview
+active, so the next preview command was ignored. Typover now ends the tracked
+interaction when the terminated application's bundle identifier is Bear. An
+unrelated application terminating continues to preserve the Bear interaction.
+Two deterministic tests cover both branches.
+
+The installed fixed build logged **Preview interaction finished** while Bear
+was quit. After Bear relaunched and the disposable note was reopened, the same
+Typover process accepted a fresh selected `teh` and changed it to `the`. No old
+annotation returned. The fixture was restored to `teh`.
+
+With the corrected Phase 2 marker tracked in Bear's main window, activating the
+separate Phase 4 geometry window hid the correction and did not annotate or
+change that note. Returning to the main window resumed the still-valid
+interaction at its original editor. The full deterministic suite then passed
+with 193 tests in 23 suites.

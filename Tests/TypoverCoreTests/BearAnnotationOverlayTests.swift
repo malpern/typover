@@ -463,6 +463,71 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Bear termination ends the interaction permanently")
+  func bearTerminationFinishesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService()
+    )
+    controller.track(overlayApplication()) {
+      completion.didFinish = true
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didTerminateApplicationNotification,
+      bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    )
+
+    #expect(completion.didFinish)
+    #expect(!presenter.isVisible)
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    )
+    #expect(!presenter.isVisible)
+  }
+
+  @MainActor
+  @Test("Another app terminating does not end the Bear interaction")
+  func unrelatedTerminationPreservesTracking() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService()
+    )
+    controller.track(overlayApplication()) {
+      completion.didFinish = true
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didTerminateApplicationNotification,
+      bundleIdentifier: "com.example.OtherApp"
+    )
+
+    #expect(!completion.didFinish)
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+    controller.stop()
+  }
+
+  @MainActor
   @Test(
     "Live Bear overlay annotates and restores the synthetic marker",
     .enabled(
