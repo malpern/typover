@@ -987,38 +987,104 @@ private struct StatisticCard: View {
 private struct RememberedRulesSection: View {
   let rules: [RememberedCorrectionRule]
   let onRemove: (RememberedCorrectionRule.ID) -> Void
+  @State private var forgottenRuleConfirmation:
+    ForgottenRuleConfirmation?
 
   var body: some View {
-    GroupBox {
-      VStack(spacing: 0) {
-        if rules.isEmpty {
-          RememberedRulesEmptyState()
-        } else {
-          ForEach(rules) { rule in
-            RememberedRuleRow(
-              rule: rule,
-              onRemove: {
-                onRemove(rule.id)
-              }
-            )
+    VStack(alignment: .leading, spacing: 8) {
+      GroupBox {
+        VStack(spacing: 0) {
+          if rules.isEmpty {
+            RememberedRulesEmptyState()
+          } else {
+            ForEach(rules) { rule in
+              RememberedRuleRow(
+                rule: rule,
+                onRemove: {
+                  onRemove(rule.id)
+                  withAnimation(.easeOut(duration: 0.18)) {
+                    forgottenRuleConfirmation =
+                      ForgottenRuleConfirmation(
+                        original: rule.original
+                      )
+                  }
+                }
+              )
 
-            if rule.id != rules.last?.id {
-              Divider()
+              if rule.id != rules.last?.id {
+                Divider()
+              }
             }
           }
         }
+      } label: {
+        Label {
+          Text(
+            "Remembered choices",
+            bundle: #bundle,
+            comment: "Heading for Typover's remembered correction choices."
+          )
+        } icon: {
+          Image(systemName: "brain")
+        }
       }
-    } label: {
-      Label {
-        Text(
-          "Remembered choices",
-          bundle: #bundle,
-          comment: "Heading for Typover's remembered correction choices."
+
+      if let forgottenRuleConfirmation {
+        ForgottenRuleConfirmationView(
+          original: forgottenRuleConfirmation.original
         )
-      } icon: {
-        Image(systemName: "brain")
+        .transition(.move(edge: .top).combined(with: .opacity))
       }
     }
+    .task(id: forgottenRuleConfirmation?.id) {
+      guard let confirmationID = forgottenRuleConfirmation?.id else {
+        return
+      }
+      do {
+        try await Task.sleep(for: .seconds(4))
+      } catch {
+        return
+      }
+      guard forgottenRuleConfirmation?.id == confirmationID else {
+        return
+      }
+      withAnimation(.easeOut(duration: 0.2)) {
+        forgottenRuleConfirmation = nil
+      }
+    }
+  }
+}
+
+private struct ForgottenRuleConfirmation: Equatable, Identifiable {
+  let id = UUID()
+  let original: String
+}
+
+private struct ForgottenRuleConfirmationView: View {
+  let original: String
+
+  var body: some View {
+    Label {
+      Text(
+        "Forgot “\(original)”. Future occurrences will use Apple Spelling; existing text won’t change.",
+        bundle: #bundle,
+        comment:
+          "Temporary confirmation after forgetting a correction choice. The variable is the original typed word."
+      )
+    } icon: {
+      Image(systemName: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+    }
+    .font(.callout)
+    .foregroundStyle(.secondary)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      .quaternary.opacity(0.45),
+      in: RoundedRectangle(cornerRadius: 8)
+    )
+    .accessibilityIdentifier("typover.settings.rule-forgotten")
   }
 }
 
