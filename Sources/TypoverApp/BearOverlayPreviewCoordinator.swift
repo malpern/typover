@@ -119,11 +119,12 @@ final class BearOverlayPreviewCoordinator {
         ) ?? []
       bearOverlayController.track(
         application,
-        alternatives: alternatives
-      ) { [weak self] in
-        self?.status = .idle
-        self?.logger.notice("Preview interaction finished")
-      }
+        alternatives: alternatives,
+        onFinished: { [weak self] in
+          self?.status = .idle
+          self?.logger.notice("Preview interaction finished")
+        }
+      )
       status = .active
       let elapsedMilliseconds = Int(
         Date().timeIntervalSince(startedAt) * 1_000

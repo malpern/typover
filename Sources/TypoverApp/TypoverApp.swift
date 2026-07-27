@@ -4,12 +4,28 @@ import TypoverCore
 
 @main
 struct TypoverApp: App {
-  @State private var behaviorSettings = CorrectionBehaviorSettings()
-  @State private var learningStore = CorrectionLearningStore()
-  @State private var bearOverlayPreviewCoordinator =
-    BearOverlayPreviewCoordinator()
+  @State private var behaviorSettings: CorrectionBehaviorSettings
+  @State private var learningStore: CorrectionLearningStore
+  @State private var bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator
+  @State private var bearAutomaticCorrectionCoordinator: BearAutomaticCorrectionCoordinator
 
   init() {
+    let behaviorSettings = CorrectionBehaviorSettings()
+    let learningStore = CorrectionLearningStore()
+    let automaticCoordinator = BearAutomaticCorrectionCoordinator(
+      learningStore: learningStore
+    )
+    automaticCoordinator.setEnabled(
+      behaviorSettings.bearAutomaticCorrectionEnabled
+    )
+    _behaviorSettings = State(initialValue: behaviorSettings)
+    _learningStore = State(initialValue: learningStore)
+    _bearOverlayPreviewCoordinator = State(
+      initialValue: BearOverlayPreviewCoordinator()
+    )
+    _bearAutomaticCorrectionCoordinator = State(
+      initialValue: automaticCoordinator
+    )
     NSApplication.shared.applicationIconImage = TypoverBrand.appIcon
   }
 
@@ -39,7 +55,9 @@ struct TypoverApp: App {
       LearningSettingsView(
         behaviorSettings: behaviorSettings,
         learningStore: learningStore,
-        bearOverlayPreviewCoordinator: bearOverlayPreviewCoordinator
+        bearOverlayPreviewCoordinator: bearOverlayPreviewCoordinator,
+        bearAutomaticCorrectionCoordinator:
+          bearAutomaticCorrectionCoordinator
       )
     }
   }

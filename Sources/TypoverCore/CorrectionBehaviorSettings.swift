@@ -23,6 +23,8 @@ public final class CorrectionBehaviorSettings {
     static let contextualScope = "contextual-correction-scope"
     static let allowsSentenceRewrites = "allows-sentence-rewrites"
     static let contextualModel = "contextual-correction-model"
+    static let bearAutomaticCorrectionEnabled =
+      "bear-automatic-correction-enabled"
   }
 
   private let defaults: UserDefaults
@@ -48,6 +50,15 @@ public final class CorrectionBehaviorSettings {
     }
   }
 
+  public var bearAutomaticCorrectionEnabled: Bool {
+    didSet {
+      defaults.set(
+        bearAutomaticCorrectionEnabled,
+        forKey: Key.bearAutomaticCorrectionEnabled
+      )
+    }
+  }
+
   public convenience init() {
     self.init(defaults: .standard)
   }
@@ -65,5 +76,8 @@ public final class CorrectionBehaviorSettings {
       defaults.string(forKey: Key.contextualModel)
       .flatMap(ContextualCorrectionModel.init(rawValue:))
       ?? .apple
+    self.bearAutomaticCorrectionEnabled = defaults.bool(
+      forKey: Key.bearAutomaticCorrectionEnabled
+    )
   }
 }

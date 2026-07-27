@@ -424,3 +424,30 @@ Phase 8 is complete only when the installed app performs a correction during
 ordinary Bear typing, keeps keyboard focus and the caret in Bear, displays the
 gray squiggle, supports immediate Change Back, and never requires the manual
 preview command.
+
+### Phase 8 implementation progress: guarded word observer
+
+The first automatic Bear slice is implemented behind a persisted setting that
+defaults off. While Bear is frontmost, Typover observes only the focused text
+area and reads at most 96 UTF-16 units before the caret and 24 after it. A word
+is eligible only when all of these independent signals agree:
+
+- an unmodified word-boundary key was typed; Command, Control, and Option
+  combinations do not arm correction;
+- Bear reports a settled value change with a collapsed caret;
+- the document and caret each advanced by exactly one UTF-16 unit;
+- the bounded text before and after the insertion is otherwise unchanged; and
+- the existing Apple Spelling policy produces an eligible proposal for the
+  completed word.
+
+This deliberately turns rapid coalesced edits into safe misses. Paste, bulk
+replacement, selection edits, focus ambiguity, missing Accessibility support,
+and context drift do not reach the correction transaction. A verified proposal
+uses the existing exact-range Bear adapter and gray-squiggle overlay. Change
+Back and alternative choices feed the existing local learning store.
+
+The current slice tracks one most-recent Bear correction at a time and handles
+word-level Apple Spelling only. Sentence-level contextual correction, marked
+text verification, multiple simultaneous annotations, Undo/Redo classification,
+performance measurement, and full live-matrix validation remain before Phase 8
+can be considered complete or enabled by default.

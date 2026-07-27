@@ -27,6 +27,11 @@ public protocol BearCorrectionServicing:
 
 extension BearCorrectionAdapter: BearCorrectionServicing {}
 
+public enum BearAnnotationResolution: Equatable, Sendable {
+  case changedBack
+  case choseAlternative(String)
+}
+
 @MainActor
 public final class BearAnnotationOverlayController {
   public static let fallbackRefreshInterval = Duration.milliseconds(125)
@@ -49,6 +54,7 @@ public final class BearAnnotationOverlayController {
   private var keyboardMonitor: Any?
   private var alternatives: [String] = []
   private var onFinished: (@MainActor @Sendable () -> Void)?
+  private var onResolution: (@MainActor @Sendable (BearAnnotationResolution) -> Void)?
 
   public init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
@@ -87,9 +93,26 @@ public final class BearAnnotationOverlayController {
     alternatives: [String] = [],
     onFinished: (@MainActor @Sendable () -> Void)? = nil
   ) {
+    trackWithResolution(
+      application,
+      alternatives: alternatives,
+      onResolution: nil,
+      onFinished: onFinished
+    )
+  }
+
+  public func trackWithResolution(
+    _ application: BearCorrectionApplication,
+    alternatives: [String] = [],
+    onResolution: (
+      @MainActor @Sendable (BearAnnotationResolution) -> Void
+    )? = nil,
+    onFinished: (@MainActor @Sendable () -> Void)? = nil
+  ) {
     stop()
     self.application = application
     self.alternatives = alternatives
+    self.onResolution = onResolution
     self.onFinished = onFinished
     installWorkspaceObservers()
     installKeyboardMonitor()
@@ -115,6 +138,7 @@ public final class BearAnnotationOverlayController {
     removeKeyboardMonitor()
     presenter.hide()
     alternatives = []
+    onResolution = nil
     onFinished = nil
   }
 
@@ -255,6 +279,7 @@ public final class BearAnnotationOverlayController {
         }
         switch result.report.status {
         case .restored, .alreadyRestored:
+          self.onResolution?(.changedBack)
           if result.report.writeOccurred,
             let anchor = application.correctionAnchor,
             let desiredSelection = result.report.selectionAfter
@@ -299,6 +324,7 @@ public final class BearAnnotationOverlayController {
           return
         }
         if let updatedApplication = result.application {
+          self.onResolution?(.choseAlternative(replacement))
           self.alternatives.insert(
             application.correction.replacement,
             at: 0

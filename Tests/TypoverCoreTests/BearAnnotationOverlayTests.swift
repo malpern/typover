@@ -312,16 +312,21 @@ struct BearAnnotationOverlayTests {
   func changeBackFinishesTracking() async {
     let presenter = SpyBearAnnotationPresenter()
     let completion = BearOverlayCompletionSpy()
+    let resolution = BearOverlayResolutionSpy()
     let controller = testController(
       presenter: presenter,
       service: StubBearCorrectionService()
     )
-    controller.track(
+    controller.trackWithResolution(
       overlayApplication(),
-      alternatives: ["ten"]
-    ) {
-      completion.didFinish = true
-    }
+      alternatives: ["ten"],
+      onResolution: { outcome in
+        resolution.value = outcome
+      },
+      onFinished: {
+        completion.didFinish = true
+      }
+    )
     #expect(
       await waitForBearOverlay {
         presenter.interaction != nil
@@ -336,12 +341,14 @@ struct BearAnnotationOverlayTests {
       }
     )
     #expect(!presenter.isVisible)
+    #expect(resolution.value == .changedBack)
   }
 
   @MainActor
   @Test("Choosing an alternative refreshes the menu around its new record")
   func alternativeRefreshesTracking() async {
     let presenter = SpyBearAnnotationPresenter()
+    let resolution = BearOverlayResolutionSpy()
     let updatedApplication = overlayApplication(replacement: "ten")
     let service = StubBearCorrectionService(
       alternative: BearCorrectionAlternativeApplication(
@@ -356,9 +363,13 @@ struct BearAnnotationOverlayTests {
       presenter: presenter,
       service: service
     )
-    controller.track(
+    controller.trackWithResolution(
       overlayApplication(),
-      alternatives: ["ten", "tech"]
+      alternatives: ["ten", "tech"],
+      onResolution: { outcome in
+        resolution.value = outcome
+      },
+      onFinished: nil
     )
     #expect(
       await waitForBearOverlay {
@@ -380,6 +391,7 @@ struct BearAnnotationOverlayTests {
         $0.action == .chooseAlternative("ten")
       } == false
     )
+    #expect(resolution.value == .choseAlternative("ten"))
     controller.stop()
   }
 
@@ -955,6 +967,11 @@ private struct StubBearCorrectionService: BearCorrectionServicing {
 @MainActor
 private final class BearOverlayCompletionSpy {
   var didFinish = false
+}
+
+@MainActor
+private final class BearOverlayResolutionSpy {
+  var value: BearAnnotationResolution?
 }
 
 @MainActor

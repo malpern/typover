@@ -684,6 +684,21 @@ naturally, receive a safe automatic correction, continue writing without a
 caret or focus jump, and use the gray squiggle to Change Back or choose another
 correction.
 
+The first opt-in implementation slice is now in the app. It combines a
+content-free boundary-keystroke classification with two bounded Bear snapshots,
+then accepts only a single-character insertion whose surrounding text, caret,
+focus, and document-length changes all agree. The snapshot is capped at 96
+UTF-16 units before the caret and 24 after it and is discarded after use.
+Multi-character paste, bulk edits, active selections, unsupported focus, and
+ambiguous or changed context refuse without writing. Apple Spelling remains the
+only engine in this first slice.
+
+The same verified Bear transaction draws the gray squiggle. Successful Change
+Back and alternative actions report into Typover's local preference and
+statistics store. The preference is disabled by default while live typing,
+composition, Undo/Redo, long-note performance, and multi-annotation behavior
+are still being validated.
+
 ## Bear CLI fallback evaluation
 
 Separately test Bear’s official CLI in the disposable note:

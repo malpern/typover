@@ -13,6 +13,7 @@ struct LearningSettingsView: View {
   let bearProbe: any BearAccessibilityProbing
   let bearEventMonitor: any BearAccessibilityEventMonitoring
   let bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator
+  let bearAutomaticCorrectionCoordinator: BearAutomaticCorrectionCoordinator
 
   @State private var isConfirmingResetAll = false
   @State private var isConfirmingStatisticsReset = false
@@ -28,7 +29,9 @@ struct LearningSettingsView: View {
     bearEventMonitor: any BearAccessibilityEventMonitoring =
       BearAccessibilityEventMonitor(),
     bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter(),
-    bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator? = nil
+    bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator? = nil,
+    bearAutomaticCorrectionCoordinator:
+      BearAutomaticCorrectionCoordinator? = nil
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
@@ -40,6 +43,12 @@ struct LearningSettingsView: View {
       ?? BearOverlayPreviewCoordinator(
         bearProbe: bearProbe,
         bearCorrectionAdapter: bearCorrectionAdapter
+      )
+    self.bearAutomaticCorrectionCoordinator =
+      bearAutomaticCorrectionCoordinator
+      ?? BearAutomaticCorrectionCoordinator(
+        learningStore: learningStore,
+        correctionAdapter: bearCorrectionAdapter
       )
   }
 
@@ -59,7 +68,15 @@ struct LearningSettingsView: View {
           eventReport: bearEventReport,
           isChecking: isCheckingBear,
           isObserving: isObservingBear,
+          automaticCorrectionEnabled:
+            behaviorSettings.bearAutomaticCorrectionEnabled,
+          automaticCorrectionStatus:
+            bearAutomaticCorrectionCoordinator.status,
           overlayPreviewStatus: bearOverlayPreviewCoordinator.status,
+          onAutomaticCorrectionChanged: { enabled in
+            behaviorSettings.bearAutomaticCorrectionEnabled = enabled
+            bearAutomaticCorrectionCoordinator.setEnabled(enabled)
+          },
           onCheck: checkBearCompatibility,
           onObserve: observeBearEvents,
           onPreviewOverlay:

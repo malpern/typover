@@ -6,7 +6,10 @@ struct BearCompatibilitySection: View {
   let eventReport: BearAccessibilityEventReport?
   let isChecking: Bool
   let isObserving: Bool
+  let automaticCorrectionEnabled: Bool
+  let automaticCorrectionStatus: BearAutomaticCorrectionStatus
   let overlayPreviewStatus: BearOverlayPreviewStatus
+  let onAutomaticCorrectionChanged: @MainActor @Sendable (Bool) -> Void
   let onCheck: () -> Void
   let onObserve: () -> Void
   let onPreviewOverlay: () -> Void
@@ -27,6 +30,14 @@ struct BearCompatibilitySection: View {
           .font(.callout)
           .foregroundStyle(.secondary)
         }
+
+        Divider()
+
+        BearAutomaticCorrectionControl(
+          isEnabled: automaticCorrectionEnabled,
+          status: automaticCorrectionStatus,
+          onChanged: onAutomaticCorrectionChanged
+        )
 
         HStack {
           Button(action: onCheck) {
@@ -97,6 +108,82 @@ struct BearCompatibilitySection: View {
       } icon: {
         Image(systemName: "pawprint")
       }
+    }
+  }
+}
+
+private struct BearAutomaticCorrectionControl: View {
+  let isEnabled: Bool
+  let status: BearAutomaticCorrectionStatus
+  let onChanged: @MainActor @Sendable (Bool) -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Toggle(
+        isOn: Binding(
+          get: { isEnabled },
+          set: onChanged
+        )
+      ) {
+        Text(
+          "Correct spelling while typing in Bear",
+          bundle: #bundle,
+          comment:
+            "Setting that enables Typover's experimental automatic spelling correction in Bear."
+        )
+      }
+      .accessibilityIdentifier(
+        "typover.settings.bear.automatic-correction"
+      )
+
+      Text(
+        "Experimental: Typover watches only the focused Bear editor, corrects verified completed words with Apple Spelling, and leaves the light-gray squiggle for Change Back.",
+        bundle: #bundle,
+        comment:
+          "Explanation below Typover's experimental automatic Bear correction setting."
+      )
+      .font(.callout)
+      .foregroundStyle(.secondary)
+      .padding(.leading, 20)
+
+      if isEnabled {
+        Label(status.message, systemImage: status.systemImage)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .padding(.leading, 20)
+      }
+    }
+  }
+}
+
+extension BearAutomaticCorrectionStatus {
+  fileprivate var message: LocalizedStringResource {
+    switch self {
+    case .disabled:
+      "Automatic Bear correction is off"
+    case .waitingForBear:
+      "Waiting for Bear"
+    case .observing:
+      "Ready in the focused Bear note"
+    case .pausedForSelection:
+      "Paused while text is selected"
+    case .accessibilityPermissionRequired:
+      "Allow Typover in Privacy & Security → Accessibility"
+    case .editorUnavailable:
+      "Click in an editable Bear note to resume"
+    }
+  }
+
+  fileprivate var systemImage: String {
+    switch self {
+    case .observing:
+      "checkmark.circle.fill"
+    case .accessibilityPermissionRequired:
+      "lock.fill"
+    case .pausedForSelection:
+      "pause.circle"
+    case .disabled, .waitingForBear, .editorUnavailable:
+      "info.circle"
     }
   }
 }
