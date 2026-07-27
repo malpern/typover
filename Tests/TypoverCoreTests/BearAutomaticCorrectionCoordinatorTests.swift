@@ -89,6 +89,31 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied)
   }
 
+  @Test("Punctuation and newline keys authorize only their exact transition")
+  func correctsPunctuationBoundaries() async throws {
+    for boundary in [".", "?", "\n"] {
+      let fixture = try Fixture()
+      fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+      fixture.coordinator.setEnabled(true)
+
+      fixture.reader.result = .ready(
+        snapshot(text: "teh\(boundary)", caret: 4)
+      )
+      fixture.inputMonitor.emitBoundary(boundary)
+      fixture.monitor.emit(.valueChanged)
+
+      #expect(
+        await waitUntil {
+          fixture.applicator.requests.count == 1
+        }
+      )
+      #expect(
+        fixture.applicator.requests.first?.range
+          == AccessibilityTextRange(location: 0, length: 3)
+      )
+    }
+  }
+
   @Test("Only the validated Bear and macOS versions are supported")
   func validatesSupportedEnvironment() {
     let policy = BearSupportPolicy.current
@@ -325,6 +350,67 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
     #expect(fixture.coordinator.status == .pausedForSelection)
     #expect(fixture.applicator.requests.isEmpty)
+  }
+
+  @Test("Collapsing a selection establishes a fresh typing baseline")
+  func resumesAfterSelection() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .selectionActive
+    fixture.monitor.emit(.selectionChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.status == .pausedForSelection
+      }
+    )
+
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.monitor.emit(.selectionChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.status == .observing
+      }
+    )
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+  }
+
+  @Test("Changing focused editors disarms an in-flight boundary")
+  func focusChangeDisarmsBoundary() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.focusedElementChanged)
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    #expect(
+      await waitUntil {
+        fixture.monitor.startCount == 2
+      }
+    )
+
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 3
+      }
+    )
+
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .unarmedValueChange
+    )
   }
 
   @Test("A learned Change Back suppresses the next matching typo")

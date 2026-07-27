@@ -5,7 +5,7 @@
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The deterministic gate passes with 213 tests in 24 suites. The signed
+The deterministic gate passes with 216 tests in 24 suites. The signed
 development build is deployed to `/Applications/Typover.app`, and automatic
 Bear correction is enabled locally for the live pass. The installed interaction
 rows remain pending until ordinary Bear keystrokes can be exercised and
@@ -37,15 +37,15 @@ also passes in Bear.
 | Scenario | Deterministic status | Installed Bear status | Expected result |
 |---|---|---|---|
 | Type `teh` and Space | Passed | Passed 2026-07-26 | Only `teh` becomes `the`; caret stays after the Space; gray squiggle appears |
-| Type `teh` and punctuation | Boundary classification passed | Pending | Exact word changes; punctuation and caret remain untouched |
+| Type `teh` and punctuation | Passed for period, question mark, and newline with exact key-to-transition matching | Pending | Exact word changes; punctuation and caret remain untouched |
 | Paste `teh ` | Passed for bulk/coalesced change | Pending | No correction and no squiggle |
 | Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Pending | No correction |
-| Active selection | Passed | Pending | Observation pauses; no write |
+| Active selection | Passed, including fresh-baseline resume | Pending | Observation pauses; no write |
 | Bounded context changes | Passed | Pending | Refuse without writing |
 | Change Back | Passed with learning | Pending | Restore only the word and suppress the same learned correction |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Exact-range and anchor suites pass | Pending | Preserve all later input; safe miss if events coalesce |
-| Switch notes or windows | Existing Phase 7 lifecycle tests pass | Pending | Reattach only to the newly focused Bear editor |
+| Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
@@ -55,7 +55,7 @@ also passes in Bear.
 ## Input-safety pass: 2026-07-26
 
 The signed development app containing the input-intent safety changes is
-deployed to `/Applications/Typover.app`. The deterministic gate passes 213
+deployed to `/Applications/Typover.app`. The deterministic gate passes 216
 tests. It now distinguishes a literal typed boundary from Command-Z and
 Shift-Command-Z, and any later Undo/Redo key disarms an earlier boundary before
 Bear's value change is considered. Shifted punctuation uses the actual typed
