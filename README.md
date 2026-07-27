@@ -125,7 +125,9 @@ compatibility spike. Bear Phase 6 now combines guarded exact-range replacement,
 independent Change Back, content-free range geometry, and a clickable
 nonactivating light-gray annotation with Apple Spelling alternatives. Phase 7
 now preserves a unique correction while the writer continues typing on one
-side, while ambiguous or two-sided changes still fail closed.
+side, while ambiguous or two-sided changes still fail closed. Phase 8 now
+automatically corrects verified word completions and keeps up to 24 recent Bear
+corrections independently annotated and reversible.
 
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
@@ -156,8 +158,10 @@ selection state. Settings and the native **Preview Selected Bear Typo** app-menu
 command share one guarded preview coordinator. The permissioned app has passed
 baseline correction, adjacent continued typing, note switching, safe return,
 manual supersession, a fresh second correction, and accessible Revert while
-preserving newly typed adjacent text. Unattended cross-app correction and the
-remaining Phase 7 robustness matrix are not implemented yet.
+preserving newly typed adjacent text. Automatic Bear correction now passes the
+first ordinary `teh` plus Space live check. Installed multi-correction,
+composition, Undo/Redo classification, and the remaining robustness matrix are
+still in progress.
 
 ## License
 

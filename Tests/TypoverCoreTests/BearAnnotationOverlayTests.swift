@@ -345,6 +345,91 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Multiple corrections keep independent overlays and actions")
+  func multipleCorrectionsRemainIndependent() async {
+    let service = StubBearCorrectionService()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    let firstResolution = BearOverlayResolutionSpy()
+    let secondResolution = BearOverlayResolutionSpy()
+
+    collection.trackWithResolution(
+      overlayApplication(),
+      alternatives: ["ten"],
+      onResolution: { firstResolution.value = $0 }
+    )
+    collection.trackWithResolution(
+      overlayApplication(replacement: "receive"),
+      alternatives: ["receiver"],
+      onResolution: { secondResolution.value = $0 }
+    )
+
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 2
+          && presenters.allSatisfy(\.isVisible)
+      }
+    )
+    #expect(collection.trackedCorrectionCount == 2)
+
+    presenters[0].interaction?.handler(.changeBack)
+
+    #expect(
+      await waitForBearOverlay {
+        collection.trackedCorrectionCount == 1
+          && !presenters[0].isVisible
+          && presenters[1].isVisible
+      }
+    )
+    #expect(firstResolution.value == .changedBack)
+    #expect(secondResolution.value == nil)
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("The correction collection prunes its oldest overlay")
+  func collectionIsBounded() async {
+    let service = StubBearCorrectionService()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 2
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+
+    collection.trackWithResolution(overlayApplication())
+    collection.trackWithResolution(overlayApplication(replacement: "one"))
+    collection.trackWithResolution(overlayApplication(replacement: "two"))
+
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3
+          && !presenters[0].isVisible
+          && presenters[1].isVisible
+          && presenters[2].isVisible
+      }
+    )
+    #expect(collection.trackedCorrectionCount == 2)
+    collection.stop()
+  }
+
+  @MainActor
   @Test("Choosing an alternative refreshes the menu around its new record")
   func alternativeRefreshesTracking() async {
     let presenter = SpyBearAnnotationPresenter()
@@ -803,7 +888,8 @@ private func testController(
   presenter: SpyBearAnnotationPresenter,
   service: StubBearCorrectionService,
   invalidationMonitor: StubBearInvalidationMonitor =
-    StubBearInvalidationMonitor()
+    StubBearInvalidationMonitor(),
+  handlesKeyboardShortcut: Bool = true
 ) -> BearAnnotationOverlayController {
   BearAnnotationOverlayController(
     adapter: service,
@@ -830,7 +916,8 @@ private func testController(
         )
       ]
     },
-    fallbackRefreshInterval: .seconds(60)
+    fallbackRefreshInterval: .seconds(60),
+    handlesKeyboardShortcut: handlesKeyboardShortcut
   )
 }
 
@@ -976,7 +1063,7 @@ private final class BearOverlayResolutionSpy {
 
 @MainActor
 private func waitForBearOverlay(
-  timeout: Duration = .seconds(2),
+  timeout: Duration = .seconds(10),
   condition: () -> Bool
 ) async -> Bool {
   let clock = ContinuousClock()

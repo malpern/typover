@@ -171,6 +171,8 @@ extension BearAutomaticCorrectionStatus {
       "Allow Typover in Privacy & Security → Accessibility"
     case .editorUnavailable:
       "Click in an editable Bear note to resume"
+    case .inputMonitoringUnavailable:
+      "Typover could not observe typing; reopen Typover and try again"
     }
   }
 
@@ -182,7 +184,8 @@ extension BearAutomaticCorrectionStatus {
       "lock.fill"
     case .pausedForSelection:
       "pause.circle"
-    case .disabled, .waitingForBear, .editorUnavailable:
+    case .disabled, .waitingForBear, .editorUnavailable,
+      .inputMonitoringUnavailable:
       "info.circle"
     }
   }

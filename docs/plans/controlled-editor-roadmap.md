@@ -21,6 +21,8 @@ attempts to reproduce those capabilities through Accessibility in another app.
 - [x] Render a persistent light-gray squiggle.
 - [x] Provide Change Back, alternatives, and Undo.
 - [x] Preserve the caret and selection through replacement.
+- [x] Keep many corrections independently annotated and reversible; changing
+      one does not remove another correction's mark or menu.
 
 ### 2. Modern TextKit reference editor
 

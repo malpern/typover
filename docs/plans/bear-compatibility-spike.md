@@ -1,6 +1,6 @@
 # Bear compatibility spike
 
-- Status: Phase 7 in progress — stable live fixture implemented
+- Status: Phase 8 in progress — automatic multi-correction tracking implemented
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
 
@@ -691,13 +691,21 @@ focus, and document-length changes all agree. The snapshot is capped at 96
 UTF-16 units before the caret and 24 after it and is discarded after use.
 Multi-character paste, bulk edits, active selections, unsupported focus, and
 ambiguous or changed context refuse without writing. Apple Spelling remains the
-only engine in this first slice.
+only engine in this first slice. Observer attachment now retries through Bear's
+brief focused-editor transition instead of silently remaining detached.
 
-The same verified Bear transaction draws the gray squiggle. Successful Change
-Back and alternative actions report into Typover's local preference and
-statistics store. The preference is disabled by default while live typing,
-composition, Undo/Redo, long-note performance, and multi-annotation behavior
-are still being validated.
+The same verified Bear transaction draws the gray squiggle. Up to 24 recent,
+still-valid Bear corrections are tracked as independent overlay sessions. Each
+word keeps its own Revert and alternative actions; completing, invalidating, or
+changing one session leaves the others intact. The oldest session is retired
+when the bound is reached. A single keyboard shortcut targets the newest
+session, while pointer and Accessibility actions remain attached to each
+individual mark. Successful Change Back and alternative actions report into
+Typover's local preference and statistics store.
+
+The preference remains disabled by default while marked-text composition,
+Undo/Redo classification, long-note performance, and the installed
+multi-annotation path are still being validated.
 
 ## Bear CLI fallback evaluation
 

@@ -34,6 +34,42 @@ struct EditorStressTests {
     )
   }
 
+  @Test("Each correction keeps an independent annotation and menu action")
+  func multipleCorrectionsRemainIndependent() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh recieve ")
+
+    let snapshots = fixture.appliedSnapshots.sorted {
+      $0.annotatedRanges[0].location < $1.annotatedRanges[0].location
+    }
+    #expect(snapshots.count == 2)
+    #expect(
+      snapshots.allSatisfy { snapshot in
+        fixture.editor.correctionMenu(
+          for: snapshot.correction.id
+        ) != nil
+      }
+    )
+
+    #expect(
+      fixture.editor.changeBack(
+        correctionID: snapshots[0].correction.id
+      )
+    )
+    #expect(fixture.editor.string == "teh receive ")
+    #expect(
+      fixture.editor.correctionMenu(
+        for: snapshots[1].correction.id
+      ) != nil
+    )
+    #expect(
+      fixture.editor.correctionSnapshots.first(where: {
+        $0.correction.id == snapshots[1].correction.id
+      })?.annotatedRanges.count == 1
+    )
+  }
+
   @Test("A proposal is rejected when its source text changes during lookup")
   func rejectsStaleProposal() {
     let fixture = EditorFixture()

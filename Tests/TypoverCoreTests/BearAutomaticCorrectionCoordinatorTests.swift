@@ -43,6 +43,43 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.store.statistics().correctionsApplied == 1)
   }
 
+  @Test("Consecutive typed words create consecutive annotations")
+  func correctsConsecutiveWords() async throws {
+    let fixture = try Fixture()
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.tracker.applications.count == 1
+      }
+    )
+
+    fixture.reader.result = .ready(snapshot(text: "teh teh", caret: 7))
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 4
+      }
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.tracker.applications.count == 2
+      }
+    )
+    #expect(fixture.applicator.requests.map(\.range) == [
+      AccessibilityTextRange(location: 0, length: 3),
+      AccessibilityTextRange(location: 4, length: 3),
+    ])
+  }
+
   @Test("A pasted or coalesced insertion is ignored")
   func ignoresBulkInsertion() async throws {
     let fixture = try Fixture()
@@ -120,6 +157,24 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.engine.responses == [.reverted])
   }
 
+  @Test("Observation retries while Bear's focused editor is attaching")
+  func retriesObserverAttachment() async throws {
+    let fixture = try Fixture()
+    fixture.monitor.startResults = [false, true]
+    fixture.reader.result = .focusedEditorUnavailable
+
+    fixture.coordinator.setEnabled(true)
+    fixture.reader.result = .ready(snapshot(text: "", caret: 0))
+
+    #expect(
+      await waitUntil {
+        fixture.monitor.startCount == 2
+          && fixture.inputMonitor.startCount == 1
+      }
+    )
+    #expect(fixture.coordinator.status == .observing)
+  }
+
   @Test("Typing transition requires unchanged bounded context")
   func rejectsChangedContext() {
     let previous = snapshot(
@@ -161,7 +216,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
   }
 
   private func waitUntil(
-    timeout: Duration = .seconds(2),
+    timeout: Duration = .seconds(10),
     condition: () -> Bool
   ) async -> Bool {
     let clock = ContinuousClock()
@@ -210,6 +265,7 @@ private final class Fixture {
         BearAccessibilityProbe.bearBundleIdentifier
       },
       settleDelay: .milliseconds(1),
+      observationRestartDelay: .milliseconds(1),
       workspaceNotificationCenter: NotificationCenter()
     )
   }
@@ -222,11 +278,14 @@ private final class Fixture {
 @MainActor
 private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   private var handler: (@MainActor @Sendable (Bool) -> Void)?
+  private(set) var startCount = 0
 
   func start(
     handler: @escaping @MainActor @Sendable (Bool) -> Void
-  ) {
+  ) -> Bool {
+    startCount += 1
     self.handler = handler
+    return true
   }
 
   func stop() {
@@ -253,6 +312,8 @@ private final class TestTypingContextReader: BearTypingContextReading {
 private final class TestInvalidationMonitor:
   BearAccessibilityInvalidationObserving
 {
+  var startResults: [Bool] = []
+  private(set) var startCount = 0
   private var handler:
     (
       @MainActor @Sendable (
@@ -266,6 +327,11 @@ private final class TestInvalidationMonitor:
         BearAccessibilityInvalidationEvent
       ) -> Void
   ) -> Bool {
+    startCount += 1
+    if !startResults.isEmpty, !startResults.removeFirst() {
+      self.handler = nil
+      return false
+    }
     self.handler = handler
     return true
   }

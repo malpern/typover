@@ -14,6 +14,7 @@ enum BearAutomaticCorrectionStatus: Equatable {
   case pausedForSelection
   case accessibilityPermissionRequired
   case editorUnavailable
+  case inputMonitoringUnavailable
 }
 
 protocol BearCorrectionApplying: Sendable {
@@ -41,12 +42,14 @@ protocol BearAnnotationTracking: AnyObject {
 }
 
 extension BearAnnotationOverlayController: BearAnnotationTracking {}
+extension BearAnnotationOverlayCollectionController: BearAnnotationTracking {}
 
 @MainActor
 protocol BearTypingInputMonitoring: AnyObject {
+  @discardableResult
   func start(
     handler: @escaping @MainActor @Sendable (Bool) -> Void
-  )
+  ) -> Bool
   func stop()
 }
 
@@ -56,7 +59,7 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
 
   func start(
     handler: @escaping @MainActor @Sendable (Bool) -> Void
-  ) {
+  ) -> Bool {
     stop()
     eventMonitor = NSEvent.addGlobalMonitorForEvents(
       matching: .keyDown
@@ -77,6 +80,7 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
         handler(isUnmodifiedBoundary)
       }
     }
+    return eventMonitor != nil
   }
 
   func stop() {
@@ -213,6 +217,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let learningStore: CorrectionLearningStore
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let settleDelay: Duration
+  private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let logger = Logger(
     subsystem: "com.malpern.typover",
@@ -226,6 +231,8 @@ final class BearAutomaticCorrectionCoordinator {
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
+  private var observationRetryCount = 0
+  private let maximumObservationRetryCount = 4
 
   convenience init(
     learningStore: CorrectionLearningStore,
@@ -236,7 +243,7 @@ final class BearAutomaticCorrectionCoordinator {
       invalidationMonitor: BearAccessibilityInvalidationMonitor(),
       correctionEngine: AppleSpellCheckerEngine(),
       correctionApplicator: correctionAdapter,
-      annotationTracker: BearAnnotationOverlayController(
+      annotationTracker: BearAnnotationOverlayCollectionController(
         adapter: correctionAdapter
       ),
       typingInputMonitor: AppKitBearTypingInputMonitor(),
@@ -256,6 +263,7 @@ final class BearAutomaticCorrectionCoordinator {
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     },
     settleDelay: Duration = .milliseconds(35),
+    observationRestartDelay: Duration = .milliseconds(250),
     workspaceNotificationCenter: NotificationCenter =
       NSWorkspace.shared.notificationCenter
   ) {
@@ -268,6 +276,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.learningStore = learningStore
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
+    self.observationRestartDelay = observationRestartDelay
     self.workspaceNotificationCenter = workspaceNotificationCenter
     installWorkspaceObservers()
   }
@@ -312,11 +321,23 @@ final class BearAutomaticCorrectionCoordinator {
     }
     guard invalidationMonitor.start(handler: handle) else {
       updateStatus(for: contextReader.read())
+      logger.notice("Bear observer attachment deferred")
+      scheduleObservationRetry()
       return
     }
-    typingInputMonitor.start { [weak self] isBoundary in
+    guard typingInputMonitor.start(handler: { [weak self] isBoundary in
       self?.pendingTypedBoundary = isBoundary
+      if isBoundary {
+        self?.logger.debug("Completion boundary key observed")
+      }
+    }) else {
+      invalidationMonitor.stop()
+      status = .inputMonitoringUnavailable
+      logger.error("Typing input monitor unavailable")
+      return
     }
+    observationRetryCount = 0
+    logger.notice("Bear automatic observation ready")
     rebaseline()
   }
 
@@ -342,6 +363,7 @@ final class BearAutomaticCorrectionCoordinator {
     }
     switch event {
     case .valueChanged:
+      logger.debug("Bear value change observed")
       pendingValueChange = true
       scheduleSettledRead()
     case .selectionChanged:
@@ -373,7 +395,7 @@ final class BearAutomaticCorrectionCoordinator {
 
   private func scheduleObservationRestart() {
     stopSettling()
-    let delay = settleDelay
+    let delay = observationRestartDelay
     settleTask = Task { [weak self] in
       do {
         try await Task.sleep(for: delay)
@@ -382,6 +404,19 @@ final class BearAutomaticCorrectionCoordinator {
       }
       self?.restartObservation()
     }
+  }
+
+  private func scheduleObservationRetry() {
+    guard
+      isEnabled,
+      frontmostBundleIdentifier()
+        == BearAccessibilityProbe.bearBundleIdentifier,
+      observationRetryCount < maximumObservationRetryCount
+    else {
+      return
+    }
+    observationRetryCount += 1
+    scheduleObservationRestart()
   }
 
   private func evaluateSettledChange() {
@@ -499,7 +534,8 @@ final class BearAutomaticCorrectionCoordinator {
         queue: .main
       ) { [weak self] _ in
         Task { @MainActor in
-          self?.restartObservation()
+          self?.observationRetryCount = 0
+          self?.scheduleObservationRestart()
         }
       }
     }

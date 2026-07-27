@@ -43,6 +43,7 @@ public final class BearAnnotationOverlayController {
   private let displays: @MainActor @Sendable () -> [BearOverlayDisplay]
   private let fallbackRefreshInterval: Duration
   private let selectionStabilizationDelays: [Duration]
+  private let handlesKeyboardShortcut: Bool
 
   private var application: BearCorrectionApplication?
   private var refreshGeneration = 0
@@ -70,6 +71,7 @@ public final class BearAnnotationOverlayController {
     },
     fallbackRefreshInterval: Duration =
       BearAnnotationOverlayController.fallbackRefreshInterval,
+    handlesKeyboardShortcut: Bool = true,
     selectionStabilizationDelays: [Duration] = [
       .milliseconds(40),
       .milliseconds(180),
@@ -81,6 +83,7 @@ public final class BearAnnotationOverlayController {
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.displays = displays
     self.fallbackRefreshInterval = fallbackRefreshInterval
+    self.handlesKeyboardShortcut = handlesKeyboardShortcut
     self.selectionStabilizationDelays = selectionStabilizationDelays
   }
 
@@ -115,7 +118,9 @@ public final class BearAnnotationOverlayController {
     self.onResolution = onResolution
     self.onFinished = onFinished
     installWorkspaceObservers()
-    installKeyboardMonitor()
+    if handlesKeyboardShortcut {
+      installKeyboardMonitor()
+    }
     restartInvalidationMonitor()
     startFallbackRefresh()
     refresh(hideFirst: true)
@@ -140,6 +145,13 @@ public final class BearAnnotationOverlayController {
     alternatives = []
     onResolution = nil
     onFinished = nil
+  }
+
+  public func showMenu() {
+    guard isBearFrontmost else {
+      return
+    }
+    presenter.showMenu()
   }
 
   private func refresh(

@@ -1,11 +1,11 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: First opt-in word-correction slice implemented
+- Status: Automatic multi-correction slice implemented
 - Updated: 2026-07-26
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The deterministic gate passes with 201 tests in 24 suites. The signed
+The deterministic gate passes with 206 tests in 24 suites. The signed
 development build is deployed to `/Applications/Typover.app`, and automatic
 Bear correction is enabled locally for the live pass. The installed interaction
 rows remain pending until ordinary Bear keystrokes can be exercised and
@@ -18,7 +18,7 @@ also passes in Bear.
 
 | Scenario | Deterministic status | Installed Bear status | Expected result |
 |---|---|---|---|
-| Type `teh` and Space | Passed | Pending manual unlock | Only `teh` becomes `the`; caret stays after the Space; gray squiggle appears |
+| Type `teh` and Space | Passed | Passed 2026-07-26 | Only `teh` becomes `the`; caret stays after the Space; gray squiggle appears |
 | Type `teh` and punctuation | Boundary classification passed | Pending | Exact word changes; punctuation and caret remain untouched |
 | Paste `teh ` | Passed for bulk/coalesced change | Pending | No correction and no squiggle |
 | Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Pending | No correction |
@@ -31,7 +31,7 @@ also passes in Bear.
 | Typover disabled | Coordinator policy implemented | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Not yet implemented | Pending | Never correct while composition is active |
 | Undo/Redo | Existing transaction tests pass; input classification pending | Pending | Do not treat Undo/Redo as new typing |
-| Multiple recent corrections | Not yet implemented | Pending | Keep each valid correction independently reversible |
+| Multiple recent corrections | Passed; independent actions and 24-session bound | Pending | Keep each valid correction independently reversible |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
 
 ## Privacy and safety boundary
