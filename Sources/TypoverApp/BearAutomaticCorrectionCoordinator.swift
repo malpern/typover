@@ -293,6 +293,7 @@ final class BearAutomaticCorrectionCoordinator {
   private var pendingValueChange = false
   private var pendingInputIntent: BearTypingInputIntent = .other
   private var pendingBoundaryObservedAt: ContinuousClock.Instant?
+  private var scheduledBoundaryObservedAt: ContinuousClock.Instant?
   private var suppressesNextRedundantAutomaticValueChange = false
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
@@ -420,6 +421,11 @@ final class BearAutomaticCorrectionCoordinator {
         self.diagnostics.recordBoundaryInput()
         self.pendingBoundaryObservedAt = self.clock.now
         self.logger.debug("Completion boundary key observed")
+        if self.pendingValueChange {
+          // Bear occasionally publishes the matching AX value change just
+          // before the global key monitor callback reaches the main actor.
+          self.scheduleSettledRead()
+        }
       case .undoOrRedo:
         self.pendingInputIntent = intent
         self.pendingBoundaryObservedAt = nil
@@ -458,6 +464,7 @@ final class BearAutomaticCorrectionCoordinator {
     pendingValueChange = false
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
+    scheduledBoundaryObservedAt = nil
     suppressesNextRedundantAutomaticValueChange = false
   }
 
@@ -483,9 +490,19 @@ final class BearAutomaticCorrectionCoordinator {
   }
 
   private func scheduleSettledRead() {
+    let boundaryObservedAt = pendingValueChange
+      ? pendingBoundaryObservedAt
+      : nil
+    if scheduledBoundaryObservedAt != nil {
+      // Once a typed boundary is paired with a Bear value change, keep its
+      // original deadline. Later selection/value notifications are commonly
+      // produced by the next word and must not debounce the correction away.
+      return
+    }
     settleGeneration += 1
     let generation = settleGeneration
     settleTask?.cancel()
+    scheduledBoundaryObservedAt = boundaryObservedAt
     let delay = settleDelay
     settleTask = Task { [weak self] in
       do {
@@ -496,6 +513,7 @@ final class BearAutomaticCorrectionCoordinator {
       guard let self, generation == self.settleGeneration else {
         return
       }
+      self.scheduledBoundaryObservedAt = nil
       self.evaluateSettledChange()
     }
   }

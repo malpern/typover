@@ -46,6 +46,13 @@ native editor is available. This closes the gap where entering the note after a
 title or search field had been focused could otherwise leave automatic
 correction dormant.
 
+Bear's keyboard and Accessibility notifications are independent asynchronous
+streams, and exact-range replacement is a comparatively slow Accessibility
+transaction. This does not prevent reliable ordinary typing, but it places a
+real ceiling on instantaneous correction during arbitrary input bursts. Typover
+must prefer an explainable safe miss over guessing when Bear has already
+coalesced several edits.
+
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
@@ -99,6 +106,11 @@ Back action, and alternatives.
   caret in local unified logs. The beta design must default off, provide an
   explicit in-app consent and retention explanation, support export and delete,
   redact or hash text by default, cap retention, and never upload automatically.
+- [ ] If the fixed boundary deadline still misses words at realistic physical
+  typing speed, add a bounded post-burst catch-up pass. It may inspect only the
+  verified insertion since a recent caret baseline, must wait for a short idle
+  interval, and must refuse any selection, focus, deletion, replacement, or
+  ambiguous-context transition. Do not use whole-note or Bear-database writes.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria
@@ -291,7 +303,9 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-Run and record the installed Phase 8 word-correction matrix against the signed
-app in the disposable Bear fixture. Fix only defects exposed by that pass, add
-deterministic regression coverage for each defect, and keep sentence-level Bear
-work out of scope until the word-level exit criteria are satisfied.
+Physically type the repeated-`teh` rapid sequence in the disposable Bear
+fixture against the deployed fixed-deadline build, then inspect the private
+trace. If ordinary typing still produces coalesced safe misses, implement the
+bounded idle catch-up pass before continuing the rest of the Phase 8 matrix.
+Keep sentence-level Bear work out of scope until the word-level exit criteria
+are satisfied.

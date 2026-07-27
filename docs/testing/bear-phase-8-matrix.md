@@ -1,15 +1,17 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Automatic multi-correction safety slice implemented
+- Status: Rapid-typing synchronization fix deployed; manual retest pending
 - Updated: 2026-07-27
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The deterministic gate passes with 217 tests in 24 suites. The signed
-development build is deployed to `/Applications/Typover.app`, and automatic
-Bear correction is enabled locally for the live pass. The installed interaction
-rows remain pending until ordinary Bear keystrokes can be exercised and
-observed end to end.
+The focused automatic-correction gate passes 23 tests, including the current
+rapid-typing regressions. A 220-test broad run attempted while an unrelated
+KeyPath release build saturated the machine timed out one existing
+consecutive-word test; it must be rerun on an idle machine before this change
+has a clean broad gate. The signed development build is deployed to
+`/Applications/Typover.app`, and automatic Bear correction is enabled locally
+for the live pass.
 
 Mutation is now gated to the environment actually under validation: Bear
 2.8.1 on macOS 27.0. An unknown Bear version, an unvalidated macOS minor
@@ -48,7 +50,7 @@ also passes in Bear.
 | Bounded context changes | Passed | Pending | Refuse without writing |
 | Change Back | Passed with learning | Pending | Restore only the word and suppress the same learned correction |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
-| Continue typing rapidly | Passed, including a next-key-before-value-change regression and coalesced-change refusal | Pre-fix run on 2026-07-27 applied 3 of 7 repeated `teh` entries; fixed build pending retest | Preserve all later input; safe miss if events coalesce |
+| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, and coalesced-change refusal | Two pre-fix runs dropped later words; fixed build pending physical-keyboard retest | Preserve all later input; safe miss if events truly coalesce |
 | Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
@@ -121,8 +123,24 @@ focus changes, selection changes, expiry, and evaluation still disarm it. Exact
 transition verification remains authoritative: if Bear coalesces the Space and
 next letter into one change, Typover records a safe context-change skip rather
 than guessing. Two deterministic regressions cover both the recoverable delayed
-notification and the fail-closed coalesced case. The fixed installed build
+notification and the fail-closed coalesced case; the fixed-deadline regression
+below covers timer rescheduling. The fixed installed build
 still requires the same rapid manual sequence before this row can pass.
+
+A second private-trace pass identified another recoverable synchronization
+problem. Once a Space and Bear value change were paired, later selection and
+value notifications from the next word repeatedly reset the 35-millisecond
+settling timer. Several completed words could therefore collapse into one
+snapshot and fail exact-transition validation. A paired boundary now keeps its
+first fixed evaluation deadline; subsequent notification noise cannot debounce
+it away. The focused 23-test suite passes, including a timing regression that
+would fail under the old rescheduling behavior.
+
+Computer Use cannot substitute for this installed row. Its bulk text action is
+delivered to Bear as one coalesced edit, while its individual key action does
+not appear in Typover's global `NSEvent` monitor. Both paths correctly produce
+no automatic correction, but neither reproduces physical keyboard input. The
+fixed build therefore still requires a manual repeated-`teh` pass.
 
 For this single-user development phase, an opt-in local private trace can log
 the actual bounded Bear context, input intents, Accessibility event order,

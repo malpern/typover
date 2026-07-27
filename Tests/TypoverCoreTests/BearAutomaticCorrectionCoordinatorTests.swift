@@ -270,6 +270,25 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
   }
 
+  @Test("Later Bear notifications do not postpone an armed boundary")
+  func preservesArmedBoundaryDeadlineDuringRapidTyping() async throws {
+    let fixture = try Fixture(settleDelay: .milliseconds(100))
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    try await Task.sleep(for: .milliseconds(70))
+    fixture.monitor.emit(.selectionChanged)
+
+    #expect(
+      await waitUntil(timeout: .milliseconds(60)) {
+        fixture.applicator.requests.count == 1
+      }
+    )
+  }
+
   @Test("A pasted or coalesced insertion is ignored")
   func ignoresBulkInsertion() async throws {
     let fixture = try Fixture()
@@ -629,6 +648,7 @@ private final class Fixture {
 
   init(
     environmentSupport: BearEnvironmentSupport = .supported,
+    settleDelay: Duration = .milliseconds(1),
     maximumBoundaryPairingDelay: Duration = .seconds(10)
   ) throws {
     directory = FileManager.default.temporaryDirectory
@@ -654,7 +674,7 @@ private final class Fixture {
       frontmostBundleIdentifier: {
         BearAccessibilityProbe.bearBundleIdentifier
       },
-      settleDelay: .milliseconds(1),
+      settleDelay: settleDelay,
       maximumBoundaryPairingDelay: maximumBoundaryPairingDelay,
       observationRestartDelay: .milliseconds(1),
       workspaceNotificationCenter: workspaceNotificationCenter
