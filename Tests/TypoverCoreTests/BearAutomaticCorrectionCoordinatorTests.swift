@@ -129,6 +129,16 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
     #expect(
       policy.evaluate(
+        bearVersion: "2.9.1",
+        operatingSystemVersion: OperatingSystemVersion(
+          majorVersion: 27,
+          minorVersion: 0,
+          patchVersion: 1
+        )
+      ) == .supported
+    )
+    #expect(
+      policy.evaluate(
         bearVersion: "2.8.2",
         operatingSystemVersion: OperatingSystemVersion(
           majorVersion: 27,

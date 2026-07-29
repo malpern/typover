@@ -1,7 +1,7 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Overlay-scaling fix deployed; rapid manual retest pending
-- Updated: 2026-07-27
+- Status: Bear 2.9.1 compatibility passed; rapid manual retest pending
+- Updated: 2026-07-29
 - Default: Off
 - Engine: Apple Spelling, on device
 
@@ -13,8 +13,8 @@ has a clean broad gate. The signed development build is deployed to
 `/Applications/Typover.app`, and automatic Bear correction is enabled locally
 for the live pass.
 
-Mutation is now gated to the environment actually under validation: Bear
-2.8.1 on macOS 27.0. An unknown Bear version, an unvalidated macOS minor
+Mutation is now gated to the environments actually validated: Bear 2.8.1 and
+2.9.1 on macOS 27.0. An unknown Bear version, an unvalidated macOS minor
 version, missing Bear bundle metadata, or any missing required Accessibility
 notification disables automatic mutation and produces an explicit status.
 The support claim will widen only after another version passes this matrix.
@@ -57,6 +57,26 @@ also passes in Bear.
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; independent actions and 24-session bound | Pending | Keep each valid correction independently reversible |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
+
+## Bear 2.9.1 compatibility pass: 2026-07-29
+
+Bear updated locally from 2.8.1 (14428) to 2.9.1 (14638). Typover's exact
+version gate correctly refused mutation until the new release was checked. A
+content-free live probe against the focused 2.9.1 editor passed with one
+`AXTextArea`, writable selection and value attributes, bounded range reads,
+range geometry, and all required selection, value, layout, focus, and window
+notifications.
+
+The guarded live geometry harness then applied `teh` to `the` in the dedicated
+fixture, resolved the same anchored range and bounds across three samples, and
+restored `teh` through Change Back. Bear CLI 2.9.1's `app open` command uses
+UTF-8 byte offsets and an appended line includes a terminal newline; the
+fixture caret must therefore be placed before that newline. This CLI setup
+detail does not change Typover's live Accessibility coordinate space.
+
+Decision: add Bear 2.9.1 to the explicit validated-version allowlist while
+retaining Bear 2.8.1. The rapid physical-keyboard row still needs to be rerun
+against the newly deployed 2.9.1-compatible build.
 
 ## Input-safety pass: 2026-07-26
 
@@ -169,6 +189,8 @@ run is complete.
 
 The observer keeps only bounded, session-only text around the caret: at most 96
 UTF-16 units before it and 24 after it. It never reads a whole note, never saves
-the bounded text, never logs words, and never requires a Bear API token. A
+the bounded text, and never requires a Bear API token. Normal diagnostics do
+not log words. The explicitly enabled single-user private trace and opt-in live
+test harness may print that bounded context locally during development. A
 correction proceeds only when a real unmodified completion key and Bear's
 one-character text transition agree; either signal alone is insufficient.

@@ -238,6 +238,15 @@ Decision: **go** for exact selected-range replacement and external overlay
 geometry. The first mutation test must remain in the dedicated disposable note
 and must not fall back to whole-value replacement.
 
+### Bear 2.9.1 revalidation: 2026-07-29
+
+After Bear updated to 2.9.1 (14638), the same content-free probe passed with a
+focused `AXTextArea`, bounded `AXStringForRange` reads, `AXBoundsForRange`,
+writable selection/value attributes, and every required notification. The
+dedicated live geometry harness also completed a guarded exact-range
+replacement and Change Back restoration. Bear 2.9.1 is therefore included in
+Typover's validated-version allowlist alongside 2.8.1.
+
 ### Acceptance criteria
 
 - Typover can reliably locate one focused Bear editor without depending on a

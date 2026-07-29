@@ -1,3 +1,5 @@
+import AppKit
+import ApplicationServices
 import Foundation
 import Testing
 
@@ -151,6 +153,75 @@ struct BearAccessibilityProbeTests {
       report.notificationRegistrations.allSatisfy { capability in
         capability.state == .available
       }
+    )
+  }
+
+  @Test(
+    "Live Bear private diagnostics print bounded typing context",
+    .enabled(
+      if: ProcessInfo.processInfo.environment[
+        "TYPOVER_RUN_LIVE_BEAR_PRIVATE_CONTEXT"
+      ] == "1"
+    )
+  )
+  @MainActor
+  func liveBearPrivateTypingContext() throws {
+    let application = try #require(
+      NSRunningApplication.runningApplications(
+        withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+      ).first
+    )
+    let applicationElement = AXUIElementCreateApplication(
+      application.processIdentifier
+    )
+    let focusedElement = try #require(
+      copyElementAttribute(
+        applicationElement,
+        kAXFocusedUIElementAttribute as CFString
+      )
+    )
+    let editorElement = try #require(
+      BearAccessibilityProbe().nearestTextArea(startingAt: focusedElement)
+    )
+    let selection = try #require(
+      copyRangeAttribute(
+        editorElement,
+        kAXSelectedTextRangeAttribute as CFString
+      )
+    )
+    let characterCount = try #require(
+      copyIntegerAttribute(
+        editorElement,
+        kAXNumberOfCharactersAttribute as CFString
+      )
+    )
+    let leadingRange = AccessibilityTextRange(
+      location: max(0, selection.location - 96),
+      length: min(96, selection.location)
+    )
+    let trailingRange = AccessibilityTextRange(
+      location: selection.location,
+      length: min(24, characterCount - selection.location)
+    )
+    let leadingText = try #require(
+      copyParameterizedValue(
+        from: editorElement,
+        name: kAXStringForRangeParameterizedAttribute as CFString,
+        range: leadingRange
+      ) as? String
+    )
+    let trailingText = try #require(
+      copyParameterizedValue(
+        from: editorElement,
+        name: kAXStringForRangeParameterizedAttribute as CFString,
+        range: trailingRange
+      ) as? String
+    )
+
+    print(
+      "caret=\(selection.location) length=\(characterCount) "
+        + "leading=\(String(reflecting: leadingText)) "
+        + "trailing=\(String(reflecting: trailingText))"
     )
   }
 

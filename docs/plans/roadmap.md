@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-07-27
+- Updated: 2026-07-29
 - Current milestone: 1 — Bear word-correction beta
 
 ## Goal
@@ -97,8 +97,9 @@ Back action, and alternatives.
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
-- [x] Define the initial support claim narrowly as Bear 2.8.1 on macOS 27.0,
-  the environment currently under installed-app validation.
+- [x] Define and enforce an explicit support allowlist. Bear 2.8.1 and 2.9.1
+  have passed the live Accessibility capability and exact-range transaction
+  checks on macOS 27.0.
 - [x] Make temporary observer and typed-boundary monitoring failures explicit
   and recover from a fresh baseline on the next application lifecycle event.
 - [ ] Replace the temporary single-user private Bear trace before broader beta
@@ -304,8 +305,8 @@ cross-version results, and repeatable local benchmarks.
 ## Immediate next slice
 
 Physically type the repeated-`teh` rapid sequence in the disposable Bear
-fixture against the deployed overlay-debounce build, then inspect the private
-trace. If removing per-squiggle geometry pressure still leaves realistic
-coalesced safe misses, implement the bounded idle catch-up pass before
-continuing the rest of the Phase 8 matrix. Keep sentence-level Bear work out of
-scope until the word-level exit criteria are satisfied.
+2.9.1 fixture against the deployed, allowlisted overlay-debounce build, then
+inspect the private trace. If removing per-squiggle geometry pressure still
+leaves realistic coalesced safe misses, implement the bounded idle catch-up
+pass before continuing the rest of the Phase 8 matrix. Keep sentence-level
+Bear work out of scope until the word-level exit criteria are satisfied.

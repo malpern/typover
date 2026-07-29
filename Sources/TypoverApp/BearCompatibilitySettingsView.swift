@@ -249,7 +249,7 @@ extension BearAutomaticCorrectionStatus {
     case .bearVersionUnavailable:
       "Typover could not identify this Bear version"
     case .unsupportedBearVersion(let installed):
-      "Bear \(installed) is not supported; this beta supports Bear 2.8.1"
+      "Bear \(installed) is not supported; this beta supports Bear 2.8.1 and 2.9.1"
     case .unsupportedMacOSVersion(let installed):
       "macOS \(installed) is not supported; this beta supports macOS 27.0"
     case .accessibilityPermissionRequired:

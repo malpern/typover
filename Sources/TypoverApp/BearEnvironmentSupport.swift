@@ -12,12 +12,12 @@ enum BearEnvironmentSupport: Equatable, Sendable {
 
 struct BearSupportPolicy: Equatable, Sendable {
   static let current = BearSupportPolicy(
-    bearVersion: "2.8.1",
+    bearVersions: ["2.8.1", "2.9.1"],
     macOSMajorVersion: 27,
     macOSMinorVersion: 0
   )
 
-  let bearVersion: String
+  let bearVersions: [String]
   let macOSMajorVersion: Int
   let macOSMinorVersion: Int
 
@@ -36,7 +36,7 @@ struct BearSupportPolicy: Equatable, Sendable {
     guard let installedBearVersion else {
       return .bearVersionUnavailable
     }
-    guard installedBearVersion == bearVersion else {
+    guard bearVersions.contains(installedBearVersion) else {
       return .unsupportedBearVersion(installed: installedBearVersion)
     }
     return .supported
