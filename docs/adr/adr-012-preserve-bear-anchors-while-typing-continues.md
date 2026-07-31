@@ -36,6 +36,21 @@ Alternative choices create a fresh two-sided anchor after their verified
 write. A writer can therefore continue typing on either one side of the latest
 correction while the squiggle, alternatives, and Change Back remain available.
 
+Typover-initiated edits are also coordinated across the complete active overlay
+collection. After Change Back or an alternative is verified:
+
+1. the interacted correction handles its own result;
+2. every nonoverlapping earlier correction keeps its range;
+3. every nonoverlapping later correction shifts by the verified UTF-16 length
+   delta;
+4. only a correction intersecting the edited range is invalidated; and
+5. every survivor verifies its exact current text and captures fresh bounded
+   fingerprints before its overlay returns.
+
+This coordination applies only to edits Typover has just verified. Arbitrary
+user edits continue through the conservative resolver and never gain write
+authority from range arithmetic alone.
+
 ## Consequences
 
 - Typing immediately after a correction no longer makes the interaction vanish.
@@ -45,5 +60,7 @@ correction while the squiggle, alternatives, and Change Back remain available.
   instead of guessing.
 - Editing both surrounding sides invalidates the correction until a new
   correction transaction creates a fresh anchor.
+- Resolving one correction no longer expires unrelated later corrections just
+  because their stored context included the edited word.
 - The resolver performs more bounded reads than an exact two-sided match, but
   it never scans or rewrites the whole note.

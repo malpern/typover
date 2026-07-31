@@ -46,11 +46,25 @@ public struct BearCorrectionAlternativeApplication: Equatable, Sendable {
   }
 }
 
+public struct BearCorrectionReanchoredApplication: Equatable, Sendable {
+  public let status: BearCorrectionReanchorStatus
+  public let application: BearCorrectionApplication?
+
+  public init(
+    status: BearCorrectionReanchorStatus,
+    application: BearCorrectionApplication?
+  ) {
+    self.status = status
+    self.application = application
+  }
+}
+
 public struct BearCorrectionAdapter: Sendable {
   private let replacer: any BearExactRangeReplacing
   private let restorer: any BearCorrectionRestoring
   private let geometryProvider: any BearCorrectionGeometryProviding
   private let retargeter: any BearCorrectionRetargeting
+  private let reanchorer: any BearCorrectionReanchoring
   private let selectionStabilizer: any BearCorrectionSelectionStabilizing
 
   public init(
@@ -59,6 +73,7 @@ public struct BearCorrectionAdapter: Sendable {
     geometryProvider: any BearCorrectionGeometryProviding =
       BearCorrectionGeometryProvider(),
     retargeter: any BearCorrectionRetargeting = BearCorrectionRetargeter(),
+    reanchorer: any BearCorrectionReanchoring = BearCorrectionReanchorer(),
     selectionStabilizer: any BearCorrectionSelectionStabilizing =
       BearCorrectionSelectionStabilizer()
   ) {
@@ -66,6 +81,7 @@ public struct BearCorrectionAdapter: Sendable {
     self.restorer = restorer
     self.geometryProvider = geometryProvider
     self.retargeter = retargeter
+    self.reanchorer = reanchorer
     self.selectionStabilizer = selectionStabilizer
   }
 
@@ -212,5 +228,43 @@ public struct BearCorrectionAdapter: Sendable {
     _ request: BearCorrectionSelectionStabilizationRequest
   ) -> BearCorrectionSelectionStabilizationStatus {
     selectionStabilizer.stabilizeSelection(request)
+  }
+
+  public func reanchor(
+    _ application: BearCorrectionApplication,
+    at targetRange: AccessibilityTextRange
+  ) -> BearCorrectionReanchoredApplication {
+    guard
+      application.correctionRecord?.disposition == .applied,
+      let oldAnchor = application.correctionAnchor
+    else {
+      return BearCorrectionReanchoredApplication(
+        status: .invalidRequest,
+        application: nil
+      )
+    }
+    let outcome = reanchorer.reanchor(
+      BearCorrectionReanchorRequest(
+        targetRange: targetRange,
+        expectedText: application.correction.replacement,
+        leadingContextLimit: oldAnchor.leadingContextLength,
+        trailingContextLimit: oldAnchor.trailingContextLength
+      )
+    )
+    guard let anchor = outcome.correctionAnchor else {
+      return BearCorrectionReanchoredApplication(
+        status: outcome.status,
+        application: nil
+      )
+    }
+    return BearCorrectionReanchoredApplication(
+      status: outcome.status,
+      application: BearCorrectionApplication(
+        report: application.report,
+        correction: application.correction,
+        correctionRecord: application.correctionRecord,
+        correctionAnchor: anchor
+      )
+    )
   }
 }

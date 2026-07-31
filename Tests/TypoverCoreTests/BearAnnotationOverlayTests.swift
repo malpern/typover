@@ -402,6 +402,131 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Changing back correction five preserves twenty repeated overlays")
+  func changeBackPreservesRepeatedCorrectionCollection() async {
+    let service = CoordinatedEditBearCorrectionService(
+      reanchorDelay: 0.002
+    )
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 24
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+
+    for index in 0..<21 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 21 && presenters.allSatisfy(\.isVisible)
+      }
+    )
+
+    presenters[4].interaction?.handler(.changeBack)
+
+    #expect(
+      await waitForBearOverlay {
+        collection.trackedCorrectionCount == 20
+          && !presenters[4].isVisible
+          && presenters.enumerated().allSatisfy { index, presenter in
+            index == 4 || presenter.isVisible
+          }
+          && service.reanchoredRanges.count == 20
+      }
+    )
+    #expect(
+      Set(service.reanchoredRanges.map(\.location))
+        == Set((0..<21).filter { $0 != 4 }.map { $0 * 4 })
+    )
+    #expect(service.maximumConcurrentReanchors == 1)
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("A length-changing alternative shifts later overlays only")
+  func alternativeTransformsSiblingRanges() async {
+    let service = CoordinatedEditBearCorrectionService()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 2)
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 10),
+      alternatives: ["there"]
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 11)
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 20)
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 4 && presenters.allSatisfy(\.isVisible)
+      }
+    )
+
+    presenters[1].interaction?.handler(.chooseAlternative("there"))
+
+    #expect(
+      await waitForBearOverlay {
+        collection.trackedCorrectionCount == 3
+          && presenters[0].isVisible
+          && presenters[1].isVisible
+          && !presenters[2].isVisible
+          && presenters[3].isVisible
+          && service.reanchoredRanges.count == 2
+      }
+    )
+    #expect(Set(service.reanchoredRanges.map(\.location)) == [2, 22])
+    collection.stop()
+  }
+
+  @Test("Verified edit range transforms preserve, shift, or reject")
+  func verifiedEditRangeTransform() {
+    let edit = BearAnnotationVerifiedEdit(
+      replacedRange: AccessibilityTextRange(location: 10, length: 3),
+      replacementLength: 5
+    )
+
+    #expect(
+      edit.transformedRange(
+        for: AccessibilityTextRange(location: 2, length: 3)
+      ) == AccessibilityTextRange(location: 2, length: 3)
+    )
+    #expect(
+      edit.transformedRange(
+        for: AccessibilityTextRange(location: 20, length: 3)
+      ) == AccessibilityTextRange(location: 22, length: 3)
+    )
+    #expect(
+      edit.transformedRange(
+        for: AccessibilityTextRange(location: 11, length: 3)
+      ) == nil
+    )
+  }
+
+  @MainActor
   @Test("The correction collection prunes its oldest overlay")
   func collectionIsBounded() async {
     let service = StubBearCorrectionService()
@@ -892,10 +1017,10 @@ struct BearAnnotationOverlayTests {
     )
     alternativeInteraction.handler(.changeBack)
     let changeBackSettled = await waitForBearOverlay {
-        editor.string(in: typoRange) == "teh"
-          && liveBearEditorContains(editor, liveContinuation)
-          && !presenter.panels.contains(where: \.isVisible)
-          && editor.selectedRange() == interactionSelection
+      editor.string(in: typoRange) == "teh"
+        && liveBearEditorContains(editor, liveContinuation)
+        && !presenter.panels.contains(where: \.isVisible)
+        && editor.selectedRange() == interactionSelection
     }
     if !changeBackSettled {
       print(
@@ -931,10 +1056,40 @@ private func overlayApplication(
   )
 }
 
+private func anchoredOverlayApplication(
+  location: Int,
+  replacement: String = "the",
+  documentLength: Int = 100
+) -> BearCorrectionApplication {
+  let correction = Correction(original: "teh", replacement: replacement)
+  let range = AccessibilityTextRange(
+    location: location,
+    length: replacement.utf16.count
+  )
+  return BearCorrectionApplication(
+    report: BearExactRangeReplacementReport(
+      status: .applied,
+      writeOccurred: true,
+      targetRange: range,
+      replacementRange: range,
+      surroundingContextVerified: true,
+      caretRestored: true
+    ),
+    correction: correction,
+    correctionRecord: CorrectionRecord(correction: correction),
+    correctionAnchor: BearCorrectionAnchor(
+      correctionRange: range,
+      documentLength: documentLength,
+      leadingContext: " ",
+      trailingContext: " "
+    )
+  )
+}
+
 @MainActor
 private func testController(
   presenter: SpyBearAnnotationPresenter,
-  service: StubBearCorrectionService,
+  service: any BearCorrectionServicing,
   invalidationMonitor: StubBearInvalidationMonitor =
     StubBearInvalidationMonitor(),
   handlesKeyboardShortcut: Bool = true,
@@ -969,6 +1124,154 @@ private func testController(
     textChangeRefreshDelay: textChangeRefreshDelay,
     handlesKeyboardShortcut: handlesKeyboardShortcut
   )
+}
+
+private final class CoordinatedEditBearCorrectionService:
+  BearCorrectionServicing, @unchecked Sendable
+{
+  private let lock = NSLock()
+  private let reanchorDelay: TimeInterval
+  private var storedReanchoredRanges: [AccessibilityTextRange] = []
+  private var activeReanchorCount = 0
+  private var storedMaximumConcurrentReanchors = 0
+
+  init(reanchorDelay: TimeInterval = 0) {
+    self.reanchorDelay = reanchorDelay
+  }
+
+  var reanchoredRanges: [AccessibilityTextRange] {
+    lock.withLock { storedReanchoredRanges }
+  }
+
+  var maximumConcurrentReanchors: Int {
+    lock.withLock { storedMaximumConcurrentReanchors }
+  }
+
+  func geometry(
+    for application: BearCorrectionApplication
+  ) -> BearCorrectionGeometryReport {
+    guard let range = application.correctionAnchor?.correctionRange else {
+      return BearCorrectionGeometryReport(status: .staleAnchor)
+    }
+    let bounds = AccessibilityBounds(
+      x: Double(100 + range.location),
+      y: 100,
+      width: 40,
+      height: 20
+    )
+    return BearCorrectionGeometryReport(
+      status: .available,
+      resolvedRange: range,
+      bounds: bounds,
+      fragments: [bounds]
+    )
+  }
+
+  func changeBack(
+    _ application: BearCorrectionApplication
+  ) -> BearCorrectionRestoration {
+    BearCorrectionRestoration(
+      report: BearCorrectionRestorationReport(
+        status: .restored,
+        writeOccurred: true,
+        matchedRange: application.correctionAnchor?.correctionRange
+      ),
+      correctionRecord: CorrectionRecord(
+        correction: application.correction,
+        disposition: .restored
+      )
+    )
+  }
+
+  func chooseAlternative(
+    _ replacement: String,
+    for application: BearCorrectionApplication
+  ) -> BearCorrectionAlternativeApplication {
+    guard let oldAnchor = application.correctionAnchor else {
+      return BearCorrectionAlternativeApplication(
+        report: BearCorrectionRetargetReport(status: .invalidated),
+        application: nil
+      )
+    }
+    let newRange = AccessibilityTextRange(
+      location: oldAnchor.correctionRange.location,
+      length: replacement.utf16.count
+    )
+    let correction = Correction(
+      original: application.correction.original,
+      replacement: replacement
+    )
+    let replacementReport = BearExactRangeReplacementReport(
+      status: .applied,
+      writeOccurred: true,
+      targetRange: oldAnchor.correctionRange,
+      replacementRange: newRange,
+      surroundingContextVerified: true,
+      caretRestored: true
+    )
+    return BearCorrectionAlternativeApplication(
+      report: BearCorrectionRetargetReport(
+        status: .applied,
+        writeOccurred: true,
+        matchedRange: oldAnchor.correctionRange,
+        candidateCount: 1,
+        replacementReport: replacementReport
+      ),
+      application: BearCorrectionApplication(
+        report: replacementReport,
+        correction: correction,
+        correctionRecord: CorrectionRecord(correction: correction),
+        correctionAnchor: BearCorrectionAnchor(
+          correctionRange: newRange,
+          documentLength: oldAnchor.documentLength
+            + newRange.length - oldAnchor.correctionRange.length,
+          leadingContext: " ",
+          trailingContext: " "
+        )
+      )
+    )
+  }
+
+  func reanchor(
+    _ application: BearCorrectionApplication,
+    at targetRange: AccessibilityTextRange
+  ) -> BearCorrectionReanchoredApplication {
+    lock.withLock {
+      activeReanchorCount += 1
+      storedMaximumConcurrentReanchors = max(
+        storedMaximumConcurrentReanchors,
+        activeReanchorCount
+      )
+      storedReanchoredRanges.append(targetRange)
+    }
+    if reanchorDelay > 0 {
+      Thread.sleep(forTimeInterval: reanchorDelay)
+    }
+    lock.withLock {
+      activeReanchorCount -= 1
+    }
+    let anchor = BearCorrectionAnchor(
+      correctionRange: targetRange,
+      documentLength: application.correctionAnchor?.documentLength ?? 100,
+      leadingContext: " ",
+      trailingContext: " "
+    )
+    return BearCorrectionReanchoredApplication(
+      status: .reanchored,
+      application: BearCorrectionApplication(
+        report: application.report,
+        correction: application.correction,
+        correctionRecord: application.correctionRecord,
+        correctionAnchor: anchor
+      )
+    )
+  }
+
+  func stabilizeSelection(
+    _: BearCorrectionSelectionStabilizationRequest
+  ) -> BearCorrectionSelectionStabilizationStatus {
+    .alreadyStable
+  }
 }
 
 @MainActor
@@ -1094,6 +1397,33 @@ private struct StubBearCorrectionService: BearCorrectionServicing {
     for _: BearCorrectionApplication
   ) -> BearCorrectionAlternativeApplication {
     alternative
+  }
+
+  func reanchor(
+    _ application: BearCorrectionApplication,
+    at targetRange: AccessibilityTextRange
+  ) -> BearCorrectionReanchoredApplication {
+    guard let oldAnchor = application.correctionAnchor else {
+      return BearCorrectionReanchoredApplication(
+        status: .invalidRequest,
+        application: nil
+      )
+    }
+    let anchor = BearCorrectionAnchor(
+      correctionRange: targetRange,
+      documentLength: oldAnchor.documentLength,
+      leadingContext: String(repeating: "l", count: oldAnchor.leadingContextLength),
+      trailingContext: String(repeating: "t", count: oldAnchor.trailingContextLength)
+    )
+    return BearCorrectionReanchoredApplication(
+      status: .reanchored,
+      application: BearCorrectionApplication(
+        report: application.report,
+        correction: application.correction,
+        correctionRecord: application.correctionRecord,
+        correctionAnchor: anchor
+      )
+    )
   }
 
   func stabilizeSelection(

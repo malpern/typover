@@ -20,6 +20,11 @@ public protocol BearCorrectionServicing:
     for application: BearCorrectionApplication
   ) -> BearCorrectionAlternativeApplication
 
+  func reanchor(
+    _ application: BearCorrectionApplication,
+    at targetRange: AccessibilityTextRange
+  ) -> BearCorrectionReanchoredApplication
+
   func stabilizeSelection(
     _ request: BearCorrectionSelectionStabilizationRequest
   ) -> BearCorrectionSelectionStabilizationStatus
@@ -57,10 +62,11 @@ public final class BearAnnotationOverlayController {
   private var workspaceObservers: [NSObjectProtocol] = []
   private var keyboardMonitor: Any?
   private var alternatives: [String] = []
-  private var onInteractionLatency:
-    (@MainActor @Sendable (Duration) -> Void)?
+  private var onInteractionLatency: (@MainActor @Sendable (Duration) -> Void)?
   private var onFinished: (@MainActor @Sendable () -> Void)?
   private var onResolution: (@MainActor @Sendable (BearAnnotationResolution) -> Void)?
+  private var onVerifiedEdit: (@MainActor @Sendable (BearAnnotationVerifiedEdit) -> Void)?
+  private var lastResolvedRange: AccessibilityTextRange?
 
   public init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
@@ -123,12 +129,38 @@ public final class BearAnnotationOverlayController {
     )? = nil,
     onFinished: (@MainActor @Sendable () -> Void)? = nil
   ) {
+    trackWithResolutionCoordinatingEdits(
+      application,
+      alternatives: alternatives,
+      onInteractionLatency: onInteractionLatency,
+      onResolution: onResolution,
+      onVerifiedEdit: nil,
+      onFinished: onFinished
+    )
+  }
+
+  func trackWithResolutionCoordinatingEdits(
+    _ application: BearCorrectionApplication,
+    alternatives: [String] = [],
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )? = nil,
+    onResolution: (
+      @MainActor @Sendable (BearAnnotationResolution) -> Void
+    )? = nil,
+    onVerifiedEdit: (
+      @MainActor @Sendable (BearAnnotationVerifiedEdit) -> Void
+    )? = nil,
+    onFinished: (@MainActor @Sendable () -> Void)? = nil
+  ) {
     stop()
     self.application = application
     self.alternatives = alternatives
     self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
+    self.onVerifiedEdit = onVerifiedEdit
     self.onFinished = onFinished
+    lastResolvedRange = application.correctionAnchor?.correctionRange
     installWorkspaceObservers()
     if handlesKeyboardShortcut {
       installKeyboardMonitor()
@@ -160,7 +192,9 @@ public final class BearAnnotationOverlayController {
     alternatives = []
     onInteractionLatency = nil
     onResolution = nil
+    onVerifiedEdit = nil
     onFinished = nil
+    lastResolvedRange = nil
   }
 
   public func showMenu() {
@@ -211,6 +245,9 @@ public final class BearAnnotationOverlayController {
     _ report: BearCorrectionGeometryReport,
     finishIfInvalidated: Bool
   ) {
+    if let resolvedRange = report.resolvedRange {
+      lastResolvedRange = resolvedRange
+    }
     guard
       let placements = BearAnnotationLayout.visiblePlacements(
         for: report,
@@ -372,6 +409,16 @@ public final class BearAnnotationOverlayController {
           )
           self.onResolution?(.changedBack)
           if result.report.writeOccurred,
+            let matchedRange = result.report.matchedRange
+          {
+            self.onVerifiedEdit?(
+              BearAnnotationVerifiedEdit(
+                replacedRange: matchedRange,
+                replacementLength: application.correction.original.utf16.count
+              )
+            )
+          }
+          if result.report.writeOccurred,
             let anchor = application.correctionAnchor,
             let desiredSelection = result.report.selectionAfter
           {
@@ -419,6 +466,16 @@ public final class BearAnnotationOverlayController {
             interactionStartedAt.duration(to: ContinuousClock().now)
           )
           self.onResolution?(.choseAlternative(replacement))
+          if result.report.writeOccurred,
+            let matchedRange = result.report.matchedRange
+          {
+            self.onVerifiedEdit?(
+              BearAnnotationVerifiedEdit(
+                replacedRange: matchedRange,
+                replacementLength: replacement.utf16.count
+              )
+            )
+          }
           self.alternatives.insert(
             application.correction.replacement,
             at: 0
@@ -437,6 +494,41 @@ public final class BearAnnotationOverlayController {
         }
       }
     }
+  }
+
+  func applyVerifiedEdit(_ edit: BearAnnotationVerifiedEdit) async {
+    guard
+      let application,
+      let currentRange = lastResolvedRange
+        ?? application.correctionAnchor?.correctionRange,
+      let transformedRange = edit.transformedRange(for: currentRange)
+    else {
+      finishTracking()
+      return
+    }
+
+    presenter.hide()
+    cancelTextChangeRefresh()
+    refreshGeneration += 1
+    refreshTask?.cancel()
+    refreshTask = nil
+    lastResolvedRange = transformedRange
+
+    let adapter = adapter
+    let result = await Task.detached(priority: .userInitiated) {
+      adapter.reanchor(application, at: transformedRange)
+    }.value
+    guard !Task.isCancelled, self.application == application else {
+      return
+    }
+    guard let updatedApplication = result.application else {
+      finishTracking()
+      return
+    }
+    self.application = updatedApplication
+    lastResolvedRange = transformedRange
+    restartInvalidationMonitor()
+    refresh(hideFirst: false)
   }
 
   private func scheduleSelectionStabilization(

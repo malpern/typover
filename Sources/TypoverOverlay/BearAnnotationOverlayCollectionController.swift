@@ -11,10 +11,10 @@ public final class BearAnnotationOverlayCollectionController {
   }
 
   private let maximumTrackedCorrections: Int
-  private let controllerFactory:
-    @MainActor () -> BearAnnotationOverlayController
+  private let controllerFactory: @MainActor () -> BearAnnotationOverlayController
   private var entries: [Entry] = []
   private var keyboardMonitor: Any?
+  private var verifiedEditTask: Task<Void, Never>?
 
   public convenience init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
@@ -74,11 +74,17 @@ public final class BearAnnotationOverlayCollectionController {
       Entry(correctionID: correctionID, controller: controller)
     )
     installKeyboardMonitorIfNeeded()
-    controller.trackWithResolution(
+    controller.trackWithResolutionCoordinatingEdits(
       application,
       alternatives: alternatives,
       onInteractionLatency: onInteractionLatency,
       onResolution: onResolution,
+      onVerifiedEdit: { [weak self, weak controller] edit in
+        guard let self, let controller else {
+          return
+        }
+        self.applyVerifiedEdit(edit, excluding: controller)
+      },
       onFinished: { [weak self, weak controller] in
         guard let self, let controller else {
           return
@@ -89,7 +95,28 @@ public final class BearAnnotationOverlayCollectionController {
     )
   }
 
+  private func applyVerifiedEdit(
+    _ edit: BearAnnotationVerifiedEdit,
+    excluding source: BearAnnotationOverlayController
+  ) {
+    verifiedEditTask?.cancel()
+    let siblingControllers = entries.compactMap { entry in
+      entry.controller === source ? nil : entry.controller
+    }
+    verifiedEditTask = Task { [weak self] in
+      for controller in siblingControllers {
+        guard !Task.isCancelled else {
+          return
+        }
+        await controller.applyVerifiedEdit(edit)
+      }
+      self?.verifiedEditTask = nil
+    }
+  }
+
   public func stop() {
+    verifiedEditTask?.cancel()
+    verifiedEditTask = nil
     let controllers = entries.map(\.controller)
     entries = []
     for controller in controllers {
@@ -106,9 +133,11 @@ public final class BearAnnotationOverlayCollectionController {
   }
 
   private func removeEntry(correctionID: String) {
-    guard let index = entries.firstIndex(where: {
-      $0.correctionID == correctionID
-    }) else {
+    guard
+      let index = entries.firstIndex(where: {
+        $0.correctionID == correctionID
+      })
+    else {
       return
     }
     entries.remove(at: index).controller.stop()
@@ -118,9 +147,11 @@ public final class BearAnnotationOverlayCollectionController {
   private func removeEntry(
     controller: BearAnnotationOverlayController
   ) {
-    guard let index = entries.firstIndex(where: {
-      $0.controller === controller
-    }) else {
+    guard
+      let index = entries.firstIndex(where: {
+        $0.controller === controller
+      })
+    else {
       return
     }
     entries.remove(at: index)

@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-07-30
+- Updated: 2026-07-31
 - Current milestone: 1 — Bear word-correction beta
 
 ## Goal
@@ -53,13 +53,15 @@ real ceiling on instantaneous correction during arbitrary input bursts. Typover
 must prefer an explainable safe miss over guessing when Bear has already
 coalesced several edits.
 
-The quiet-machine rapid-typing pass corrected every completed typo: 16 actual
-`teh ` insertions produced 16 verified `the` replacements, with 117 ms average
-boundary-to-application latency. The same pass exposed a separate annotation
-collision after ten identical `the ` sequences. Production correction anchors
-now retain a larger but still bounded 256-unit neighborhood, and a deterministic
-regression keeps all 16 repeated corrections independently anchored. A final
-installed overlay-retention pass remains.
+The quiet-machine rapid-typing passes corrected every completed typo, including
+21 consecutive `teh ` insertions in the latest run. All 21 corrections retained
+their overlays. Changing back the fifth word then exposed a collection-level
+anchor dependency: its verified edit changed the long leading fingerprint of
+every later correction. Typover now broadcasts its own verified edits across
+the active collection, transforms nonoverlapping ranges, and rebuilds their
+anchors from Bear's current text. Automated coverage reverts correction five
+of 21 while retaining the other 20 and separately covers length-changing and
+overlapping edits. A post-fix installed interaction pass remains.
 
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and

@@ -46,14 +46,14 @@ also passes in Bear.
 | Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Pending | No correction |
 | Active selection | Passed, including fresh-baseline resume | Pending | Observation pauses; no write |
 | Bounded context changes | Passed | Pending | Refuse without writing |
-| Change Back | Passed with learning | Pending | Restore only the word and suppress the same learned correction |
+| Change Back | Passed with learning and collection-wide sibling re-anchoring | Single correction passed; post-fix repeated-collection retest pending | Restore only the word and suppress the same learned correction |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
-| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, debounced overlay geometry, and 16 repeated production anchors | Quiet-machine run corrected 16 of 16 completed typos; 256-unit anchor build pending physical overlay-retention retest | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
+| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, debounced overlay geometry, and 21 repeated correction interactions | Quiet-machine run corrected and annotated 21 of 21 completed typos | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
 | Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
-| Multiple recent corrections | Passed; independent actions and 24-session bound | Pending | Keep each valid correction independently reversible |
+| Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | All 21 overlays appeared; post-fix early Change Back retest pending | Keep each valid correction independently reversible |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
 
 ## Bear 2.9.1 compatibility pass: 2026-07-29
@@ -202,6 +202,30 @@ to collide with the complete production anchor and still refuses without
 writing. The broad gate now passes 223 tests in 24 suites. The installed build
 still needs one physical pass confirming all 16 squiggles and Change Back on an
 early word.
+
+## Collection re-anchoring pass: 2026-07-31
+
+A later quiet-machine run produced 21 completion boundaries, 21 verified
+applications, no context-change refusals, and 21 visible overlays. Application
+latency ranged from 82 to 166 ms and averaged 109.3 ms. Changing back the fifth
+correction restored only that word, but removed every later overlay. Those
+later anchors all included the edited word in their 256-unit leading
+fingerprint, so they became stale together even though their own text and
+ranges remained valid.
+
+Typover now treats a successful Change Back or alternative as a verified
+collection edit. Every non-source overlay transforms its last resolved range:
+earlier ranges remain fixed, later ranges shift by the UTF-16 length delta, and
+only overlapping ranges are invalidated. Each survivor then verifies its exact
+replacement against Bear's current text and captures fresh bounded,
+content-private fingerprints before drawing again.
+
+Five regressions cover the new behavior: exact re-anchoring, superseded and
+out-of-bounds refusal, reverting correction five of 21 while preserving the
+other 20, length-changing range shifts, and overlap invalidation. The focused
+gate passes 62 tests across four relevant suites; the complete gate passes 228
+tests in 24 suites. The installed build still needs the same early Change Back
+interaction to confirm all 20 sibling squiggles remain visible in Bear.
 
 For this single-user development phase, an opt-in local private trace can log
 the actual bounded Bear context, input intents, Accessibility event order,

@@ -9,6 +9,61 @@ import TypoverCore
 
 @Suite("Bear exact-range replacement")
 struct BearExactRangeReplacementTests {
+  @Test("A verified current range can be re-anchored after a sibling edit")
+  func reanchorsVerifiedCurrentRange() throws {
+    let editor = FakeBearEditableTextClient(
+      text: "alpha teh the omega",
+      selection: AccessibilityTextRange(location: 17, length: 0)
+    )
+    let outcome = BearCorrectionReanchorTransaction().reanchor(
+      BearCorrectionReanchorRequest(
+        targetRange: AccessibilityTextRange(location: 10, length: 3),
+        expectedText: "the",
+        leadingContextLimit: 6,
+        trailingContextLimit: 6
+      ),
+      in: editor
+    )
+
+    #expect(outcome.status == .reanchored)
+    let anchor = try #require(outcome.correctionAnchor)
+    #expect(anchor.correctionRange == AccessibilityTextRange(location: 10, length: 3))
+    #expect(anchor.documentLength == editor.text.length)
+    #expect(anchor.leadingContextLength == 6)
+    #expect(anchor.trailingContextLength == 6)
+  }
+
+  @Test("Re-anchoring rejects superseded and out-of-bounds ranges")
+  func reanchorRejectsUnsafeRanges() {
+    let editor = FakeBearEditableTextClient(
+      text: "alpha the omega",
+      selection: AccessibilityTextRange(location: 15, length: 0)
+    )
+    let superseded = BearCorrectionReanchorTransaction().reanchor(
+      BearCorrectionReanchorRequest(
+        targetRange: AccessibilityTextRange(location: 6, length: 3),
+        expectedText: "ten",
+        leadingContextLimit: 6,
+        trailingContextLimit: 6
+      ),
+      in: editor
+    )
+    let outOfBounds = BearCorrectionReanchorTransaction().reanchor(
+      BearCorrectionReanchorRequest(
+        targetRange: AccessibilityTextRange(location: 99, length: 3),
+        expectedText: "the",
+        leadingContextLimit: 6,
+        trailingContextLimit: 6
+      ),
+      in: editor
+    )
+
+    #expect(superseded.status == .superseded)
+    #expect(superseded.correctionAnchor == nil)
+    #expect(outOfBounds.status == .targetOutOfBounds)
+    #expect(outOfBounds.correctionAnchor == nil)
+  }
+
   @Test("Only the requested range changes and the caret is restored")
   func appliesExactRange() {
     let editor = FakeBearEditableTextClient(
