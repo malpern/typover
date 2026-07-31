@@ -120,6 +120,16 @@ Back action, and alternatives.
   verified insertion since a recent caret baseline, must wait for a short idle
   interval, and must refuse any selection, focus, deletion, replacement, or
   ambiguous-context transition. Do not use whole-note or Bear-database writes.
+- [ ] Investigate resilience under severe system load as a separate,
+  reproducible workstream. Create controlled CPU, WindowServer, and
+  Accessibility-contention scenarios; measure keyboard-to-Bear delay,
+  notification coalescing, correction latency, and recovery after the system
+  becomes responsive. Evaluate a bounded idle catch-up pass for recent,
+  append-only text so safely skipped completed words can be corrected after a
+  burst. It must preserve exact-range verification, remain local, avoid
+  whole-note scanning, and never infer or insert a boundary that macOS or Bear
+  did not record. Document the load envelope Typover can recover from and the
+  conditions that must remain an explainable safe miss.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria
@@ -316,6 +326,7 @@ Repeat the 16-word physical `teh` sequence in the disposable Bear 2.9.1 fixture
 against the deployed 256-unit anchor build. Confirm that all completed typos
 become `the`, all 16 corrections retain independent gray squiggles, and an
 early squiggle can still Change Back only its own word. Then continue the
-remaining Phase 8 installed matrix. The quiet-machine correction result does
-not justify a catch-up pass; reconsider one only if a later realistic trace
-contains an actual coalesced safe miss.
+remaining Phase 8 installed matrix. After the normal-load acceptance pass,
+design the severe-load investigation and its controlled fixtures. The
+high-load trace demonstrates real coalesced safe misses, but it does not yet
+establish the recovery algorithm or the supported load envelope.
