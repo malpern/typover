@@ -1,6 +1,6 @@
 # Bear physical HID harness
 
-- Status: Code complete; first board-backed run pending
+- Status: Harness and visual monitor complete; first board-backed run pending
 - Fixture: Waveshare ESP32-S3 Touch-LCD-1.69 KeyPath HID fixture
 - Scope: Synthetic text in a disposable Bear note
 
@@ -13,6 +13,14 @@ The Typover repository does not copy or modify the fixture firmware. It invokes
 the existing authenticated client from the KeyPath fixture worktree through
 `TYPOVER_HID_FIXTURE_CLIENT`. The fixture token is decrypted by the wrapper from
 the existing sops store and is never passed in argv or printed.
+
+The harness also opens the existing native AppKit HID Capture Jig in a dedicated
+`Typover · Bear Physical HID` mode. The floating monitor stays visible while
+Bear owns keyboard focus. It presents the ESP32's known rapid-key schedule as an
+animated keycap stack, then replaces the pending state with correction and miss
+counts verified from Bear text and Typover logs. The UI explicitly labels the
+animation as scheduled input because a background window cannot capture the
+events delivered to Bear.
 
 ## Build and offline check
 
@@ -29,6 +37,7 @@ per character. This covers ordinary deliberate typing through a fast burst.
 `doctor` checks all of the following without emitting HID input:
 
 - the existing fixture client is executable;
+- the AppKit Jig launcher and monitor client are executable;
 - the fixture is reachable and its USB keyboard is mounted;
 - Typover is running with local private diagnostics enabled;
 - Bear exposes the supported focused text editor contract; and
@@ -49,9 +58,12 @@ Scripts/typover-hid-harness run --exclusive-desktop-confirmed
 The runner waits for three host samples with at least 60% CPU idle and no
 active Swift compiler. It refuses to start unless Typover is running, the
 fixture reports a mounted USB keyboard, and Bear has a focused collapsed caret
-at the end of its editor. It rechecks that caret after load and arm, monitors
-the frontmost application throughout the delayed start and HID burst, and
-aborts the fixture if Bear loses focus.
+at the end of its editor. Before the quiet-host wait it opens the Jig monitor and
+shows a focus gate; the runner then waits up to two minutes for the safe Bear
+caret instead of requiring perfect setup at command launch. It rechecks that
+caret after load, arm, and monitor setup, watches the frontmost application
+throughout the delayed start and HID burst, and aborts the fixture if Bear loses
+focus. The monitor remains visible on the final verified result.
 
 Each case is classified as:
 

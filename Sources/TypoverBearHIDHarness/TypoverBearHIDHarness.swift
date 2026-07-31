@@ -96,6 +96,8 @@ private struct DoctorReport: Encodable {
   let caseCount: Int
   let wordsPerCase: Int
   let readyToRun: Bool
+  let jigToolReady: Bool
+  let jigClientReady: Bool
 }
 
 private struct ProcessResult {
@@ -216,6 +218,86 @@ private struct FixtureController {
   }
 }
 
+private struct JigController {
+  let toolPath: String
+  let clientPath: String
+  let runner: CommandRunner
+
+  func ensureRunning() throws {
+    let result = try runner.run(toolPath, ["open"], timeout: 120)
+    guard result.status == 0 else {
+      throw HarnessError.commandFailed(
+        "Could not open HID Capture Jig: \(result.error.trimmingCharacters(in: .whitespacesAndNewlines))"
+      )
+    }
+  }
+
+  func prepare(runID: String, caseCount: Int) throws {
+    _ = try invoke([
+      "bear-prepare",
+      "--run-id", runID,
+      "--case-count", String(caseCount),
+      "--message", "Focus the disposable Bear note; the Jig will stay visible without taking keyboard focus.",
+    ])
+  }
+
+  func begin(
+    runID: String,
+    testCase: BearHIDTestCase,
+    caseCount: Int,
+    textURL: URL
+  ) throws {
+    _ = try invoke([
+      "bear-begin",
+      "--run-id", runID,
+      "--case-index", String(testCase.ordinal),
+      "--case-count", String(caseCount),
+      "--interval-ms", String(testCase.intervalMilliseconds),
+      "--word-count", String(testCase.words),
+      "--scheduled-text", textURL.path,
+      "--start-delay-ms", String(testCase.startDelayMilliseconds),
+      "--bear-focused",
+    ])
+  }
+
+  func update(
+    phase: String,
+    correctedWords: Int? = nil,
+    missedWords: Int? = nil,
+    message: String,
+    bearFocused: Bool
+  ) {
+    var arguments = [
+      "bear-update", "--phase", phase,
+      "--message", message,
+      bearFocused ? "--bear-focused" : "--no-bear-focused",
+    ]
+    if let correctedWords {
+      arguments += ["--corrected-words", String(correctedWords)]
+    }
+    if let missedWords {
+      arguments += ["--missed-words", String(missedWords)]
+    }
+    _ = try? invoke(arguments)
+  }
+
+  private func invoke(_ arguments: [String]) throws -> String {
+    let result = try runner.run(clientPath, arguments, timeout: 8)
+    guard result.status == 0 else {
+      throw HarnessError.commandFailed(
+        "HID Capture Jig command failed: \(result.error.trimmingCharacters(in: .whitespacesAndNewlines))"
+      )
+    }
+    guard let data = result.output.data(using: .utf8),
+      let response = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      response["ok"] as? Bool == true
+    else {
+      throw HarnessError.invalidJSON("HID Capture Jig returned an invalid response.")
+    }
+    return result.output
+  }
+}
+
 private struct Options {
   var command = ""
   var fixtureClient = ProcessInfo.processInfo.environment[
@@ -224,6 +306,12 @@ private struct Options {
   var fixtureHost = ProcessInfo.processInfo.environment[
     "KEYPATH_FIXTURE_HOST"
   ] ?? "keypath-hid-fixture.local"
+  var jigTool = ProcessInfo.processInfo.environment[
+    "TYPOVER_HID_JIG_TOOL"
+  ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-tool"
+  var jigClient = ProcessInfo.processInfo.environment[
+    "TYPOVER_HID_JIG_CLIENT"
+  ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-client"
   var intervals = [160, 100, 60, 40]
   var words = 20
   var quietTimeoutSeconds = 600
@@ -245,8 +333,8 @@ private struct Options {
       case "--exclusive-desktop-confirmed":
         options.exclusiveDesktopConfirmed = true
         index += 1
-      case "--fixture-client", "--fixture-host", "--intervals", "--words",
-        "--quiet-timeout-seconds", "--output-directory":
+      case "--fixture-client", "--fixture-host", "--jig-tool", "--jig-client",
+        "--intervals", "--words", "--quiet-timeout-seconds", "--output-directory":
         guard index + 1 < arguments.count else {
           throw HarnessError.usage("Missing value for \(argument).")
         }
@@ -254,6 +342,8 @@ private struct Options {
         switch argument {
         case "--fixture-client": options.fixtureClient = value
         case "--fixture-host": options.fixtureHost = value
+        case "--jig-tool": options.jigTool = value
+        case "--jig-client": options.jigClient = value
         case "--intervals":
           let values = value.split(separator: ",").compactMap { Int($0) }
           guard values.count == value.split(separator: ",").count else {
@@ -322,6 +412,8 @@ private enum TypoverBearHIDHarness {
   private static func doctor(options: Options, plan: BearHIDTestPlan) throws {
     let fileManager = FileManager.default
     let clientReady = fileManager.isExecutableFile(atPath: options.fixtureClient)
+    let jigToolReady = fileManager.isExecutableFile(atPath: options.jigTool)
+    let jigClientReady = fileManager.isExecutableFile(atPath: options.jigClient)
     let typoverRunning = !NSRunningApplication.runningApplications(
       withBundleIdentifier: "com.malpern.typover"
     ).isEmpty
@@ -357,8 +449,10 @@ private enum TypoverBearHIDHarness {
         caseCount: plan.cases.count,
         wordsPerCase: plan.wordsPerCase,
         readyToRun: clientReady && fixtureStatus?.usbMounted == true
-          && typoverRunning && privateDiagnostics && probe.status == .ready
-          && bearFrontmost
+          && jigToolReady && jigClientReady && typoverRunning
+          && privateDiagnostics && probe.status == .ready && bearFrontmost,
+        jigToolReady: jigToolReady,
+        jigClientReady: jigClientReady
       )
     )
   }
@@ -374,18 +468,38 @@ private enum TypoverBearHIDHarness {
         "Fixture client is missing or not executable: \(options.fixtureClient)"
       )
     }
+    guard FileManager.default.isExecutableFile(atPath: options.jigTool),
+      FileManager.default.isExecutableFile(atPath: options.jigClient)
+    else {
+      throw HarnessError.commandFailed(
+        "The HID Capture Jig tool or client is missing."
+      )
+    }
     guard !NSRunningApplication.runningApplications(
       withBundleIdentifier: "com.malpern.typover"
     ).isEmpty else {
       throw HarnessError.commandFailed("Typover is not running.")
     }
 
-    let controller = FixtureController(
+    let fixture = FixtureController(
       clientPath: options.fixtureClient,
       host: options.fixtureHost,
       runner: CommandRunner()
     )
-    let initialStatus = try controller.status()
+    let jig = JigController(
+      toolPath: options.jigTool,
+      clientPath: options.jigClient,
+      runner: CommandRunner()
+    )
+    print("Opening the AppKit HID Jig in Typover · Bear monitor mode…")
+    try jig.ensureRunning()
+
+    let stamp = ISO8601DateFormatter().string(from: Date())
+      .replacingOccurrences(of: ":", with: "-")
+    let matrixRunID = "typover-hid-\(stamp)"
+    try jig.prepare(runID: matrixRunID, caseCount: plan.cases.count)
+
+    let initialStatus = try fixture.status()
     guard initialStatus.usbMounted == true else {
       throw HarnessError.commandFailed(
         "The fixture is reachable, but its USB keyboard is not mounted."
@@ -396,11 +510,9 @@ private enum TypoverBearHIDHarness {
     let readiness = try waitForQuietHost(
       timeoutSeconds: options.quietTimeoutSeconds
     )
-    try requireSafeBearCaret()
+    print("Focus Bear and place the caret at the end of the disposable test note.")
+    try waitForSafeBearCaret(timeoutSeconds: 120)
 
-    let stamp = ISO8601DateFormatter().string(from: Date())
-      .replacingOccurrences(of: ":", with: "-")
-    let matrixRunID = "typover-hid-\(stamp)"
     let outputDirectory = URL(fileURLWithPath: options.outputDirectory ?? (
       FileManager.default.homeDirectoryForCurrentUser.path
         + "/.local/state/typover/bear-hid/\(matrixRunID)"
@@ -418,7 +530,9 @@ private enum TypoverBearHIDHarness {
         testCase: testCase,
         matrixRunID: matrixRunID,
         outputDirectory: outputDirectory,
-        fixture: controller,
+        fixture: fixture,
+        jig: jig,
+        caseCount: plan.cases.count,
         readiness: readiness
       )
       caseArtifacts.append(artifact)
@@ -475,6 +589,8 @@ private enum TypoverBearHIDHarness {
     matrixRunID: String,
     outputDirectory: URL,
     fixture: FixtureController,
+    jig: JigController,
+    caseCount: Int,
     readiness: [HostReadinessSample]
   ) throws -> CaseArtifact {
     let reader = BearTypingContextReader(leadingLimit: 256, trailingLimit: 24)
@@ -519,6 +635,23 @@ private enum TypoverBearHIDHarness {
     )
     _ = try fixture.invoke(testCase.fixtureArguments(command: "arm", runID: runID))
     try requireSafeBearCaret(expectedCaret: baseline.caretLocation)
+    do {
+      try jig.begin(
+        runID: runID,
+        testCase: testCase,
+        caseCount: caseCount,
+        textURL: textURL
+      )
+      try requireSafeBearCaret(expectedCaret: baseline.caretLocation)
+    } catch {
+      fixture.abort()
+      jig.update(
+        phase: "failed",
+        message: "Monitor setup or Bear focus failed before HID start.",
+        bearFocused: false
+      )
+      throw error
+    }
     _ = try fixture.invoke(testCase.fixtureArguments(command: "start", runID: runID))
 
     let typingDeadline = Date().addingTimeInterval(
@@ -535,6 +668,11 @@ private enum TypoverBearHIDHarness {
       {
         focusRemainedValid = false
         fixture.abort()
+        jig.update(
+          phase: "failed",
+          message: "Bear lost focus; the fixture was aborted and no result is credited.",
+          bearFocused: false
+        )
         break
       }
       RunLoop.current.run(until: Date().addingTimeInterval(0.025))
@@ -548,6 +686,11 @@ private enum TypoverBearHIDHarness {
         if finalStatus?.state == "complete" { break }
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
       } while Date() < deadline
+      jig.update(
+        phase: "analyzing",
+        message: "Comparing exact Bear text with Typover correction logs…",
+        bearFocused: true
+      )
       RunLoop.current.run(
         until: Date().addingTimeInterval(
           Double(testCase.settleMilliseconds) / 1_000
@@ -588,6 +731,26 @@ private enum TypoverBearHIDHarness {
     } else {
       evidenceClassification = analysis.classification.rawValue
     }
+    let monitorPhase: String = switch evidenceClassification {
+    case "passed": "passed"
+    case "safe-misses-observed": "safeMisses"
+    default: "failed"
+    }
+    let monitorMessage: String = switch evidenceClassification {
+    case "passed":
+      "All \(analysis.correctedWords) corrections matched Typover log evidence."
+    case "safe-misses-observed":
+      "\(analysis.correctedWords) corrected · \(analysis.missedWords) preserved safe misses."
+    default:
+      "Focus, fixture, text, or Typover-log evidence was incomplete."
+    }
+    jig.update(
+      phase: monitorPhase,
+      correctedWords: analysis.correctedWords,
+      missedWords: analysis.missedWords,
+      message: monitorMessage,
+      bearFocused: focusRemainedValid
+    )
     return CaseArtifact(
       testCase: testCase,
       runID: runID,
@@ -621,6 +784,27 @@ private enum TypoverBearHIDHarness {
         "Bear must remain frontmost with the same collapsed editor caret."
       )
     }
+  }
+
+  private static func waitForSafeBearCaret(timeoutSeconds: Int) throws {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
+    repeat {
+      let probe = BearAccessibilityProbe().run()
+      if probe.status == .ready,
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+          == BearAccessibilityProbe.bearBundleIdentifier,
+        let selection = probe.selectedRange,
+        let characterCount = probe.characterCount,
+        selection.length == 0,
+        selection.location == characterCount
+      {
+        return
+      }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    } while Date() < deadline
+    throw HarnessError.unsafeFocus(
+      "Bear did not become frontmost with a collapsed caret at the end of its editor."
+    )
   }
 
   private static func waitForQuietHost(
