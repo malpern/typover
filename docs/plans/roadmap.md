@@ -132,6 +132,13 @@ Back action, and alternatives.
   whole-note scanning, and never infer or insert a boundary that macOS or Bear
   did not record. Document the load envelope Typover can recover from and the
   conditions that must remain an explainable safe miss.
+  The board-independent host harness is implemented and documented in
+  [Bear physical HID harness](../testing/bear-physical-hid-harness.md). It
+  reuses the existing Waveshare ESP32-S3 fixture, requires a quiet-machine
+  baseline and exclusive Bear focus, captures exact inserted-range and local
+  private-trace evidence, and fails closed on focus or range ambiguity. The
+  first physical baseline and controlled-load profiles remain pending until
+  the board is connected.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria

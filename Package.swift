@@ -10,7 +10,12 @@ let package = Package(
   products: [
     .executable(name: "Typover", targets: ["TypoverApp"]),
     .executable(name: "TypoverEval", targets: ["TypoverEval"]),
+    .executable(
+      name: "TypoverBearHIDHarness",
+      targets: ["TypoverBearHIDHarness"]
+    ),
     .library(name: "TypoverCore", targets: ["TypoverCore"]),
+    .library(name: "TypoverHIDTesting", targets: ["TypoverHIDTesting"]),
     .library(
       name: "TypoverAppleIntelligence",
       targets: ["TypoverAppleIntelligence"]
@@ -32,6 +37,7 @@ let package = Package(
   ],
   targets: [
     .target(name: "TypoverCore"),
+    .target(name: "TypoverHIDTesting"),
     .target(name: "TypoverAccessibility"),
     .target(
       name: "TypoverBearAdapter",
@@ -84,6 +90,10 @@ let package = Package(
         .process("Resources")
       ]
     ),
+    .executableTarget(
+      name: "TypoverBearHIDHarness",
+      dependencies: ["TypoverAccessibility", "TypoverHIDTesting"]
+    ),
     .testTarget(
       name: "TypoverCoreTests",
       dependencies: [
@@ -94,6 +104,7 @@ let package = Package(
         "TypoverBearAdapter",
         "TypoverCore",
         "TypoverEvaluation",
+        "TypoverHIDTesting",
         "TypoverOverlay",
         "TypoverRemoteIntelligence",
       ]
