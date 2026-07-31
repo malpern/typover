@@ -1,15 +1,13 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Bear 2.9.1 compatibility passed; rapid manual retest pending
-- Updated: 2026-07-29
+- Status: Bear 2.9.1 compatibility and rapid correction passed; repeated-overlay retest pending
+- Updated: 2026-07-30
 - Default: Off
 - Engine: Apple Spelling, on device
 
 The focused automatic-correction gate passes 23 tests, including the current
-rapid-typing regressions. A 220-test broad run attempted while an unrelated
-KeyPath release build saturated the machine timed out one existing
-consecutive-word test; it must be rerun on an idle machine before this change
-has a clean broad gate. The signed development build is deployed to
+rapid-typing regressions. The quiet-machine broad gate now passes 223 tests in
+24 suites. The signed development build is deployed to
 `/Applications/Typover.app`, and automatic Bear correction is enabled locally
 for the live pass.
 
@@ -50,7 +48,7 @@ also passes in Bear.
 | Bounded context changes | Passed | Pending | Refuse without writing |
 | Change Back | Passed with learning | Pending | Restore only the word and suppress the same learned correction |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
-| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, and debounced overlay geometry | Fixed-deadline run applied 4 of 14; overlay-scaling fix pending physical-keyboard retest | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
+| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, debounced overlay geometry, and 16 repeated production anchors | Quiet-machine run corrected 16 of 16 completed typos; 256-unit anchor build pending physical overlay-retention retest | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
 | Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
@@ -178,6 +176,33 @@ independent and continues during the debounce. The focused overlay suite passes
 suite passes all 23 tests. The deployed build needs the same physical sequence
 before deciding whether bounded idle catch-up is still required.
 
+## Quiet-machine rapid correction and repeated-anchor pass: 2026-07-30
+
+After the machine reached three consecutive samples above 60% CPU idle, the
+complete deterministic gate passed 222 tests in 24 suites. A physical Bear
+2.9.1 run then produced 17 Space key-down boundaries. Sixteen Spaces entered
+Bear and every corresponding `teh ` became `the `; the remaining Space never
+entered Bear's document and therefore was not a Typover miss. The 16 verified
+applications took 92–207 ms from boundary to completion, averaging 117 ms.
+Bear's final note contained 16 `the` words and no `teh`.
+
+The screenshot nevertheless retained only ten gray squiggles. This was a
+separate reversibility defect: production anchors kept 40 UTF-16 units of
+leading context, exactly ten repetitions of `the `. Starting with the eleventh
+correction, later identical words could reproduce the same bounded
+fingerprints, so the geometry resolver correctly failed closed and discarded
+the ambiguous annotations.
+
+Production anchors now retain 256 UTF-16 units on each available side. This
+remains a bounded local read and distinguishes 64 consecutive `the ` sequences,
+well beyond the 24-overlay session limit for this case. A regression creates 16
+corrections through the real exact-range transaction and confirms that every
+anchor resolves to its own range. The true duplicated-context test was expanded
+to collide with the complete production anchor and still refuses without
+writing. The broad gate now passes 223 tests in 24 suites. The installed build
+still needs one physical pass confirming all 16 squiggles and Change Back on an
+early word.
+
 For this single-user development phase, an opt-in local private trace can log
 the actual bounded Bear context, input intents, Accessibility event order,
 pairing latency, proposals, ranges, and outcomes through unified logging. It is
@@ -190,7 +215,11 @@ run is complete.
 The observer keeps only bounded, session-only text around the caret: at most 96
 UTF-16 units before it and 24 after it. It never reads a whole note, never saves
 the bounded text, and never requires a Bear API token. Normal diagnostics do
-not log words. The explicitly enabled single-user private trace and opt-in live
-test harness may print that bounded context locally during development. A
-correction proceeds only when a real unmodified completion key and Bear's
-one-character text transition agree; either signal alone is insufficient.
+not log words. Anchor creation captures up to 256 UTF-16 units on each
+available side of a correction, hashes that context immediately, and retains
+only the fingerprints. Re-resolution searches only bounded neighborhoods
+around the original and length-adjusted locations. The explicitly enabled
+single-user private trace and opt-in live test harness may print bounded
+context locally during development. A correction proceeds only when a real
+unmodified completion key and Bear's one-character text transition agree;
+either signal alone is insufficient.

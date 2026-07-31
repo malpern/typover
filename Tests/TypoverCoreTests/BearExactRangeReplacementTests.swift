@@ -561,9 +561,9 @@ struct BearCorrectionRestorationTests {
   func refusesAmbiguousAnchor() throws {
     let fixture = try makeAppliedFixture()
     let duplicate =
-      String(repeating: "a", count: 39)
+      String(repeating: "a", count: 60)
       + " the "
-      + String(repeating: "z", count: 39)
+      + String(repeating: "z", count: 60)
     fixture.editor.userReplace(
       AccessibilityTextRange(
         location: fixture.editor.text.length,

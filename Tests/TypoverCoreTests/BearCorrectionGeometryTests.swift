@@ -189,6 +189,64 @@ struct BearCorrectionGeometryTests {
     #expect(fixture.reader.boundsQueryCount == 0)
   }
 
+  @Test("Production anchors distinguish sixteen repeated corrections")
+  func retainsRepeatedProductionAnchors() throws {
+    let reader = FakeBearGeometryTextClient(
+      text: "# testing\n\n",
+      visibleRange: nil,
+      boundsResult: .success(
+        AccessibilityBounds(x: 100, y: 200, width: 24, height: 18)
+      )
+    )
+    var anchors: [BearCorrectionAnchor] = []
+
+    for _ in 0..<16 {
+      let target = AccessibilityTextRange(
+        location: reader.text.length,
+        length: 3
+      )
+      reader.userReplace(
+        AccessibilityTextRange(
+          location: reader.text.length,
+          length: 0
+        ),
+        with: "teh "
+      )
+      reader.selectedRangeValue = AccessibilityTextRange(
+        location: reader.text.length,
+        length: 0
+      )
+
+      let outcome = BearExactRangeTransaction().applyOutcome(
+        BearExactRangeReplacementRequest(
+          targetRange: target,
+          expectedOriginal: "teh",
+          replacement: "the"
+        ),
+        to: reader
+      )
+
+      #expect(outcome.report.status == .applied)
+      anchors.append(try #require(outcome.correctionAnchor))
+    }
+
+    reader.visibleRangeValue = AccessibilityTextRange(
+      location: 0,
+      length: reader.text.length
+    )
+    for anchor in anchors {
+      let report = BearCorrectionGeometryTransaction().geometry(
+        for: BearCorrectionGeometryRequest(
+          anchor: anchor,
+          expectedReplacement: "the"
+        ),
+        in: reader
+      )
+      #expect(report.status == .available)
+      #expect(report.resolvedRange == anchor.correctionRange)
+    }
+  }
+
   @Test("A manually changed correction is not annotated")
   func refusesSupersededCorrection() {
     let fixture = makeFixture()
@@ -612,9 +670,12 @@ private struct GeometryFixture {
   let bounds: AccessibilityBounds
 }
 
-private final class FakeBearGeometryTextClient: BearGeometryTextClient {
+private final class FakeBearGeometryTextClient:
+  BearGeometryTextClient, BearEditableTextClient
+{
   let text: NSMutableString
   var visibleRangeValue: AccessibilityTextRange?
+  var selectedRangeValue: AccessibilityTextRange?
   var boundsResult: BearRangeBoundsQueryResult
   var boundsByRange: [AccessibilityTextRange: BearRangeBoundsQueryResult] = [:]
   private(set) var boundsQueryCount = 0
@@ -627,6 +688,10 @@ private final class FakeBearGeometryTextClient: BearGeometryTextClient {
   ) {
     self.text = NSMutableString(string: text)
     visibleRangeValue = visibleRange
+    selectedRangeValue = AccessibilityTextRange(
+      location: self.text.length,
+      length: 0
+    )
     self.boundsResult = boundsResult
   }
 
@@ -650,6 +715,40 @@ private final class FakeBearGeometryTextClient: BearGeometryTextClient {
 
   func visibleRange() -> AccessibilityTextRange? {
     visibleRangeValue
+  }
+
+  func selectedRange() -> AccessibilityTextRange? {
+    selectedRangeValue
+  }
+
+  func setSelectedRange(_ range: AccessibilityTextRange) -> AXError {
+    guard
+      range.location >= 0,
+      range.length >= 0,
+      range.location + range.length <= text.length
+    else {
+      return .illegalArgument
+    }
+    selectedRangeValue = range
+    return .success
+  }
+
+  func replaceSelectedText(with replacement: String) -> AXError {
+    guard let selectedRangeValue else {
+      return .failure
+    }
+    text.replaceCharacters(
+      in: NSRange(
+        location: selectedRangeValue.location,
+        length: selectedRangeValue.length
+      ),
+      with: replacement
+    )
+    self.selectedRangeValue = AccessibilityTextRange(
+      location: selectedRangeValue.location + replacement.utf16.count,
+      length: 0
+    )
+    return .success
   }
 
   func bounds(

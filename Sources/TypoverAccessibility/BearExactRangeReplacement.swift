@@ -171,7 +171,12 @@ protocol BearEditableTextClient: BearTextReadingClient {
 }
 
 struct BearExactRangeTransaction {
-  private let contextRadius = 40
+  // Keep enough bounded context to distinguish the complete overlay
+  // collection during ordinary repeated typing. Forty UTF-16 units made the
+  // eleventh identical "the " correction indistinguishable from its
+  // predecessors even though every correction still occupied its original
+  // range.
+  private let contextRadius = 256
 
   func apply(
     _ request: BearExactRangeReplacementRequest,

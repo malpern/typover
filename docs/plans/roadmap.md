@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-07-29
+- Updated: 2026-07-30
 - Current milestone: 1 — Bear word-correction beta
 
 ## Goal
@@ -52,6 +52,14 @@ transaction. This does not prevent reliable ordinary typing, but it places a
 real ceiling on instantaneous correction during arbitrary input bursts. Typover
 must prefer an explainable safe miss over guessing when Bear has already
 coalesced several edits.
+
+The quiet-machine rapid-typing pass corrected every completed typo: 16 actual
+`teh ` insertions produced 16 verified `the` replacements, with 117 ms average
+boundary-to-application latency. The same pass exposed a separate annotation
+collision after ten identical `the ` sequences. Production correction anchors
+now retain a larger but still bounded 256-unit neighborhood, and a deterministic
+regression keeps all 16 repeated corrections independently anchored. A final
+installed overlay-retention pass remains.
 
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
@@ -304,9 +312,10 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-Physically type the repeated-`teh` rapid sequence in the disposable Bear
-2.9.1 fixture against the deployed, allowlisted overlay-debounce build, then
-inspect the private trace. If removing per-squiggle geometry pressure still
-leaves realistic coalesced safe misses, implement the bounded idle catch-up
-pass before continuing the rest of the Phase 8 matrix. Keep sentence-level
-Bear work out of scope until the word-level exit criteria are satisfied.
+Repeat the 16-word physical `teh` sequence in the disposable Bear 2.9.1 fixture
+against the deployed 256-unit anchor build. Confirm that all completed typos
+become `the`, all 16 corrections retain independent gray squiggles, and an
+early squiggle can still Change Back only its own word. Then continue the
+remaining Phase 8 installed matrix. The quiet-machine correction result does
+not justify a catch-up pass; reconsider one only if a later realistic trace
+contains an actual coalesced safe miss.
