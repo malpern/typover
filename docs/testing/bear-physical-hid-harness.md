@@ -22,6 +22,13 @@ counts verified from Bear text and Typover logs. The UI explicitly labels the
 animation as scheduled input because a background window cannot capture the
 events delivered to Bear.
 
+Both test surfaces are deliberately Bear-branded. The AppKit monitor uses the
+installed Bear app icon and a prominent Bear wordmark. The harness also sends an
+explicit `brand: bear` presentation to the ESP32 for every phase, producing a
+coral Bear face and Bear-specific preparation, typing, verification, and result
+labels on the board. This is presentation state only; it does not change the HID
+schedule or count as correction evidence.
+
 ## Build and offline check
 
 ```bash

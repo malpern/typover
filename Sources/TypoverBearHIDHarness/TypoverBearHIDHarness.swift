@@ -33,6 +33,15 @@ private struct FixtureStatus: Codable, Equatable {
   let wifiConnected: Bool?
   let displayHealthy: Bool?
   let error: String?
+  let presentation: FixturePresentationStatus?
+}
+
+private struct FixturePresentationStatus: Codable, Equatable {
+  let phase: String?
+  let result: String?
+  let brand: String?
+  let title: String?
+  let detail: String?
 }
 
 private struct HostReadinessSample: Codable, Equatable {
@@ -215,6 +224,29 @@ private struct FixtureController {
 
   func abort() {
     _ = try? invoke(["abort"], timeout: 3)
+  }
+
+  func presentBear(
+    phase: String,
+    result: String = "none",
+    progress: Int = 0,
+    title: String,
+    detail: String,
+    next: String = ""
+  ) throws {
+    var arguments = [
+      "present",
+      "--phase", phase,
+      "--result", result,
+      "--brand", "bear",
+      "--progress", String(progress),
+      "--title", title,
+      "--detail", detail,
+    ]
+    if !next.isEmpty {
+      arguments += ["--next", next]
+    }
+    _ = try invoke(arguments)
   }
 }
 
@@ -505,6 +537,12 @@ private enum TypoverBearHIDHarness {
         "The fixture is reachable, but its USB keyboard is not mounted."
       )
     }
+    try fixture.presentBear(
+      phase: "next",
+      title: "BEAR TYPOVER TEST",
+      detail: "FOCUS THE BEAR NOTE",
+      next: "4 TIMING CASES"
+    )
 
     print("Waiting for three quiet host samples (>=60% CPU idle, no Swift compiler)…")
     let readiness = try waitForQuietHost(
@@ -608,6 +646,12 @@ private enum TypoverBearHIDHarness {
     let runID = String(
       "\(shortMatrixID)-i\(testCase.intervalMilliseconds)".prefix(48)
     )
+    try fixture.presentBear(
+      phase: "preparing",
+      progress: max(0, (testCase.ordinal - 1) * 1000 / caseCount),
+      title: "BEAR CASE \(testCase.ordinal) OF \(caseCount)",
+      detail: "\(testCase.intervalMilliseconds) MS PER KEY"
+    )
     let caseDirectory = outputDirectory.appendingPathComponent(
       "case-\(testCase.ordinal)"
     )
@@ -642,6 +686,13 @@ private enum TypoverBearHIDHarness {
         caseCount: caseCount,
         textURL: textURL
       )
+      try fixture.presentBear(
+        phase: "countdown",
+        progress: max(0, (testCase.ordinal - 1) * 1000 / caseCount),
+        title: "BEAR READY",
+        detail: "\(testCase.words) X TEH",
+        next: "TYPING STARTS SOON"
+      )
       try requireSafeBearCaret(expectedCaret: baseline.caretLocation)
     } catch {
       fixture.abort()
@@ -653,6 +704,12 @@ private enum TypoverBearHIDHarness {
       throw error
     }
     _ = try fixture.invoke(testCase.fixtureArguments(command: "start", runID: runID))
+    try? fixture.presentBear(
+      phase: "testing",
+      progress: max(1, testCase.ordinal * 800 / caseCount),
+      title: "TYPING IN BEAR",
+      detail: "CASE \(testCase.ordinal) OF \(caseCount)"
+    )
 
     let typingDeadline = Date().addingTimeInterval(
       Double(
@@ -673,6 +730,12 @@ private enum TypoverBearHIDHarness {
           message: "Bear lost focus; the fixture was aborted and no result is credited.",
           bearFocused: false
         )
+        try? fixture.presentBear(
+          phase: "result",
+          result: "fail",
+          title: "BEAR FOCUS LOST",
+          detail: "RUN ABORTED SAFELY"
+        )
         break
       }
       RunLoop.current.run(until: Date().addingTimeInterval(0.025))
@@ -690,6 +753,12 @@ private enum TypoverBearHIDHarness {
         phase: "analyzing",
         message: "Comparing exact Bear text with Typover correction logs…",
         bearFocused: true
+      )
+      try? fixture.presentBear(
+        phase: "observing",
+        progress: max(1, testCase.ordinal * 900 / caseCount),
+        title: "CHECKING BEAR",
+        detail: "VERIFYING TYPOVER"
       )
       RunLoop.current.run(
         until: Date().addingTimeInterval(
@@ -751,6 +820,28 @@ private enum TypoverBearHIDHarness {
       message: monitorMessage,
       bearFocused: focusRemainedValid
     )
+    let fixtureResult = switch evidenceClassification {
+    case "passed": "pass"
+    case "safe-misses-observed": "inconclusive"
+    default: "fail"
+    }
+    let fixtureTitle = switch evidenceClassification {
+    case "passed": "BEAR TEST PASSED"
+    case "safe-misses-observed": "BEAR NEEDS REVIEW"
+    default: "BEAR TEST INVALID"
+    }
+    try? fixture.presentBear(
+      phase: "result",
+      result: fixtureResult,
+      progress: evidenceClassification == "passed"
+        ? 1000
+        : max(1, testCase.ordinal * 900 / caseCount),
+      title: fixtureTitle,
+      detail: "\(analysis.correctedWords) FIXED  \(analysis.missedWords) MISSED"
+    )
+    if let brandedStatus = try? fixture.status(timeout: 2) {
+      finalStatus = brandedStatus
+    }
     return CaseArtifact(
       testCase: testCase,
       runID: runID,
