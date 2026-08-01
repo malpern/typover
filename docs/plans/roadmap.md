@@ -235,8 +235,11 @@ ordinary app or Accessibility lifecycle changes.
 - [x] Provide a privacy summary and a content-free diagnostic export. The
   optional local trace now has explicit consent, bounded retention, export,
   delete, and a separately gated bounded-writing mode.
-- Produce a signed beta build and a repeatable clean-machine install and
-  permission test.
+- [ ] Produce a signed beta build and a repeatable clean-machine install and
+  permission test. The Developer ID/notarization script and clean-machine
+  checklist are implemented in
+  [Beta distribution](../testing/beta-distribution.md); building and validating
+  the notarized candidate remain.
 
 ### Exit criteria
 
