@@ -81,6 +81,17 @@ private struct HostLoadSample: Codable, Equatable {
   let windowServer: ProcessLoadSample
 }
 
+private extension HostLoadSample {
+  var isComplete: Bool {
+    cpuIdlePercent != nil
+      && [typover, bear, windowServer].allSatisfy {
+        $0.cpuPercent != nil
+          && $0.residentMemoryKiB != nil
+          && $0.powerScore != nil
+      }
+  }
+}
+
 private struct CaseArtifact: Codable {
   let testCase: BearHIDTestCase
   let runID: String
@@ -100,6 +111,7 @@ private struct CaseArtifact: Codable {
   let typoverLog: [String]
   let readinessSamples: [HostReadinessSample]
   let loadSamples: [HostLoadSample]
+  let loadEvidenceComplete: Bool
 }
 
 private struct MatrixArtifact: Codable {
@@ -226,9 +238,14 @@ private final class AwakeSession {
     guard process == nil else { return }
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
-    process.arguments = [
-      "-dimsu", "-w", String(ProcessInfo.processInfo.processIdentifier),
-    ]
+    // `caffeinate -u` defaults to a five-second UserIsActive assertion when
+    // no timeout is supplied. The quiet-admission samples take longer than
+    // that, so a policy-driven screen lock could still interrupt the run.
+    // Keep every assertion alive for at most one hour, while `-w` releases
+    // them sooner as soon as this harness exits.
+    process.arguments = HostWakeAssertionPlan.caffeinateArguments(
+      parentProcessIdentifier: ProcessInfo.processInfo.processIdentifier
+    )
     process.standardOutput = FileHandle.nullDevice
     process.standardError = FileHandle.nullDevice
     try process.run()
@@ -318,31 +335,21 @@ private final class HostLoadSampler: @unchecked Sendable {
           ? String(fields[0])
           : nil
       } ?? []
-    var topArguments = [
-      "-l", "2", "-s", "0.2",
-      "-stats", "pid,cpu,mem,power,command",
-    ]
-    for processIdentifier in processIdentifiers {
-      topArguments += ["-pid", processIdentifier]
-    }
+    let topArguments = HostLoadSamplingPlan.topArguments(
+      processIdentifiers: processIdentifiers
+    )
     let top = try? runner.run(
       "/usr/bin/top",
       topArguments,
       timeout: 5
     )
-    let idle = top.flatMap { result -> Double? in
-      guard
-        let line = result.output.split(separator: "\n").first(where: {
-          $0.contains("CPU usage:")
-        }),
-        let range = line.range(
-          of: #"([0-9.]+)% idle"#,
-          options: .regularExpression
-        )
-      else { return nil }
-      return Double(line[range].dropLast("% idle".count))
+    let idle = top.flatMap {
+      HostLoadSamplingPlan.cpuIdlePercent(from: $0.output)
     }
-    for (name, powerScore) in parsePowerScores(top?.output ?? "") {
+    for (name, powerScore) in HostLoadSamplingPlan.powerScores(
+      from: top?.output ?? "",
+      processNames: ["Typover", "Bear", "WindowServer"]
+    ) {
       let existing = processSamples[name] ?? emptyProcessSample
       processSamples[name] = ProcessLoadSample(
         cpuPercent: existing.cpuPercent,
@@ -385,24 +392,6 @@ private final class HostLoadSampler: @unchecked Sendable {
         residentMemoryKiB: Int(fields[2]),
         powerScore: nil
       )
-    }
-    return result
-  }
-
-  private static func parsePowerScores(_ topOutput: String) -> [String: Double] {
-    var result: [String: Double] = [:]
-    for line in topOutput.split(separator: "\n") {
-      let fields = line.split(
-        maxSplits: 4,
-        omittingEmptySubsequences: true,
-        whereSeparator: { $0.isWhitespace }
-      )
-      guard fields.count == 5 else { continue }
-      let name = String(fields[4])
-      guard ["Typover", "Bear", "WindowServer"].contains(name),
-        let power = Double(fields[3])
-      else { continue }
-      result[name] = power
     }
     return result
   }
@@ -710,6 +699,7 @@ private struct Options {
   var words = 20
   var quietTimeoutSeconds = 600
   var loadProfile = BearHIDLoadProfile.quiet
+  var scenario = BearHIDTestScenario.repeatedWords
   var exclusiveDesktopConfirmed = false
   var outputDirectory: String?
 
@@ -730,7 +720,7 @@ private struct Options {
         index += 1
       case "--fixture-client", "--fixture-host", "--jig-tool", "--jig-client",
         "--intervals", "--words", "--quiet-timeout-seconds", "--output-directory",
-        "--load-profile":
+        "--load-profile", "--scenario":
         guard index + 1 < arguments.count else {
           throw HarnessError.usage("Missing value for \(argument).")
         }
@@ -764,6 +754,13 @@ private struct Options {
             )
           }
           options.loadProfile = profile
+        case "--scenario":
+          guard let scenario = BearHIDTestScenario(rawValue: value) else {
+            throw HarnessError.usage(
+              "Scenario must be repeated-words or punctuation."
+            )
+          }
+          options.scenario = scenario
         default: break
         }
         index += 2
@@ -784,6 +781,8 @@ private struct Options {
 
     Load profiles: quiet (default), cpu, window-server, accessibility, combined.
     Every contention run first requires the same three-sample quiet baseline.
+
+    Scenarios: repeated-words (default) or punctuation.
 
     Run requires --exclusive-desktop-confirmed because the ESP32 is a real
     keyboard and can only type into the active desktop.
@@ -810,6 +809,7 @@ private enum TypoverBearHIDHarness {
     do {
       let options = try Options.parse(Array(CommandLine.arguments.dropFirst()))
       let plan = try BearHIDTestPlan(
+        scenario: options.scenario,
         intervalsMilliseconds: options.intervals,
         wordsPerCase: options.words
       )
@@ -980,7 +980,7 @@ private enum TypoverBearHIDHarness {
       phase: "next",
       title: "BEAR TYPOVER TEST",
       detail: "FOCUS THE BEAR NOTE",
-      next: "4 TIMING CASES"
+      next: "\(plan.cases.count) TIMING CASES"
     )
 
     print("Waiting for three quiet host samples (>=60% CPU idle, no Swift compiler)…")
@@ -1024,7 +1024,8 @@ private enum TypoverBearHIDHarness {
         fixture: fixture,
         jig: jig,
         caseCount: plan.cases.count,
-        readiness: readiness
+        readiness: readiness,
+        requiresLoadEvidence: options.loadProfile != .quiet
       )
       caseArtifacts.append(artifact)
       try writeJSON(
@@ -1061,7 +1062,7 @@ private enum TypoverBearHIDHarness {
     }
 
     let summary = MatrixArtifact(
-      schemaVersion: 2,
+      schemaVersion: 3,
       runID: matrixRunID,
       createdAt: Date(),
       host: fixture.host,
@@ -1084,7 +1085,8 @@ private enum TypoverBearHIDHarness {
     fixture: FixtureController,
     jig: JigController,
     caseCount: Int,
-    readiness: [HostReadinessSample]
+    readiness: [HostReadinessSample],
+    requiresLoadEvidence: Bool
   ) throws -> CaseArtifact {
     let loadSampler = HostLoadSampler()
     loadSampler.start()
@@ -1262,10 +1264,15 @@ private enum TypoverBearHIDHarness {
     )
     let logs = typoverLog(from: startedAt, to: finishedAt)
     let telemetry = summarize(logs: logs)
+    let loadSamples = loadSampler.stop()
+    samplerStopped = true
+    let loadEvidenceComplete = !requiresLoadEvidence
+      || (!loadSamples.isEmpty && loadSamples.allSatisfy(\.isComplete))
     let evidenceClassification: String
     if !focusRemainedValid || finalStatus?.state != "complete"
       || finalStatus?.runId != runID
       || telemetry.applied != analysis.correctedWords
+      || !loadEvidenceComplete
     {
       evidenceClassification = "invalid-evidence"
     } else {
@@ -1317,8 +1324,6 @@ private enum TypoverBearHIDHarness {
     if let brandedStatus = try? fixture.status(timeout: 2) {
       finalStatus = brandedStatus
     }
-    let loadSamples = loadSampler.stop()
-    samplerStopped = true
     return CaseArtifact(
       testCase: testCase,
       runID: runID,
@@ -1337,7 +1342,8 @@ private enum TypoverBearHIDHarness {
       telemetry: telemetry,
       typoverLog: logs,
       readinessSamples: readiness,
-      loadSamples: loadSamples
+      loadSamples: loadSamples,
+      loadEvidenceComplete: loadEvidenceComplete
     )
   }
 

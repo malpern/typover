@@ -1,6 +1,7 @@
 # Beta distribution
 
-- Status: Developer ID build path implemented; clean-machine gate pending
+- Status: Developer ID build and clean-bundle onboarding check pass;
+  clean-machine permission gate pending
 - Updated: 2026-08-01
 
 Typover's beta artifact is a release-built `.app` signed with the Developer ID
@@ -15,6 +16,14 @@ Scripts/build-beta-app.sh 0.1
 
 This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
 and does not contact Apple.
+
+The 2026-08-01 local beta artifact was signed successfully with the configured
+Developer ID identity. A fresh temporary bundle identifier simulated a clean
+preferences domain: the onboarding sheet appeared, both permissions showed
+`Not yet allowed`, and Continue opened the controlled editor. This verifies the
+first-launch presentation without changing the installed app's existing TCC
+grants. It is not a substitute for the clean-machine permission and Gatekeeper
+gate below.
 
 ## Notarized candidate
 

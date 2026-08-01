@@ -72,14 +72,29 @@ Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile acc
 Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile combined
 ```
 
+The focused punctuation row uses the same physical and exact-text contract:
+
+```bash
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --scenario punctuation --intervals 100 --words 5
+```
+
+It cycles through `.`, `?`, `!`, `;`, and `:` completion boundaries, preserving
+the punctuation and following spaces while distinguishing each `teh` safe miss
+from an exact `the` correction. This closes the gap between deterministic
+punctuation coverage and a repeatable installed Bear run once the desktop is
+unlocked.
+
 The runner waits for three host samples with at least 60% CPU idle and no
 active Swift compiler. It refuses to start unless Typover is running and the
 fixture reports a mounted USB keyboard. Before the quiet-host wait it opens the
 Jig monitor and shows a focus gate. After the host becomes quiet, the harness
 activates Bear itself and waits up to two minutes for a focused collapsed caret
-at the end of the editor. It holds an explicit macOS display/system wake
-assertion until the run ends, and every generated load source is terminated on
-normal completion or failure. It rechecks the caret after load, arm, and monitor
+at the end of the editor. It holds explicit macOS display, system, and
+one-hour-bounded user-active wake assertions until the run ends, and every
+generated load source is terminated on normal completion or failure. The
+explicit timeout matters because macOS gives an otherwise unbounded
+`caffeinate -u` assertion only five seconds. It rechecks the caret after load, arm, and monitor
 setup, watches the frontmost application throughout the delayed start and HID
 burst, and aborts the fixture if Bear loses focus. The monitor remains visible
 on the final verified result.
@@ -115,9 +130,24 @@ The matrix separates three layers that manual typing mixes together:
 3. the Typover trace explains applied corrections and safe skips such as
    `contextChanged`.
 
-The first quiet run is a baseline. Schema version 2 adds controlled CPU,
-WindowServer, Accessibility, and combined contention using the same exact-text
-and fail-closed evidence contract.
+The first quiet run is a baseline. Schema version 3 adds named scenarios and
+requires complete CPU-idle, CPU, resident-memory, and power evidence for every
+controlled CPU, WindowServer, Accessibility, or combined contention case. The
+same exact-text and fail-closed evidence contract still applies.
+
+The first two CPU attempts were safely rejected after `loginwindow` became
+frontmost. They exposed an expired user-active assertion in the harness, not a
+Typover correction result. The wake contract is fixed and covered; fresh
+unlocked controlled-load evidence remains pending. See
+[HID harness wake assertion timeout](../bugs/2026-08-01-hid-harness-user-active-timeout.md).
+
+The same rejected artifact revealed that macOS 27 refuses fractional `top`
+sample delays. The sampler now uses a supported one-second interval and tests
+the complete argument and parser contract. A valid load artifact must contain
+CPU-idle, CPU, resident-memory, and power fields for Typover, Bear, and
+WindowServer in every sample; a contention case with missing resource evidence
+is now classified `invalid-evidence`. See
+[HID harness top delay](../bugs/2026-08-01-hid-harness-top-delay.md).
 
 ## Quiet baseline result: 2026-07-31
 

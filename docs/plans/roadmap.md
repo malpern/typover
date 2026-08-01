@@ -162,9 +162,22 @@ Back action, and alternatives.
   character. The harness now implements bounded `cpu`, `window-server`,
   `accessibility`, and `combined` profiles after the same quiet admission gate,
   records Typover/Bear/WindowServer CPU and resident memory plus per-correction
-  latency, resolves the fixture's mDNS name once, and holds a macOS wake
-  assertion for the run. The first CPU attempt was rejected because the session
-  locked before the wake assertion existed; no product result was credited.
+  latency, resolves the fixture's mDNS name once, and holds macOS display,
+  system, and user-active wake assertions for the run. Two CPU attempts were
+  rejected because the five-second default lifetime of `caffeinate -u` expired
+  during quiet admission; no product result was credited. The harness now uses
+  an explicit one-hour bound tied to its own PID, with focused coverage and a
+  direct assertion check. The rejected artifact also exposed an unsupported
+  fractional `top` delay; sampling now uses a macOS 27-compatible one-second
+  interval and has focused argument and parser coverage.
+  A dedicated physical punctuation scenario now cycles through period,
+  question mark, exclamation mark, semicolon, and colon while exact-verifying
+  each corrected or safely missed segment; its installed run remains pending.
+  The app's main editor scene now has a stable `main` restoration identity and
+  presented launch behavior so root-view changes cannot strand future installs
+  on stale synthesized SwiftUI restoration identifiers. A clean-bundle
+  onboarding pass succeeded; the final singleton-window visual check remains
+  pending on the unlocked desktop.
   Fresh unlocked installed passes remain. A reported rainbow wait cursor while opening an early
   squiggle exposed collection-scaled main-thread churn: every overlay fallback
   refresh synchronously queried LaunchServices and reissued unchanged

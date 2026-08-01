@@ -1,6 +1,12 @@
 import Foundation
 
+public enum BearHIDTestScenario: String, Codable, CaseIterable, Sendable {
+  case repeatedWords = "repeated-words"
+  case punctuation
+}
+
 public struct BearHIDTestPlan: Codable, Equatable, Sendable {
+  public let scenario: BearHIDTestScenario
   public let intervalsMilliseconds: [Int]
   public let wordsPerCase: Int
   public let holdMilliseconds: Int
@@ -8,6 +14,7 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
   public let settleMilliseconds: Int
 
   public init(
+    scenario: BearHIDTestScenario = .repeatedWords,
     intervalsMilliseconds: [Int] = [160, 100, 60, 40],
     wordsPerCase: Int = 20,
     holdMilliseconds: Int = 12,
@@ -35,6 +42,7 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
       throw BearHIDTestPlanError.invalidSettleDelay
     }
 
+    self.scenario = scenario
     self.intervalsMilliseconds = intervalsMilliseconds
     self.wordsPerCase = wordsPerCase
     self.holdMilliseconds = holdMilliseconds
@@ -45,6 +53,7 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
   public var cases: [BearHIDTestCase] {
     intervalsMilliseconds.enumerated().map { index, interval in
       BearHIDTestCase(
+        scenario: scenario,
         ordinal: index + 1,
         intervalMilliseconds: interval,
         words: wordsPerCase,
@@ -65,6 +74,7 @@ public enum BearHIDTestPlanError: Error, Equatable, Sendable {
 }
 
 public struct BearHIDTestCase: Codable, Equatable, Sendable {
+  public let scenario: BearHIDTestScenario
   public let ordinal: Int
   public let intervalMilliseconds: Int
   public let words: Int
@@ -73,11 +83,22 @@ public struct BearHIDTestCase: Codable, Equatable, Sendable {
   public let settleMilliseconds: Int
 
   public var typedText: String {
-    String(repeating: "teh ", count: words) + "\n"
+    correctionSegments.map(\.typed).joined() + "\n"
   }
 
   public var fullyCorrectedText: String {
-    String(repeating: "the ", count: words) + "\n"
+    correctionSegments.map(\.corrected).joined() + "\n"
+  }
+
+  public var correctionSegments: [(typed: String, corrected: String)] {
+    switch scenario {
+    case .repeatedWords:
+      Array(repeating: (typed: "teh ", corrected: "the "), count: words)
+    case .punctuation:
+      [". ", "? ", "! ", "; ", ": "].map { boundary in
+        (typed: "teh\(boundary)", corrected: "the\(boundary)")
+      }.cycled(prefix: words)
+    }
   }
 
   public var expectedUTF16Length: Int {
@@ -156,14 +177,28 @@ public struct BearHIDCaseAnalysis: Codable, Equatable, Sendable {
     var missedWords = 0
     var unexpectedChunks = 0
     let units = Array(body.utf16)
-    for offset in stride(from: 0, to: units.count, by: 4) {
-      let end = min(offset + 4, units.count)
-      let chunk = String(decoding: units[offset ..< end], as: UTF16.self)
-      switch chunk {
-      case "the ": correctedWords += 1
-      case "teh ": missedWords += 1
-      default: unexpectedChunks += 1
+    var offset = 0
+    for segment in testCase.correctionSegments {
+      let length = segment.typed.utf16.count
+      guard offset + length <= units.count else {
+        unexpectedChunks += 1
+        break
       }
+      let chunk = String(
+        decoding: units[offset ..< offset + length],
+        as: UTF16.self
+      )
+      if chunk == segment.corrected {
+        correctedWords += 1
+      } else if chunk == segment.typed {
+        missedWords += 1
+      } else {
+        unexpectedChunks += 1
+      }
+      offset += length
+    }
+    if offset != units.count {
+      unexpectedChunks += 1
     }
     let trailingNewline = actualText.last == "\n"
     let classification: BearHIDCaseClassification
@@ -184,6 +219,13 @@ public struct BearHIDCaseAnalysis: Codable, Equatable, Sendable {
     self.unexpectedChunks = unexpectedChunks
     hadExpectedTrailingNewline = trailingNewline
     self.actualText = actualText
+  }
+}
+
+private extension Array {
+  func cycled(prefix count: Int) -> [Element] {
+    guard !isEmpty, count > 0 else { return [] }
+    return (0 ..< count).map { self[$0 % self.count] }
   }
 }
 

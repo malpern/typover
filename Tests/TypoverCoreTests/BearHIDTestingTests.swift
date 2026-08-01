@@ -17,6 +17,50 @@ struct BearHIDTestingTests {
     #expect(BearHIDLoadProfile.combined.stressesAccessibility)
   }
 
+  @Test("Wake assertion keeps user activity alive through quiet admission")
+  func wakeAssertionPlan() {
+    let arguments = HostWakeAssertionPlan.caffeinateArguments(
+      parentProcessIdentifier: 42
+    )
+
+    #expect(arguments == ["-dimsu", "-t", "3600", "-w", "42"])
+    #expect(HostWakeAssertionPlan.maximumDurationSeconds > 5)
+  }
+
+  @Test("Host load sampling uses a macOS-compatible top interval")
+  func hostLoadSamplingPlan() {
+    let arguments = HostLoadSamplingPlan.topArguments(
+      processIdentifiers: ["42", "84"]
+    )
+
+    #expect(arguments == [
+      "-l", "2", "-s", "1",
+      "-stats", "pid,cpu,mem,power,command",
+      "-pid", "42", "-pid", "84",
+    ])
+  }
+
+  @Test("Host load sampling parses the final CPU and process power rows")
+  func hostLoadSamplingParsers() {
+    let output = """
+      CPU usage: 10.0% user, 5.0% sys, 85.0% idle
+      PID %CPU MEM POWER COMMAND
+      42 1.0 50M 1.5 Typover
+      CPU usage: 20.0% user, 5.0% sys, 75.0% idle
+      PID %CPU MEM POWER COMMAND
+      84 2.0 60M 2.5 Bear
+      90 3.0 70M 4.5 WindowServer
+      """
+
+    #expect(HostLoadSamplingPlan.cpuIdlePercent(from: output) == 75)
+    #expect(
+      HostLoadSamplingPlan.powerScores(
+        from: output,
+        processNames: ["Typover", "Bear", "WindowServer"]
+      ) == ["Typover": 1.5, "Bear": 2.5, "WindowServer": 4.5]
+    )
+  }
+
   @Test("Default matrix spans realistic through burst typing")
   func defaultMatrix() throws {
     let plan = try BearHIDTestPlan()
@@ -25,6 +69,29 @@ struct BearHIDTestingTests {
     #expect(plan.cases.count == 4)
     #expect(plan.cases.allSatisfy { $0.words == 20 })
     #expect(plan.cases.allSatisfy { $0.typedText.utf16.count == 81 })
+  }
+
+  @Test("Punctuation scenario cycles through completion boundaries")
+  func punctuationScenario() throws {
+    let testCase = try #require(
+      BearHIDTestPlan(
+        scenario: .punctuation,
+        intervalsMilliseconds: [100],
+        wordsPerCase: 5
+      ).cases.first
+    )
+
+    #expect(testCase.typedText == "teh. teh? teh! teh; teh: \n")
+    #expect(testCase.fullyCorrectedText == "the. the? the! the; the: \n")
+
+    let analysis = BearHIDCaseAnalysis(
+      testCase: testCase,
+      actualText: "the. teh? the! teh; the: \n"
+    )
+    #expect(analysis.classification == .safeMissesObserved)
+    #expect(analysis.correctedWords == 3)
+    #expect(analysis.missedWords == 2)
+    #expect(analysis.unexpectedChunks == 0)
   }
 
   @Test("Plan refuses timing the fixture cannot deliver")

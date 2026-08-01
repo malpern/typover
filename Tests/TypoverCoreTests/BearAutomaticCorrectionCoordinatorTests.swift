@@ -561,15 +561,14 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(
       await waitUntil {
         fixture.applicator.requests.count == 1
+          && fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied
       }
     )
     #expect(
       fixture.applicator.requests.map(\.range) == [
         AccessibilityTextRange(location: 0, length: 3)
       ])
-    #expect(
-      fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied
-    )
+    #expect(fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied)
   }
 
   @Test("Later Bear notifications do not postpone an armed boundary")

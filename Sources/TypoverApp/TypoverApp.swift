@@ -32,7 +32,7 @@ struct TypoverApp: App {
   }
 
   var body: some Scene {
-    WindowGroup {
+    Window("Typover", id: "main") {
       ContentView(
         behaviorSettings: behaviorSettings,
         learningStore: learningStore
@@ -45,6 +45,7 @@ struct TypoverApp: App {
       }
     }
     .defaultSize(width: 760, height: 540)
+    .defaultLaunchBehavior(.presented)
     .windowResizability(.contentMinSize)
     .commands {
       AboutCommands()
