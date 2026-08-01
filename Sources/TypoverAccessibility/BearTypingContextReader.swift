@@ -34,15 +34,15 @@ public enum BearTypingContextReadResult: Equatable, Sendable {
   case contextUnavailable
 }
 
-@MainActor
-public protocol BearTypingContextReading: AnyObject {
+public protocol BearTypingContextReading: AnyObject, Sendable {
   func read() -> BearTypingContextReadResult
 }
 
 /// Reads only a bounded neighborhood around the caret in Bear's focused
 /// editor. The returned strings are transient and are never persisted.
-@MainActor
-public final class BearTypingContextReader: BearTypingContextReading {
+public final class BearTypingContextReader:
+  BearTypingContextReading, @unchecked Sendable
+{
   private let leadingLimit: Int
   private let trailingLimit: Int
 
@@ -66,8 +66,7 @@ public final class BearTypingContextReader: BearTypingContextReading {
       return .bearNotRunning
     }
     guard
-      NSWorkspace.shared.frontmostApplication?.processIdentifier
-        == runningApplication.processIdentifier
+      runningApplication.isActive
     else {
       return .bearNotFrontmost
     }
@@ -75,6 +74,7 @@ public final class BearTypingContextReader: BearTypingContextReading {
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,

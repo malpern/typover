@@ -9,6 +9,23 @@ import TypoverCore
 
 @MainActor
 struct LearningSettingsViewTests {
+  @Test("Permission model reports the current checker snapshot")
+  func permissionModelRefreshes() {
+    let model = TypoverPermissionModel(
+      checker: TestPermissionChecker(
+        value: TypoverPermissionSnapshot(
+          accessibilityAllowed: true,
+          inputMonitoringAllowed: false
+        )
+      )
+    )
+
+    model.refresh()
+
+    #expect(model.snapshot.accessibilityAllowed)
+    #expect(model.snapshot.inputMonitoringAllowed == false)
+  }
+
   @Test("A new Bear preview supersedes only an active interaction")
   func previewRequestActions() {
     #expect(BearOverlayPreviewStatus.idle.previewRequestAction == .start)
@@ -198,4 +215,10 @@ struct LearningSettingsViewTests {
     image.addRepresentation(bitmap)
     return image
   }
+}
+
+private struct TestPermissionChecker: TypoverPermissionChecking {
+  let value: TypoverPermissionSnapshot
+
+  func snapshot() -> TypoverPermissionSnapshot { value }
 }

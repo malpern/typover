@@ -229,12 +229,16 @@ struct BearAnnotationOverlayTests {
   @Test("Panels stay nonactivating with a narrow accessible hit target")
   func panelsAreNonactivating() throws {
     let presenter = AppKitBearAnnotationPresenter()
+    var selectedAccessibilityAction: BearAnnotationAction?
+    let interaction = overlayInteraction { action in
+      selectedAccessibilityAction = action
+    }
     presenter.show(
       placements: [
         AccessibilityBounds(x: 100, y: 100, width: 40, height: 4),
         AccessibilityBounds(x: 200, y: 200, width: 30, height: 4),
       ],
-      interaction: overlayInteraction()
+      interaction: interaction
     )
 
     #expect(presenter.panels.count == 2)
@@ -272,13 +276,110 @@ struct BearAnnotationOverlayTests {
     )
     #expect(
       presenter.panels[0].contentView?.accessibilityHelp()
-        == "Opens the menu for reverting this correction or choosing another suggestion."
+        == "Opens correction options. Accessibility actions can revert the correction or choose another suggestion without moving focus."
     )
+    let customActions = try #require(
+      presenter.panels[0].contentView?.accessibilityCustomActions()
+    )
+    #expect(customActions.map(\.name) == ["Revert to “teh”", "ten", "tech"])
+    #expect(customActions[0].handler?() == true)
+    #expect(selectedAccessibilityAction == .changeBack)
+    let previousCustomAction = customActions[0]
 
+    let panelIdentities = presenter.panels.map(ObjectIdentifier.init)
+    let panelFrames = presenter.panels.map(\.frame)
+    presenter.show(
+      placements: [
+        AccessibilityBounds(x: 100, y: 100, width: 40, height: 4),
+        AccessibilityBounds(x: 200, y: 200, width: 30, height: 4),
+      ],
+      interaction: overlayInteraction()
+    )
+    #expect(presenter.panels.map(ObjectIdentifier.init) == panelIdentities)
+    #expect(presenter.panels.map(\.frame) == panelFrames)
+    #expect(presenter.panels.allSatisfy { $0.isVisible })
+    #expect(previousCustomAction.handler?() == false)
+
+    presenter.hide()
     presenter.hide()
     for panel in presenter.panels {
       #expect(!panel.isVisible)
     }
+  }
+
+  @MainActor
+  @Test("The global shortcut center dispatches only to its newest owner")
+  func globalShortcutCenterArbitratesOwners() throws {
+    let backend = StubBearAnnotationHotKeyBackend()
+    let center = BearAnnotationShortcutCenter(backend: backend)
+    var received: [String] = []
+
+    let first = try #require(
+      center.register { received.append("first") }
+    )
+    let second = try #require(
+      center.register { received.append("second") }
+    )
+
+    #expect(backend.startCount == 1)
+    backend.fire()
+    #expect(received == ["second"])
+
+    center.unregister(second)
+    backend.fire()
+    #expect(received == ["second", "first"])
+    #expect(backend.stopCount == 0)
+
+    center.unregister(first)
+    #expect(backend.stopCount == 1)
+  }
+
+  @Test("The global Change Back chord requires an exact nonrepeating shortcut")
+  func globalShortcutChordMatching() {
+    let required: NSEvent.ModifierFlags = [.control, .option, .command]
+
+    #expect(
+      BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode,
+        modifiers: required,
+        isRepeat: false
+      )
+    )
+    #expect(
+      BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode,
+        modifiers: required.union(.capsLock),
+        isRepeat: false
+      )
+    )
+    #expect(
+      !BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode,
+        modifiers: required,
+        isRepeat: true
+      )
+    )
+    #expect(
+      !BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode,
+        modifiers: required.union(.shift),
+        isRepeat: false
+      )
+    )
+    #expect(
+      !BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode,
+        modifiers: [.control, .command],
+        isRepeat: false
+      )
+    )
+    #expect(
+      !BearAnnotationShortcutChord.matches(
+        keyCode: BearAnnotationShortcutChord.keyCode - 1,
+        modifiers: required,
+        isRepeat: false
+      )
+    )
   }
 
   @MainActor
@@ -402,6 +503,123 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("The global shortcut changes back only the newest correction")
+  func globalShortcutChangesBackNewestCorrection() async {
+    let service = StubBearCorrectionService()
+    let shortcutRegistrar = StubBearAnnotationShortcutRegistrar()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4,
+      shortcutRegistrar: shortcutRegistrar
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    let firstResolution = BearOverlayResolutionSpy()
+    let secondResolution = BearOverlayResolutionSpy()
+
+    collection.trackWithResolution(
+      overlayApplication(),
+      onResolution: { firstResolution.value = $0 }
+    )
+    collection.trackWithResolution(
+      overlayApplication(replacement: "receive"),
+      onResolution: { secondResolution.value = $0 }
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 2
+          && presenters.allSatisfy(\.isVisible)
+          && shortcutRegistrar.registerCount == 1
+      }
+    )
+
+    shortcutRegistrar.fire()
+
+    #expect(
+      await waitForBearOverlay {
+        collection.trackedCorrectionCount == 1
+          && presenters[0].isVisible
+          && !presenters[1].isVisible
+      }
+    )
+    #expect(firstResolution.value == nil)
+    #expect(secondResolution.value == .changedBack)
+    #expect(shortcutRegistrar.unregisterCount == 0)
+
+    collection.stop()
+    #expect(shortcutRegistrar.unregisterCount == 1)
+  }
+
+  @MainActor
+  @Test("The global shortcut preserves user recency across reverse-safe applications")
+  func globalShortcutUsesUserRecencyAcrossReverseApplicationOrder() async {
+    let service = StubBearCorrectionService()
+    let shortcutRegistrar = StubBearAnnotationShortcutRegistrar()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4,
+      shortcutRegistrar: shortcutRegistrar
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    let rightmostResolution = BearOverlayResolutionSpy()
+    let middleResolution = BearOverlayResolutionSpy()
+    let leftmostResolution = BearOverlayResolutionSpy()
+
+    // Exact range writes are applied right-to-left so earlier writes cannot
+    // shift later ranges. User recency must remain independent of that order.
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 12),
+      userRecency: Date(timeIntervalSinceReferenceDate: 3),
+      onResolution: { rightmostResolution.value = $0 }
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 8),
+      userRecency: Date(timeIntervalSinceReferenceDate: 2),
+      onResolution: { middleResolution.value = $0 }
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 4),
+      userRecency: Date(timeIntervalSinceReferenceDate: 1),
+      onResolution: { leftmostResolution.value = $0 }
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3
+          && presenters.allSatisfy(\.isVisible)
+          && shortcutRegistrar.registerCount == 1
+      }
+    )
+
+    shortcutRegistrar.fire()
+
+    #expect(
+      await waitForBearOverlay {
+        collection.trackedCorrectionCount == 2
+          && !presenters[0].isVisible
+          && presenters[1].isVisible
+          && presenters[2].isVisible
+      }
+    )
+    #expect(rightmostResolution.value == .changedBack)
+    #expect(middleResolution.value == nil)
+    #expect(leftmostResolution.value == nil)
+    collection.stop()
+  }
+
+  @MainActor
   @Test("Changing back correction five preserves twenty repeated overlays")
   func changeBackPreservesRepeatedCorrectionCollection() async {
     let service = CoordinatedEditBearCorrectionService(
@@ -448,6 +666,154 @@ struct BearAnnotationOverlayTests {
         == Set((0..<21).filter { $0 != 4 }.map { $0 * 4 })
     )
     #expect(service.maximumConcurrentReanchors == 1)
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("Verified automatic edits are serialized without dropping earlier edits")
+  func serializesVerifiedAutomaticEdits() async {
+    let service = CoordinatedEditBearCorrectionService(
+      reanchorDelay: 0.002
+    )
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    for index in 0..<3 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3 && presenters.allSatisfy(\.isVisible)
+      }
+    )
+
+    collection.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: AccessibilityTextRange(location: 80, length: 1),
+        replacementLength: 1
+      )
+    )
+    collection.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: AccessibilityTextRange(location: 90, length: 1),
+        replacementLength: 1
+      )
+    )
+
+    #expect(
+      await waitForBearOverlay {
+        service.reanchoredRanges.count == 3
+          && presenters.allSatisfy(\.isVisible)
+      }
+    )
+    #expect(service.maximumConcurrentReanchors == 1)
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("Typover value changes wait for batched sibling re-anchoring")
+  func suppressesSelfInvalidationUntilVerifiedEditBatchFinishes() async {
+    let service = CoordinatedEditBearCorrectionService(
+      reanchorDelay: 0.2
+    )
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4,
+      verifiedEditBatchDelay: .milliseconds(50)
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+    for index in 0..<3 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3 && presenters.allSatisfy(\.isVisible)
+      }
+    )
+
+    collection.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: AccessibilityTextRange(location: 80, length: 1),
+        replacementLength: 1
+      )
+    )
+    collection.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: AccessibilityTextRange(location: 90, length: 1),
+        replacementLength: 1
+      )
+    )
+    collection.handleInvalidation(.valueChanged)
+
+    #expect(presenters.allSatisfy { $0.isVisible })
+    try? await Task.sleep(for: .milliseconds(80))
+    // The batch has started, but the serialized AX work is deliberately still
+    // in flight. Existing verified placements must not disappear while their
+    // refreshed anchors are pending.
+    #expect(presenters.allSatisfy { $0.isVisible })
+    #expect(
+      await waitForBearOverlay {
+        service.reanchoredRanges.count == 3
+          && presenters.allSatisfy(\.isVisible)
+      }
+    )
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("A verified edit never targets the annotation added after it")
+  func verifiedEditExcludesNewAnnotation() async {
+    let service = CoordinatedEditBearCorrectionService()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: service,
+        handlesKeyboardShortcut: false
+      )
+    }
+
+    collection.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: AccessibilityTextRange(location: 0, length: 3),
+        replacementLength: 3
+      )
+    )
+    collection.trackWithResolution(
+      anchoredOverlayApplication(location: 0)
+    )
+
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 1 && presenters[0].isVisible
+      }
+    )
+    #expect(collection.trackedCorrectionCount == 1)
+    #expect(service.reanchoredRanges.isEmpty)
     collection.stop()
   }
 
@@ -557,6 +923,45 @@ struct BearAnnotationOverlayTests {
     )
     #expect(collection.trackedCorrectionCount == 2)
     collection.stop()
+  }
+
+  @MainActor
+  @Test("The collection owns one lifecycle and focus changes end its editor session")
+  func collectionSharesLifecycleAndEndsChangedEditorSession() async {
+    let service = StubBearCorrectionService()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    var monitors: [StubBearInvalidationMonitor] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 8,
+      fallbackRefreshInterval: .seconds(60)
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      let monitor = StubBearInvalidationMonitor()
+      presenters.append(presenter)
+      monitors.append(monitor)
+      return testController(
+        presenter: presenter,
+        service: service,
+        invalidationMonitor: monitor,
+        handlesKeyboardShortcut: false
+      )
+    }
+    for index in 0..<6 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 6 && presenters.allSatisfy(\.isVisible)
+      }
+    )
+
+    #expect(monitors.allSatisfy { $0.startCount == 0 })
+    collection.handleInvalidation(.focusedWindowChanged)
+
+    #expect(collection.trackedCorrectionCount == 0)
+    #expect(presenters.allSatisfy { !$0.isVisible })
   }
 
   @MainActor
@@ -785,6 +1190,68 @@ struct BearAnnotationOverlayTests {
         presenter.isVisible
       }
     )
+    controller.stop()
+  }
+
+  @MainActor
+  @Test("Fallback refreshes reuse workspace frontmost state")
+  func fallbackRefreshesReuseFrontmostState() async throws {
+    let presenter = SpyBearAnnotationPresenter()
+    var frontmostLookupCount = 0
+    let controller = BearAnnotationOverlayController(
+      adapter: StubBearCorrectionService(),
+      presenter: presenter,
+      invalidationMonitor: StubBearInvalidationMonitor(),
+      frontmostBundleIdentifier: {
+        frontmostLookupCount += 1
+        return BearAccessibilityProbe.bearBundleIdentifier
+      },
+      displays: {
+        [
+          BearOverlayDisplay(
+            accessibilityFrame: AccessibilityBounds(
+              x: 0,
+              y: 0,
+              width: 1_440,
+              height: 900
+            ),
+            appKitFrame: AccessibilityBounds(
+              x: 0,
+              y: 0,
+              width: 1_440,
+              height: 900
+            )
+          )
+        ]
+      },
+      fallbackRefreshInterval: .milliseconds(10),
+      handlesKeyboardShortcut: false
+    )
+
+    controller.track(overlayApplication())
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(frontmostLookupCount == 1)
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: "com.example.OtherApp"
+    )
+    #expect(!presenter.isVisible)
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+    #expect(frontmostLookupCount == 1)
     controller.stop()
   }
 
@@ -1325,6 +1792,8 @@ private final class StubBearInvalidationMonitor:
     ) -> Void
 
   private var handler: Handler?
+  private(set) var startCount = 0
+  private(set) var stopCount = 0
 
   func start(
     handler:
@@ -1332,16 +1801,77 @@ private final class StubBearInvalidationMonitor:
         BearAccessibilityInvalidationEvent
       ) -> Void
   ) -> Bool {
+    startCount += 1
     self.handler = handler
     return true
   }
 
   func stop() {
+    stopCount += 1
     handler = nil
   }
 
   func send(_ event: BearAccessibilityInvalidationEvent) {
     handler?(event)
+  }
+}
+
+@MainActor
+private final class StubBearAnnotationShortcutRegistrar:
+  BearAnnotationShortcutRegistering
+{
+  private var handler: (@MainActor @Sendable () -> Void)?
+  private var token: UUID?
+  private(set) var registerCount = 0
+  private(set) var unregisterCount = 0
+
+  func register(
+    handler: @escaping @MainActor @Sendable () -> Void
+  ) -> UUID? {
+    registerCount += 1
+    let token = UUID()
+    self.token = token
+    self.handler = handler
+    return token
+  }
+
+  func unregister(_ token: UUID) {
+    guard self.token == token else {
+      return
+    }
+    unregisterCount += 1
+    self.token = nil
+    handler = nil
+  }
+
+  func fire() {
+    handler?()
+  }
+}
+
+@MainActor
+private final class StubBearAnnotationHotKeyBackend:
+  BearAnnotationHotKeyBackend
+{
+  private var handler: (@MainActor @Sendable () -> Void)?
+  private(set) var startCount = 0
+  private(set) var stopCount = 0
+
+  func start(
+    handler: @escaping @MainActor @Sendable () -> Void
+  ) -> Bool {
+    startCount += 1
+    self.handler = handler
+    return true
+  }
+
+  func stop() {
+    stopCount += 1
+    handler = nil
+  }
+
+  func fire() {
+    handler?()
   }
 }
 

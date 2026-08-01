@@ -318,7 +318,7 @@ struct BearExactRangeReplacementTests {
     #expect(!json.contains("replacementText"))
   }
 
-  @Test("A correction record is created only after verified application")
+  @Test("A correction record is created only after verified or reconciled application")
   func adapterGatesCorrectionRecord() {
     let verifiedReport = BearExactRangeReplacementReport(
       status: .applied,
@@ -365,6 +365,46 @@ struct BearExactRangeReplacementTests {
     #expect(failed.correction.original == "teh")
     #expect(failed.correction.replacement == "the")
     #expect(failed.correctionRecord == nil)
+  }
+
+  @Test("A post-write verification failure recovers a reversible anchor")
+  func adapterReconcilesPostWriteFailure() throws {
+    let replacementRange = AccessibilityTextRange(location: 6, length: 3)
+    let report = BearExactRangeReplacementReport(
+      status: .verificationFailed,
+      writeOccurred: true,
+      targetRange: replacementRange,
+      replacementRange: replacementRange,
+      selectionBefore: AccessibilityTextRange(location: 10, length: 0),
+      selectionAfter: AccessibilityTextRange(location: 10, length: 0),
+      caretRestored: true
+    )
+    let anchor = BearCorrectionAnchor(
+      correctionRange: replacementRange,
+      documentLength: 15,
+      leadingContext: "alpha ",
+      trailingContext: " omega"
+    )
+    let adapter = BearCorrectionAdapter(
+      replacer: StubBearReplacer(report: report),
+      reanchorer: StubBearReanchorer(
+        outcome: BearCorrectionReanchorOutcome(
+          status: .reanchored,
+          correctionAnchor: anchor
+        )
+      )
+    )
+
+    let application = adapter.apply(
+      original: "teh",
+      replacement: "the",
+      at: replacementRange
+    )
+
+    #expect(!application.report.isVerifiedApplication)
+    #expect(application.isReversibleApplication)
+    #expect(application.correctionAnchor == anchor)
+    #expect(application.correctionRecord?.disposition == .applied)
   }
 
   @Test(
@@ -1264,6 +1304,16 @@ private struct StubBearRetargeter: BearCorrectionRetargeting {
   func retarget(
     _: BearCorrectionRetargetRequest
   ) -> BearCorrectionRetargetOutcome {
+    outcome
+  }
+}
+
+private struct StubBearReanchorer: BearCorrectionReanchoring {
+  let outcome: BearCorrectionReanchorOutcome
+
+  func reanchor(
+    _: BearCorrectionReanchorRequest
+  ) -> BearCorrectionReanchorOutcome {
     outcome
   }
 }

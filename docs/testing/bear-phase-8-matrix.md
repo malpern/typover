@@ -1,15 +1,24 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Bear 2.9.1 compatibility and rapid correction passed; repeated-overlay retest pending
-- Updated: 2026-07-30
+- Status: Bear 2.9.1 rapid correction, 20-overlay retention, and repeated-correction interaction passed
+- Updated: 2026-08-01
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The focused automatic-correction gate passes 23 tests, including the current
-rapid-typing regressions. The quiet-machine broad gate now passes 223 tests in
-24 suites. The signed development build is deployed to
-`/Applications/Typover.app`, and automatic Bear correction is enabled locally
-for the live pass.
+The redesigned focused automatic-correction gate passes 31 tests. The focused
+overlay gate now passes 31 tests, including idle-first catch-up, shared
+lifecycle, post-write reconciliation, circuit-breaker regressions, one-owner
+global-hotkey arbitration, direct newest-correction Change Back, and per-item
+Accessibility actions. The last recorded broad gate passes 252 tests in 25
+suites; it must be refreshed after this interaction change. Deployment and the
+redesigned physical Bear pass are recorded separately below rather than
+inferred from deterministic tests.
+
+The Apple Development-signed runtime-v2 build is deployed to
+`/Applications/Typover.app` and launches with the stable
+`com.malpern.typover` identity. The previous installed build was moved to the
+Trash as `Typover-before-runtime-v2-2026-07-31.app`. This advances deployment,
+not the physical-HID or visible-overlay rows.
 
 Mutation is now gated to the environments actually validated: Bear 2.8.1 and
 2.9.1 on macOS 27.0. An unknown Bear version, an unvalidated macOS minor
@@ -46,14 +55,15 @@ also passes in Bear.
 | Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Pending | No correction |
 | Active selection | Passed, including fresh-baseline resume | Pending | Observation pauses; no write |
 | Bounded context changes | Passed | Pending | Refuse without writing |
-| Change Back | Passed with learning and collection-wide sibling re-anchoring | Single correction passed; post-fix repeated-collection retest pending | Restore only the word and suppress the same learned correction |
+| Change Back | Passed with learning, collection-wide sibling re-anchoring, direct Accessibility actions, and an exact AppKit global shortcut that targets only the newest correction | AppKit global shortcut and an early correction's direct Accessibility action both passed independently; the direct action retained every unaffected sibling | Restore only the word and suppress the same learned correction without activating Typover |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
-| Continue typing rapidly | Passed, including boundary preservation, a fixed boundary deadline, coalesced-change refusal, debounced overlay geometry, and 21 repeated correction interactions | Quiet-machine run corrected and annotated 21 of 21 completed typos | Preserve all later input; existing squiggles may briefly hide while typing and return after idle; safe miss if events truly coalesce |
-| Switch notes or windows | Passed; focus changes disarm in-flight input before reattachment | Pending | Reattach only to the newly focused Bear editor |
+| Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
+| Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Pending | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
-| Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | All 21 overlays appeared; post-fix early Change Back retest pending | Keep each valid correction independently reversible |
+| Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
+| Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
 
 ## Bear 2.9.1 compatibility pass: 2026-07-29
@@ -226,6 +236,164 @@ other 20, length-changing range shifts, and overlap invalidation. The focused
 gate passes 62 tests across four relevant suites; the complete gate passes 228
 tests in 24 suites. The installed build still needs the same early Change Back
 interaction to confirm all 20 sibling squiggles remain visible in Bear.
+
+## Overlay interaction contention pass: 2026-07-31
+
+Opening an early squiggle in a repeated-correction collection produced a
+transient rainbow wait cursor. Typover remained alive and recovered. Process
+samples did not show a deadlock; they showed every overlay controller's
+fallback refresh performing a synchronous frontmost-application lookup and
+reissuing panel frame and ordering operations even when neither state changed.
+That main-actor LaunchServices and WindowServer work scaled with the correction
+collection and could contend with menu interaction.
+
+Typover now initializes a cached frontmost bundle identifier once and maintains
+it from workspace activation and Bear-hide events. Fallback refreshes use the
+cache. The AppKit presenter changes a panel frame only when needed, orders only
+hidden panels front, and orders out only visible panels. A fast-fallback
+regression proves repeated refreshes do not repeat the synchronous lookup, and
+the presenter regression covers identical show and repeated hide calls. The
+focused overlay suite passes 27 tests and the complete suite passes 248 tests
+in 25 suites. The rebuilt app is installed; the physical early Change Back and
+sibling-menu interaction remains pending until the Mac is unlocked.
+
+## Empty-note repeated-anchor pass: 2026-07-31
+
+The next installed pass typed eight identical corrections into a truly empty
+note. All eight `teh` words became `the`, but only the first and final gray
+squiggles remained. Middle anchors captured short repeated context while the
+note was still growing, so later geometry refreshes found several valid
+one-sided candidates and hid them as ambiguous. The earlier synthetic repeated
+test had begun after a unique heading and therefore missed this exact case.
+
+Automatic correction now reports each successful exact-range replacement to
+the annotation collection. The collection snapshots the existing controllers
+before the new annotation is added and queues verified edits without dropping
+an in-flight update. Each targeted controller transforms its known range and
+re-anchors against current Bear text before drawing again. This is proven edit
+provenance, not a text-only inference, and the newly added correction cannot
+mistake its own edit for an overlap. A manual identical-prefix case remains
+ambiguous and hidden.
+
+Regressions now cover sixteen repeated corrections starting in an empty note,
+the manual ambiguity refusal, consecutive coordinator edit reports, two queued
+edits reaching every overlay serially, and enqueue-time target isolation. The
+full gate passes 248 tests in
+25 suites. A rebuilt installed pass must still show all eight squiggles before
+the first Change Back interaction proceeds.
+
+## Post-burst overlay-settling pass: 2026-07-31
+
+The first physical run of the idle-first runtime typed 20 continuous `teh `
+words at 160 milliseconds per character. Bear contained exactly 20 corrected
+`the` words, Typover logged 20 verified applications with no context or
+replacement failures, and the ESP32 later reported all 162 HID reports with no
+late reports or Wi-Fi disconnects. The harness initially marked the evidence
+invalid because its eight-second fixture-status request timed out after the
+burst; a later status read confirmed the fixture run had completed. The
+correction result is therefore 20/20, but the harness evidence row remains
+invalid rather than being retroactively upgraded.
+
+All 20 gray squiggles initially appeared. After the runtime settled, only the
+final six remained. This isolated a collection race rather than a correction,
+HID, or Bear-rendering failure: each Typover replacement generated Bear value
+notifications while earlier overlays were still re-anchoring through the
+verified-edit queue. A temporarily stale middle anchor could receive its
+ordinary invalidation refresh and retire before all sibling edits reached it.
+
+Verified edits are now debounced into a short collection-level batch. Each
+surviving controller transforms through every applicable edit and performs one
+final re-anchor against Bear's settled text. Value and selection invalidations
+caused during that batch are suppressed and followed by one shared fallback
+refresh after all controllers finish. New edits arriving during processing are
+queued for a later batch.
+
+Regression coverage proves three repeated overlays remain visible when Bear
+value notifications arrive before a two-edit batch settles, in addition to the
+existing 20-overlay Change Back case. The focused overlay suite passes 29 tests
+and the complete suite passes 252 tests in 25 suites. The installed retention
+rerun is recorded below. The interaction row still requires an early Change
+Back and later sibling-menu click.
+
+## Atomic overlay-retention pass: 2026-08-01
+
+The signed installed runtime typed 20 continuous `teh ` words plus Return at
+160 milliseconds per character without any automation focus handoff after the
+harness launched. The run passed with exact expected Bear text, 20 matching
+Typover applications, a final caret at 81 in an 81-unit document, valid focus,
+all 162 ESP32 reports submitted, zero late reports, and a healthy fixture.
+
+The harness artifact is
+`~/.local/state/typover/bear-hid/typover-hid-2026-08-01T14-18-22Z/summary.json`.
+Content-free overlay lifecycle telemetry independently recorded 20 visible
+correction IDs at the exact ranges `0:3` through `76:3` and zero hide events
+through the settled observation window. This passes the installed retention
+gate without inferring overlay state from corrected text alone. The app-scoped
+automation screenshot cannot composite Typover's separate nonactivating panel
+windows, so the early Change Back and later sibling-menu interaction remain a
+separate visible UI gate.
+
+## AppKit global Change Back shortcut: 2026-08-01
+
+The first installed repeated-correction shortcut attempt submitted the complete
+physical Control–Option–Command–M chord through the ESP32 and retained Bear
+focus. Carbon had reported successful registration, but its event handler never
+ran: Typover logged neither shortcut receipt nor an overlay action, and Bear's
+text remained unchanged. This isolated the failure to shortcut delivery rather
+than correction restoration or collection ordering.
+
+Typover now observes the shortcut through an AppKit global key-down monitor, the
+same permissioned event mechanism that already receives physical Bear typing.
+It accepts only the ANSI M virtual key with Control, Option, and Command,
+rejects Shift and key repeats, and ignores unrelated state such as Caps Lock.
+The collection still chooses by user recency rather than reverse-safe
+application order. Content-free logging distinguishes registration from actual
+shortcut receipt.
+
+The focused overlay suite passes 33 tests, including exact chord matching,
+single shared registration, newest-owner arbitration, newest-correction Change
+Back, and user-recency ordering. The signed build is deployed to
+`/Applications/Typover.app`.
+
+After USB firmware recovery, a fresh quiet-host physical baseline corrected
+20/20 `teh` words at 160 milliseconds per character with valid focus. A uniquely
+identified shortcut run then submitted one Control–Option–Command–M key-down and
+one release with zero late reports. Bear's bounded text changed at exactly range
+`68:3`, from `the` to `teh`; the other 78 UTF-16 units, document length, caret,
+and focused editor were unchanged. The local artifacts are
+`~/.local/state/typover/bear-hid/typover-hid-2026-08-01T20-16-04Z/summary.json`
+and
+`~/.local/state/typover/bear-hid/typover-change-back-2026-08-01T20-20-51Z/summary.json`.
+This passes the installed global-shortcut row. Direct early Accessibility action
+and later pointer-menu interaction are recorded independently below.
+
+## Installed early action and sibling-menu pass: 2026-08-01
+
+A fresh quiet-host physical run passed 20/20 continuous `teh ` corrections at
+160 milliseconds per character. Bear remained the frontmost application, the
+final caret and document length were both 81 UTF-16 units, and Typover exposed
+exactly 20 accessible overlay windows. The baseline artifact is
+`~/.local/state/typover/bear-hid/typover-hid-2026-08-01T22-38-27Z/summary.json`.
+
+The fifth visible correction was then invoked through its exported custom
+Accessibility action, `Revert to “teh”`. The action returned success, changed
+only range `16:3` from `the` to `teh`, preserved Bear as frontmost, and left the
+caret and document length unchanged at 81. Typover retired only the resolved
+overlay: the exact overlay count changed from 20 to 19, with the other window
+positions unchanged.
+
+A real pointer down/up was then posted at a later sibling overlay. Within the
+400-millisecond observation window its native menu was present beneath that
+specific correction and exposed `Revert to “teh”`, `ten`, `yeh`, `tea`, and
+`feh`. Bear remained frontmost, the text and caret were unchanged, and all 19
+unresolved overlay windows remained present while the menu was open. Dismissing
+the menu with Escape caused Bear to leave editor focus and Typover correctly
+ended the annotation session; that cleanup is not credited as part of the
+pointer pass.
+
+The test-created `teh` suppression was removed after the run while preserving
+all 713 activity records. The pre-cleanup learning file is recoverable from
+`~/.Trash/typover-correction-learning-before-ax-pointer-cleanup-2026-08-01-154417.json`.
 
 ## Physical cadence and bounded catch-up pass: 2026-07-31
 

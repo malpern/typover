@@ -4,6 +4,19 @@ import TypoverHIDTesting
 
 @Suite("Bear physical HID testing")
 struct BearHIDTestingTests {
+  @Test("Load profiles expose only their requested contention sources")
+  func loadProfiles() {
+    #expect(BearHIDLoadProfile.quiet.stressesCPU == false)
+    #expect(BearHIDLoadProfile.quiet.stressesWindowServer == false)
+    #expect(BearHIDLoadProfile.quiet.stressesAccessibility == false)
+    #expect(BearHIDLoadProfile.cpu.stressesCPU)
+    #expect(BearHIDLoadProfile.windowServer.stressesWindowServer)
+    #expect(BearHIDLoadProfile.accessibility.stressesAccessibility)
+    #expect(BearHIDLoadProfile.combined.stressesCPU)
+    #expect(BearHIDLoadProfile.combined.stressesWindowServer)
+    #expect(BearHIDLoadProfile.combined.stressesAccessibility)
+  }
+
   @Test("Default matrix spans realistic through burst typing")
   func defaultMatrix() throws {
     let plan = try BearHIDTestPlan()
@@ -40,6 +53,26 @@ struct BearHIDTestingTests {
     #expect(arguments[arguments.firstIndex(of: "--repeat")! + 1] == "1")
     #expect(arguments[arguments.firstIndex(of: "--cycle-gap-ms")! + 1] == "0")
     #expect(arguments[arguments.firstIndex(of: "--interval-ms")! + 1] == "160")
+  }
+
+  @Test("Compiler guard matches executable names, not shell command text")
+  func compilerProcessDetection() {
+    let processList = """
+        101 /bin/zsh
+        102 /usr/bin/ssh
+        103 /usr/bin/swift-frontend
+        104 /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-driver
+        105 /usr/bin/swiftc
+      """
+
+    let matches = SwiftCompilerProcessDetector.compilerProcesses(
+      in: processList
+    )
+
+    #expect(matches.count == 3)
+    #expect(matches.contains("103 /usr/bin/swift-frontend"))
+    #expect(matches.contains(where: { $0.hasSuffix("/swift-driver") }))
+    #expect(matches.contains("105 /usr/bin/swiftc"))
   }
 
   @Test("Analysis distinguishes corrections from safe misses")

@@ -56,6 +56,7 @@ struct LearningSettingsView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         LearningSettingsHeader()
+        TypoverPermissionsSettingsSection()
         ContextualModelSection(
           behaviorSettings: behaviorSettings,
           credentialStore: credentialStore
@@ -85,6 +86,7 @@ struct LearningSettingsView: View {
             bearOverlayPreviewCoordinator.previewSelectedTypo,
           onStopOverlayPreview: bearOverlayPreviewCoordinator.stopPreview
         )
+        BearDiagnosticsPrivacySection()
         CorrectionStatisticsSection(
           statistics: learningStore.statistics(),
           sourceStatistics: learningStore.statisticsBySource(),

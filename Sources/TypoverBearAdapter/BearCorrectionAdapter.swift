@@ -18,6 +18,14 @@ public struct BearCorrectionApplication: Equatable, Sendable {
     self.correctionRecord = correctionRecord
     self.correctionAnchor = correctionAnchor
   }
+
+  /// True when Typover has enough verified state to expose Change Back even
+  /// if the original write's final caret/context verification was incomplete.
+  public var isReversibleApplication: Bool {
+    report.writeOccurred
+      && correctionRecord?.disposition == .applied
+      && correctionAnchor != nil
+  }
 }
 
 public struct BearCorrectionRestoration: Equatable, Sendable {
@@ -102,15 +110,37 @@ public struct BearCorrectionAdapter: Sendable {
       original: original,
       replacement: replacement
     )
+    let anchor: BearCorrectionAnchor?
+    if let correctionAnchor = outcome.correctionAnchor {
+      anchor = correctionAnchor
+    } else if report.writeOccurred,
+      let replacementRange = report.replacementRange
+    {
+      // A successful AX write can be followed by a failed caret restoration
+      // or bounded verification read. Re-read the exact replacement range and
+      // recover an anchor before returning; never silently discard a mutation
+      // that the user may need to reverse.
+      anchor =
+        reanchorer.reanchor(
+          BearCorrectionReanchorRequest(
+            targetRange: replacementRange,
+            expectedText: replacement,
+            leadingContextLimit: 256,
+            trailingContextLimit: 256
+          )
+        ).correctionAnchor
+    } else {
+      anchor = nil
+    }
     let record =
-      report.isVerifiedApplication && outcome.correctionAnchor != nil
+      report.writeOccurred && anchor != nil
       ? CorrectionRecord(correction: correction)
       : nil
     return BearCorrectionApplication(
       report: report,
       correction: correction,
       correctionRecord: record,
-      correctionAnchor: outcome.correctionAnchor
+      correctionAnchor: anchor
     )
   }
 

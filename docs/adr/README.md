@@ -13,3 +13,5 @@
 - [ADR-011: Keep Bear correction menus nonactivating and transaction-backed](adr-011-nonactivating-bear-correction-menu.md)
 - [ADR-012: Preserve Bear correction anchors while typing continues](adr-012-preserve-bear-anchors-while-typing-continues.md)
 - [ADR-013: Use stable signing for Accessibility development builds](adr-013-stable-signing-for-accessibility-development.md)
+- [ADR-014: Serialize an idle-first Bear runtime](adr-014-serialize-idle-first-bear-runtime.md)
+- [ADR-015: Keep launch at login out of the initial beta](adr-015-manual-launch-for-initial-beta.md)

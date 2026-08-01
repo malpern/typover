@@ -64,6 +64,7 @@ public struct BearCorrectionSelectionStabilizer:
     let applicationElement = AXUIElementCreateApplication(
       application.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,

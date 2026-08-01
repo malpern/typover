@@ -69,6 +69,8 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(request.replacement == "the")
     #expect(request.range == AccessibilityTextRange(location: 0, length: 3))
     #expect(fixture.tracker.applications.count == 1)
+    #expect(fixture.tracker.userRecencies.count == 1)
+    #expect(fixture.tracker.userRecencies[0] != nil)
     #expect(fixture.store.statistics().correctionsApplied == 1)
     #expect(fixture.coordinator.diagnostics.snapshot.boundaryInputs == 1)
     #expect(fixture.coordinator.diagnostics.snapshot.valueChanges == 1)
@@ -215,10 +217,13 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
 
     fixture.reader.result = .ready(snapshot(text: "teh teh", caret: 7))
+    let valueChangesBeforeIntermediateEdit =
+      fixture.coordinator.diagnostics.snapshot.valueChanges
     fixture.monitor.emit(.valueChanged)
     #expect(
       await waitUntil {
-        fixture.reader.readCount >= 4
+        fixture.coordinator.diagnostics.snapshot.valueChanges
+          == valueChangesBeforeIntermediateEdit + 1
       }
     )
     fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
@@ -230,10 +235,22 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.tracker.applications.count == 2
       }
     )
-    #expect(fixture.applicator.requests.map(\.range) == [
-      AccessibilityTextRange(location: 0, length: 3),
-      AccessibilityTextRange(location: 4, length: 3),
-    ])
+    #expect(
+      fixture.applicator.requests.map(\.range) == [
+        AccessibilityTextRange(location: 0, length: 3),
+        AccessibilityTextRange(location: 4, length: 3),
+      ])
+    #expect(
+      fixture.tracker.verifiedEdits == [
+        BearAnnotationVerifiedEdit(
+          replacedRange: AccessibilityTextRange(location: 0, length: 3),
+          replacementLength: 3
+        ),
+        BearAnnotationVerifiedEdit(
+          replacedRange: AccessibilityTextRange(location: 4, length: 3),
+          replacementLength: 3
+        ),
+      ])
   }
 
   @Test("The next ordinary key does not erase a pending boundary")
@@ -261,7 +278,6 @@ struct BearAutomaticCorrectionCoordinatorTests {
   @Test("Rapid typing defers correction until input becomes idle")
   func defersCorrectionDuringRapidTyping() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(80)
     )
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
@@ -295,10 +311,43 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
   }
 
+  @Test("A queued physical key postpones AX mutation before its callback arrives")
+  func physicalInputIdleGatePreventsPrematureMutation() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.milliseconds(5))
+    let fixture = try Fixture(
+      deferredCorrectionIdleDelay: .milliseconds(40),
+      physicalInputIdleDuration: { physicalIdle.value }
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+
+    try? await Task.sleep(for: .milliseconds(70))
+    #expect(fixture.applicator.requests.isEmpty)
+
+    physicalIdle.value = .seconds(1)
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    #expect(
+      fixture.applicator.requests.first?.range
+        == AccessibilityTextRange(location: 0, length: 3)
+    )
+  }
+
   @Test("Post-burst catch-up applies queued corrections from end to beginning")
   func catchesUpInReverseDocumentOrder() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(150)
     )
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
@@ -339,17 +388,17 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.applicator.requests.count == 2
       }
     )
-    #expect(fixture.applicator.requests.map(\.range) == [
-      AccessibilityTextRange(location: 4, length: 3),
-      AccessibilityTextRange(location: 0, length: 3),
-    ])
+    #expect(
+      fixture.applicator.requests.map(\.range) == [
+        AccessibilityTextRange(location: 4, length: 3),
+        AccessibilityTextRange(location: 0, length: 3),
+      ])
     #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 2)
   }
 
   @Test("Post-burst scan recovers boundaries coalesced by Accessibility")
   func catchesUpCoalescedRapidBoundaries() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(80)
     )
     fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
@@ -361,7 +410,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
     fixture.monitor.emit(.valueChanged)
     #expect(
       await waitUntil {
-        fixture.reader.readCount >= 2
+        fixture.coordinator.diagnostics.snapshot.valueChanges == 1
       }
     )
 
@@ -371,7 +420,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
     fixture.monitor.emit(.valueChanged)
     #expect(
       await waitUntil {
-        fixture.reader.readCount >= 3
+        fixture.coordinator.diagnostics.snapshot.valueChanges == 2
       }
     )
 
@@ -380,10 +429,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.applicator.requests.count == 2
       }
     )
-    #expect(fixture.applicator.requests.map(\.range) == [
-      AccessibilityTextRange(location: 4, length: 3),
-      AccessibilityTextRange(location: 0, length: 3),
-    ])
+    #expect(
+      fixture.applicator.requests.map(\.range) == [
+        AccessibilityTextRange(location: 4, length: 3),
+        AccessibilityTextRange(location: 0, length: 3),
+      ])
     #expect(fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 2)
     #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 0)
   }
@@ -391,7 +441,6 @@ struct BearAutomaticCorrectionCoordinatorTests {
   @Test("Post-burst scan excludes text before rapid typing began")
   func catchUpScanIsBoundedToRapidTyping() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(60)
     )
     fixture.reader.result = .ready(snapshot(text: "teh te", caret: 6))
@@ -416,7 +465,6 @@ struct BearAutomaticCorrectionCoordinatorTests {
   @Test("Post-burst scan fails closed when the typed start was never observed")
   func catchUpRequiresObservedBurstStart() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(50)
     )
     fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
@@ -442,7 +490,6 @@ struct BearAutomaticCorrectionCoordinatorTests {
   @Test("New input during the idle scan postpones every queued write")
   func inputDuringScanReschedulesCatchUp() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(100)
     )
     fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
@@ -474,7 +521,6 @@ struct BearAutomaticCorrectionCoordinatorTests {
   @Test("Changing focused editors cancels queued rapid corrections")
   func focusChangeCancelsDeferredCorrections() async throws {
     let fixture = try Fixture(
-      minimumImmediateCorrectionInputInterval: .seconds(1),
       deferredCorrectionIdleDelay: .milliseconds(100)
     )
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
@@ -501,8 +547,8 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.applicator.requests.isEmpty)
   }
 
-  @Test("A coalesced next character still fails closed")
-  func refusesBoundaryCoalescedWithRapidTyping() async throws {
+  @Test("Idle catch-up recovers a completed word before a coalesced next character")
+  func recoversBoundaryCoalescedWithRapidTyping() async throws {
     let fixture = try Fixture()
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
     fixture.coordinator.setEnabled(true)
@@ -514,12 +560,15 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
     #expect(
       await waitUntil {
-        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+        fixture.applicator.requests.count == 1
       }
     )
-    #expect(fixture.applicator.requests.isEmpty)
     #expect(
-      fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
+      fixture.applicator.requests.map(\.range) == [
+        AccessibilityTextRange(location: 0, length: 3)
+      ])
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied
     )
   }
 
@@ -808,6 +857,43 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
   }
 
+  @Test("An unreconciled post-write result opens the mutation circuit")
+  func pausesAfterIndeterminateWrite() async throws {
+    let fixture = try Fixture()
+    let correction = Correction(original: "teh", replacement: "the")
+    fixture.applicator.setNextApplication(
+      BearCorrectionApplication(
+        report: BearExactRangeReplacementReport(
+          status: .verificationFailed,
+          writeOccurred: true,
+          targetRange: AccessibilityTextRange(location: 0, length: 3),
+          replacementRange: AccessibilityTextRange(location: 0, length: 3),
+          selectionAfter: AccessibilityTextRange(location: 4, length: 0)
+        ),
+        correction: correction,
+        correctionRecord: nil,
+        correctionAnchor: nil
+      )
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.status == .pausedAfterIndeterminateWrite
+      }
+    )
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .postWriteReconciliationFailed
+    )
+    #expect(fixture.tracker.applications.isEmpty)
+  }
+
   @Test("Typing transition requires unchanged bounded context")
   func rejectsChangedContext() {
     let previous = snapshot(
@@ -887,6 +973,15 @@ struct BearAutomaticCorrectionCoordinatorTests {
 }
 
 @MainActor
+private final class TestPhysicalIdleDuration {
+  var value: Duration
+
+  init(_ value: Duration) {
+    self.value = value
+  }
+}
+
+@MainActor
 private final class Fixture {
   let reader = TestTypingContextReader()
   let monitor = TestInvalidationMonitor()
@@ -903,8 +998,10 @@ private final class Fixture {
     environmentSupport: BearEnvironmentSupport = .supported,
     settleDelay: Duration = .milliseconds(1),
     maximumBoundaryPairingDelay: Duration = .seconds(10),
-    minimumImmediateCorrectionInputInterval: Duration = .zero,
-    deferredCorrectionIdleDelay: Duration = .milliseconds(20)
+    deferredCorrectionIdleDelay: Duration = .milliseconds(20),
+    physicalInputIdleDuration: @escaping @MainActor @Sendable () -> Duration? = {
+      .seconds(60)
+    }
   ) throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -931,10 +1028,10 @@ private final class Fixture {
       },
       settleDelay: settleDelay,
       maximumBoundaryPairingDelay: maximumBoundaryPairingDelay,
-      minimumImmediateCorrectionInputInterval:
-        minimumImmediateCorrectionInputInterval,
       deferredCorrectionIdleDelay: deferredCorrectionIdleDelay,
+      physicalInputIdleDuration: physicalInputIdleDuration,
       observationRestartDelay: .milliseconds(1),
+      privateDiagnosticsEnabled: { false },
       workspaceNotificationCenter: workspaceNotificationCenter
     )
   }
@@ -954,14 +1051,13 @@ private struct TestBearEnvironmentChecker: BearEnvironmentChecking {
 
 @MainActor
 private final class TestTypingInputMonitor: BearTypingInputMonitoring {
-  private var handler:
-    (@MainActor @Sendable (BearTypingInputIntent) -> Void)?
+  private var handler: (@MainActor @Sendable (BearTypingInputObservation) -> Void)?
   private(set) var startCount = 0
   private(set) var stopCount = 0
   var startResults: [Bool] = []
 
   func start(
-    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputObservation) -> Void
   ) -> Bool {
     startCount += 1
     if !startResults.isEmpty, !startResults.removeFirst() {
@@ -978,26 +1074,49 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   }
 
   func emitBoundary(_ character: String = " ") {
-    handler?(.completionBoundary(character))
+    emit(.completionBoundary(character))
   }
 
   func emitUndoOrRedo() {
-    handler?(.undoOrRedo)
+    emit(.undoOrRedo)
   }
 
   func emitOther() {
-    handler?(.other)
+    emit(.other)
+  }
+
+  private func emit(_ intent: BearTypingInputIntent) {
+    handler?(
+      BearTypingInputObservation(
+        intent: intent,
+        observedAt: ContinuousClock().now
+      )
+    )
   }
 }
 
-@MainActor
-private final class TestTypingContextReader: BearTypingContextReading {
-  var result: BearTypingContextReadResult = .focusedEditorUnavailable
-  private(set) var readCount = 0
+private final class TestTypingContextReader:
+  BearTypingContextReading, @unchecked Sendable
+{
+  private let lock = NSLock()
+  private var storedResult: BearTypingContextReadResult =
+    .focusedEditorUnavailable
+  private var storedReadCount = 0
+
+  var result: BearTypingContextReadResult {
+    get { lock.withLock { storedResult } }
+    set { lock.withLock { storedResult = newValue } }
+  }
+
+  var readCount: Int {
+    lock.withLock { storedReadCount }
+  }
 
   func read() -> BearTypingContextReadResult {
-    readCount += 1
-    return result
+    lock.withLock {
+      storedReadCount += 1
+      return storedResult
+    }
   }
 }
 
@@ -1080,9 +1199,16 @@ private final class TestCorrectionApplicator:
 
   private let lock = NSLock()
   private var storedRequests: [Request] = []
+  private var nextApplication: BearCorrectionApplication?
 
   var requests: [Request] {
     lock.withLock { storedRequests }
+  }
+
+  func setNextApplication(_ application: BearCorrectionApplication) {
+    lock.withLock {
+      nextApplication = application
+    }
   }
 
   func apply(
@@ -1090,7 +1216,7 @@ private final class TestCorrectionApplicator:
     replacement: String,
     at targetRange: AccessibilityTextRange
   ) -> BearCorrectionApplication {
-    lock.withLock {
+    let override = lock.withLock { () -> BearCorrectionApplication? in
       storedRequests.append(
         Request(
           original: original,
@@ -1098,6 +1224,11 @@ private final class TestCorrectionApplicator:
           range: targetRange
         )
       )
+      defer { nextApplication = nil }
+      return nextApplication
+    }
+    if let override {
+      return override
     }
     let replacementRange = AccessibilityTextRange(
       location: targetRange.location,
@@ -1139,17 +1270,28 @@ private final class TestCorrectionApplicator:
 @MainActor
 private final class TestAnnotationTracker: BearAnnotationTracking {
   var applications: [BearCorrectionApplication] = []
+  var userRecencies: [Date?] = []
+  var verifiedEdits: [BearAnnotationVerifiedEdit] = []
+  var invalidationEvents: [BearAccessibilityInvalidationEvent] = []
   private(set) var stopCount = 0
   private var onResolution:
     (
       @MainActor @Sendable (BearAnnotationResolution) -> Void
     )?
-  private var onInteractionLatency:
-    (@MainActor @Sendable (Duration) -> Void)?
+  private var onInteractionLatency: (@MainActor @Sendable (Duration) -> Void)?
+
+  func handleInvalidation(_ event: BearAccessibilityInvalidationEvent) {
+    invalidationEvents.append(event)
+  }
+
+  func recordVerifiedEdit(_ edit: BearAnnotationVerifiedEdit) {
+    verifiedEdits.append(edit)
+  }
 
   func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives _: [String],
+    userRecency: Date?,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )?,
@@ -1159,6 +1301,7 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
     onFinished _: (@MainActor @Sendable () -> Void)?
   ) {
     applications.append(application)
+    userRecencies.append(userRecency)
     self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
   }
@@ -1166,6 +1309,7 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
   func stop() {
     stopCount += 1
     applications = []
+    userRecencies = []
     onInteractionLatency = nil
     onResolution = nil
   }

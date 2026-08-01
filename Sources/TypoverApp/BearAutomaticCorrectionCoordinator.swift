@@ -18,6 +18,7 @@ enum BearAutomaticCorrectionStatus: Equatable {
   case accessibilityPermissionRequired
   case editorUnavailable
   case inputMonitoringUnavailable
+  case pausedAfterIndeterminateWrite
 }
 
 protocol BearCorrectionApplying: Sendable {
@@ -32,9 +33,14 @@ extension BearCorrectionAdapter: BearCorrectionApplying {}
 
 @MainActor
 protocol BearAnnotationTracking: AnyObject {
+  func handleInvalidation(_ event: BearAccessibilityInvalidationEvent)
+
+  func recordVerifiedEdit(_ edit: BearAnnotationVerifiedEdit)
+
   func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives: [String],
+    userRecency: Date?,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )?,
@@ -47,14 +53,45 @@ protocol BearAnnotationTracking: AnyObject {
   func stop()
 }
 
-extension BearAnnotationOverlayController: BearAnnotationTracking {}
+extension BearAnnotationOverlayController: BearAnnotationTracking {
+  func trackWithResolution(
+    _ application: BearCorrectionApplication,
+    alternatives: [String],
+    userRecency _: Date?,
+    onInteractionLatency: (
+      @MainActor @Sendable (Duration) -> Void
+    )?,
+    onResolution: (
+      @MainActor @Sendable (BearAnnotationResolution) -> Void
+    )?,
+    onFinished: (@MainActor @Sendable () -> Void)?
+  ) {
+    trackWithResolution(
+      application,
+      alternatives: alternatives,
+      onInteractionLatency: onInteractionLatency,
+      onResolution: onResolution,
+      onFinished: onFinished
+    )
+  }
+
+  func handleInvalidation(_ event: BearAccessibilityInvalidationEvent) {
+    handleSharedInvalidation(event)
+  }
+
+  func recordVerifiedEdit(_ edit: BearAnnotationVerifiedEdit) {
+    Task { @MainActor [weak self] in
+      await self?.applyVerifiedEdit(edit)
+    }
+  }
+}
 extension BearAnnotationOverlayCollectionController: BearAnnotationTracking {}
 
 @MainActor
 protocol BearTypingInputMonitoring: AnyObject {
   @discardableResult
   func start(
-    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputObservation) -> Void
   ) -> Bool
   func stop()
 }
@@ -64,7 +101,7 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
   private var eventMonitor: Any?
 
   func start(
-    handler: @escaping @MainActor @Sendable (BearTypingInputIntent) -> Void
+    handler: @escaping @MainActor @Sendable (BearTypingInputObservation) -> Void
   ) -> Bool {
     stop()
     eventMonitor = NSEvent.addGlobalMonitorForEvents(
@@ -78,8 +115,15 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
         charactersIgnoringModifiers: event.charactersIgnoringModifiers,
         modifiers: modifiers
       )
+      // Capture time in the event callback, before the MainActor hop. Under
+      // load, actor scheduling delay must not make a fresh physical key look
+      // stale or distort correction latency diagnostics.
+      let observation = BearTypingInputObservation(
+        intent: intent,
+        observedAt: ContinuousClock().now
+      )
       Task { @MainActor in
-        handler(intent)
+        handler(observation)
       }
     }
     return eventMonitor != nil
@@ -91,6 +135,24 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
       self.eventMonitor = nil
     }
   }
+}
+
+private enum SystemPhysicalInputActivity {
+  static func idleDuration() -> Duration? {
+    let seconds = CGEventSource.secondsSinceLastEventType(
+      .combinedSessionState,
+      eventType: .keyDown
+    )
+    guard seconds.isFinite, seconds >= 0 else {
+      return nil
+    }
+    return .seconds(seconds)
+  }
+}
+
+struct BearTypingInputObservation: Equatable, Sendable {
+  let intent: BearTypingInputIntent
+  let observedAt: ContinuousClock.Instant
 }
 
 enum BearTypingInputIntent: Equatable {
@@ -122,9 +184,9 @@ enum BearTypingInput {
     let normalizedCharacters =
       (charactersIgnoringModifiers ?? characters)?.lowercased()
     if modifiers.contains(.command),
-       !modifiers.contains(.control),
-       !modifiers.contains(.option),
-       normalizedCharacters == "z"
+      !modifiers.contains(.control),
+      !modifiers.contains(.option),
+      normalizedCharacters == "z"
     {
       return .undoOrRedo
     }
@@ -145,7 +207,8 @@ enum BearTypingInput {
 }
 
 enum BearAutomaticCorrectionPrivateDiagnostics {
-  static let defaultsKey = "bear-private-diagnostics-enabled"
+  static let defaultsKey =
+    BearPrivateDiagnosticsConfiguration.enabledDefaultsKey
 }
 
 struct VerifiedBearTypingCompletion: Equatable {
@@ -285,8 +348,8 @@ final class BearAutomaticCorrectionCoordinator {
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let settleDelay: Duration
   private let maximumBoundaryPairingDelay: Duration
-  private let minimumImmediateCorrectionInputInterval: Duration
   private let deferredCorrectionIdleDelay: Duration
+  private let physicalInputIdleDuration: @MainActor @Sendable () -> Duration?
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let privateDiagnosticsEnabled: @MainActor @Sendable () -> Bool
@@ -302,8 +365,6 @@ final class BearAutomaticCorrectionCoordinator {
   private var pendingInputIntent: BearTypingInputIntent = .other
   private var pendingBoundaryObservedAt: ContinuousClock.Instant?
   private var scheduledBoundaryObservedAt: ContinuousClock.Instant?
-  private var pendingBoundaryRequiresIdle = false
-  private var lastTypingInputObservedAt: ContinuousClock.Instant?
   private var typingInputGeneration = 0
   private var deferredCorrections: [DeferredCorrection] = []
   private var deferredScanStartLocation: Int?
@@ -313,6 +374,7 @@ final class BearAutomaticCorrectionCoordinator {
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
   private var observationRetryCount = 0
+  private var isMutationCircuitOpen = false
   private let maximumObservationRetryCount = 4
 
   convenience init(
@@ -349,8 +411,10 @@ final class BearAutomaticCorrectionCoordinator {
     },
     settleDelay: Duration = .milliseconds(35),
     maximumBoundaryPairingDelay: Duration = .milliseconds(750),
-    minimumImmediateCorrectionInputInterval: Duration = .milliseconds(80),
     deferredCorrectionIdleDelay: Duration = .milliseconds(220),
+    physicalInputIdleDuration: @escaping @MainActor @Sendable () -> Duration? = {
+      SystemPhysicalInputActivity.idleDuration()
+    },
     observationRestartDelay: Duration = .milliseconds(250),
     privateDiagnosticsEnabled: @escaping @MainActor @Sendable () -> Bool = {
       UserDefaults.standard.bool(
@@ -372,9 +436,8 @@ final class BearAutomaticCorrectionCoordinator {
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
     self.maximumBoundaryPairingDelay = maximumBoundaryPairingDelay
-    self.minimumImmediateCorrectionInputInterval =
-      minimumImmediateCorrectionInputInterval
     self.deferredCorrectionIdleDelay = deferredCorrectionIdleDelay
+    self.physicalInputIdleDuration = physicalInputIdleDuration
     self.observationRestartDelay = observationRestartDelay
     self.privateDiagnosticsEnabled = privateDiagnosticsEnabled
     self.workspaceNotificationCenter = workspaceNotificationCenter
@@ -396,6 +459,9 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     isEnabled = enabled
+    if !enabled {
+      isMutationCircuitOpen = false
+    }
     if enabled {
       restartObservation()
     } else {
@@ -411,6 +477,10 @@ final class BearAutomaticCorrectionCoordinator {
     lastSnapshot = nil
     guard isEnabled else {
       status = .disabled
+      return
+    }
+    guard !isMutationCircuitOpen else {
+      status = .pausedAfterIndeterminateWrite
       return
     }
     guard
@@ -430,51 +500,48 @@ final class BearAutomaticCorrectionCoordinator {
       scheduleObservationRetry()
       return
     }
-    guard typingInputMonitor.start(handler: { [weak self] intent in
-      guard let self else {
-        return
-      }
-      let observedAt = self.clock.now
-      let inputInterval = self.lastTypingInputObservedAt.map {
-        $0.duration(to: observedAt)
-      }
-      self.lastTypingInputObservedAt = observedAt
-      self.typingInputGeneration += 1
-      self.scheduleDeferredCorrectionsIfNeeded()
-      self.tracePrivate("input intent=\(intent.traceLabel)")
-      switch intent {
-      case .completionBoundary:
-        self.pendingInputIntent = intent
-        self.diagnostics.recordBoundaryInput()
-        self.pendingBoundaryObservedAt = observedAt
-        let requiresIdle = inputInterval.map {
-          $0 < self.minimumImmediateCorrectionInputInterval
-        } ?? false
-        self.pendingBoundaryRequiresIdle = requiresIdle
-        if requiresIdle {
+    guard
+      typingInputMonitor.start(handler: { [weak self] observation in
+        guard let self else {
+          return
+        }
+        let intent = observation.intent
+        let observedAt = observation.observedAt
+        self.typingInputGeneration += 1
+        self.scheduleDeferredCorrectionsIfNeeded()
+        self.tracePrivate("input intent=\(intent.traceLabel)")
+        switch intent {
+        case .completionBoundary:
+          self.pendingInputIntent = intent
+          self.diagnostics.recordBoundaryInput()
+          self.pendingBoundaryObservedAt = observedAt
+          // AX writes are deliberately idle-first. Bear's editor transaction is
+          // not atomic across select, replace, and caret restoration, so writing
+          // while the next physical key may arrive risks joining or displacing
+          // user input. Record the bounded scan start now and mutate only after
+          // the typing stream has been quiet.
           self.markDeferredScanStart()
           self.scheduleDeferredCorrectionsIfNeeded()
+          self.logger.debug("Completion boundary key observed")
+          if self.pendingValueChange {
+            // Bear occasionally publishes the matching AX value change just
+            // before the global key monitor callback reaches the main actor.
+            self.scheduleSettledRead()
+          }
+        case .undoOrRedo:
+          self.pendingInputIntent = intent
+          self.pendingBoundaryObservedAt = nil
+          self.clearDeferredCorrections()
+          self.logger.debug("Undo or Redo input observed; correction disarmed")
+        case .other:
+          // Bear can deliver the value-change notification for a completed word
+          // after the writer has already pressed the first key of the next word.
+          // Keep the boundary armed; exact transition verification still rejects
+          // a coalesced or otherwise changed context.
+          break
         }
-        self.logger.debug("Completion boundary key observed")
-        if self.pendingValueChange {
-          // Bear occasionally publishes the matching AX value change just
-          // before the global key monitor callback reaches the main actor.
-          self.scheduleSettledRead()
-        }
-      case .undoOrRedo:
-        self.pendingInputIntent = intent
-        self.pendingBoundaryObservedAt = nil
-        self.pendingBoundaryRequiresIdle = false
-        self.clearDeferredCorrections()
-        self.logger.debug("Undo or Redo input observed; correction disarmed")
-      case .other:
-        // Bear can deliver the value-change notification for a completed word
-        // after the writer has already pressed the first key of the next word.
-        // Keep the boundary armed; exact transition verification still rejects
-        // a coalesced or otherwise changed context.
-        break
-      }
-    }) else {
+      })
+    else {
       invalidationMonitor.stop()
       status = .inputMonitoringUnavailable
       diagnostics.recordRefusal(.inputMonitoringUnavailable)
@@ -483,7 +550,16 @@ final class BearAutomaticCorrectionCoordinator {
     }
     observationRetryCount = 0
     logger.notice("Bear automatic observation ready")
-    rebaseline()
+    // Establish the baseline before accepting physical input. This is the one
+    // intentional synchronous read at session attachment; all recurring hot-
+    // path reads and every mutation use the serialized off-main AX lane.
+    let baseline = contextReader.read()
+    if case .ready(let snapshot) = baseline {
+      lastSnapshot = snapshot
+    } else {
+      lastSnapshot = nil
+    }
+    updateStatus(for: baseline)
   }
 
   private func stopObservation() {
@@ -502,8 +578,6 @@ final class BearAutomaticCorrectionCoordinator {
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
     scheduledBoundaryObservedAt = nil
-    pendingBoundaryRequiresIdle = false
-    lastTypingInputObservedAt = nil
     typingInputGeneration += 1
     clearDeferredCorrections()
     suppressesNextRedundantAutomaticValueChange = false
@@ -513,6 +587,7 @@ final class BearAutomaticCorrectionCoordinator {
     guard isEnabled else {
       return
     }
+    annotationTracker.handleInvalidation(event)
     switch event {
     case .valueChanged:
       logger.debug("Bear value change observed")
@@ -531,7 +606,8 @@ final class BearAutomaticCorrectionCoordinator {
   }
 
   private func scheduleSettledRead() {
-    let boundaryObservedAt = pendingValueChange
+    let boundaryObservedAt =
+      pendingValueChange
       ? pendingBoundaryObservedAt
       : nil
     if scheduledBoundaryObservedAt != nil {
@@ -555,7 +631,7 @@ final class BearAutomaticCorrectionCoordinator {
         return
       }
       self.scheduledBoundaryObservedAt = nil
-      self.evaluateSettledChange()
+      await self.evaluateSettledChange()
     }
   }
 
@@ -585,11 +661,10 @@ final class BearAutomaticCorrectionCoordinator {
     scheduleObservationRestart()
   }
 
-  private func evaluateSettledChange() {
+  private func evaluateSettledChange() async {
     let valueChangeWasObserved = pendingValueChange
     let boundaryObservedAt = pendingBoundaryObservedAt
     let pendingBoundaryCharacter: String?
-    let boundaryRequiresIdle = pendingBoundaryRequiresIdle
     if case .completionBoundary(let character) = pendingInputIntent {
       pendingBoundaryCharacter = character
     } else {
@@ -600,24 +675,23 @@ final class BearAutomaticCorrectionCoordinator {
     }
     let valueChangeWasTypedBoundary =
       pendingValueChange
-        && pendingBoundaryCharacter != nil
-        && boundaryPairingElapsed.map {
-          $0 <= maximumBoundaryPairingDelay
-        } == true
+      && pendingBoundaryCharacter != nil
+      && boundaryPairingElapsed.map {
+        $0 <= maximumBoundaryPairingDelay
+      } == true
     let valueChangeHadStaleBoundary =
       pendingValueChange
-        && pendingBoundaryCharacter != nil
-        && boundaryObservedAt != nil
-        && !valueChangeWasTypedBoundary
+      && pendingBoundaryCharacter != nil
+      && boundaryObservedAt != nil
+      && !valueChangeWasTypedBoundary
     let mayBeRedundantAutomaticValueChange =
       suppressesNextRedundantAutomaticValueChange
     pendingValueChange = false
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
-    pendingBoundaryRequiresIdle = false
     suppressesNextRedundantAutomaticValueChange = false
 
-    let result = contextReader.read()
+    let result = await readContext()
     guard case .ready(let currentSnapshot) = result else {
       tracePrivate(
         "evaluation result=\(result.traceLabel) valueChange=\(valueChangeWasObserved) boundary=\(pendingBoundaryCharacter.debugDescription)"
@@ -673,7 +747,7 @@ final class BearAutomaticCorrectionCoordinator {
         expectedBoundary: pendingBoundaryCharacter ?? ""
       )
     else {
-      if boundaryRequiresIdle, deferredScanStartLocation != nil {
+      if deferredScanStartLocation != nil {
         tracePrivate("outcome=rapidTypingCoalesced")
         logger.debug("Coalesced rapid input deferred to bounded idle scan")
         scheduleDeferredCorrectionsIfNeeded()
@@ -705,53 +779,23 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
 
-    if boundaryRequiresIdle {
-      deferredScanStartLocation = min(
-        deferredScanStartLocation ?? completion.targetRange.location,
-        completion.targetRange.location
-      )
-      deferredCorrections.append(
-        DeferredCorrection(
-          proposal: proposal,
-          targetRange: completion.targetRange,
-          boundaryObservedAt: boundaryObservedAt
-        )
-      )
-      diagnostics.recordDeferred()
-      tracePrivate(
-        "outcome=rapidTypingDeferred range=\(completion.targetRange.location):\(completion.targetRange.length)"
-      )
-      logger.debug("Correction deferred until typing is idle")
-      scheduleDeferredCorrectionsIfNeeded()
-      return
-    }
-
-    let application = correctionApplicator.apply(
-      original: proposal.correction.original,
-      replacement: proposal.correction.replacement,
-      at: completion.targetRange
+    deferredScanStartLocation = min(
+      deferredScanStartLocation ?? completion.targetRange.location,
+      completion.targetRange.location
     )
-    guard application.report.isVerifiedApplication else {
-      tracePrivate(
-        "outcome=replacementRefused status=\(application.report.status.rawValue)"
+    deferredCorrections.append(
+      DeferredCorrection(
+        proposal: proposal,
+        targetRange: completion.targetRange,
+        boundaryObservedAt: boundaryObservedAt
       )
-      diagnostics.recordRefusal(.replacementRefused)
-      logger.notice(
-        "Automatic correction refused: \(application.report.status.rawValue, privacy: .public)"
-      )
-      rebaseline()
-      return
-    }
-    recordVerifiedApplication(
-      application,
-      proposal: proposal,
-      elapsed: boundaryPairingElapsed
     )
+    diagnostics.recordDeferred()
     tracePrivate(
-      "outcome=applied original=\(proposal.correction.original.debugDescription) replacement=\(proposal.correction.replacement.debugDescription) range=\(completion.targetRange.location):\(completion.targetRange.length)"
+      "outcome=idleDeferred range=\(completion.targetRange.location):\(completion.targetRange.length)"
     )
-    logger.notice("Automatic correction applied")
-    rebaseline()
+    logger.debug("Correction deferred until typing is idle")
+    scheduleDeferredCorrectionsIfNeeded()
   }
 
   private func scheduleDeferredCorrectionsIfNeeded() {
@@ -787,9 +831,18 @@ final class BearAutomaticCorrectionCoordinator {
       clearDeferredCorrections()
       return
     }
+    if let physicalIdle = physicalInputIdleDuration(),
+      physicalIdle < deferredCorrectionIdleDelay
+    {
+      tracePrivate(
+        "outcome=physicalInputStillActive idleMs=\(Self.milliseconds(physicalIdle))"
+      )
+      scheduleDeferredCorrectionsIfNeeded()
+      return
+    }
 
     let scanGeneration = typingInputGeneration
-    appendDeferredCorrectionsFromRapidScan()
+    await appendDeferredCorrectionsFromRapidScan()
     await Task.yield()
     guard scanGeneration == typingInputGeneration else {
       scheduleDeferredCorrectionsIfNeeded()
@@ -801,31 +854,54 @@ final class BearAutomaticCorrectionCoordinator {
     deferredCorrections.removeAll(keepingCapacity: true)
     let applicationGeneration = typingInputGeneration
     for (index, correction) in pending.enumerated() {
-      let application = correctionApplicator.apply(
-        original: correction.proposal.correction.original,
-        replacement: correction.proposal.correction.replacement,
-        at: correction.targetRange
-      )
-      guard application.report.isVerifiedApplication else {
+      let applicator = correctionApplicator
+      let original = correction.proposal.correction.original
+      let replacement = correction.proposal.correction.replacement
+      let targetRange = correction.targetRange
+      let application = await BearAccessibilityOperationLane.shared.run {
+        applicator.apply(
+          original: original,
+          replacement: replacement,
+          at: targetRange
+        )
+      }
+      guard application.isReversibleApplication else {
         tracePrivate(
           "outcome=deferredReplacementRefused status=\(application.report.status.rawValue) range=\(correction.targetRange.location):\(correction.targetRange.length)"
         )
+        if application.report.writeOccurred {
+          diagnostics.recordRefusal(.postWriteReconciliationFailed)
+          openMutationCircuit(
+            status: application.report.status,
+            range: correction.targetRange
+          )
+          return
+        }
         diagnostics.recordRefusal(.replacementRefused)
         continue
+      }
+      let correctionElapsed = correction.boundaryObservedAt.map {
+        $0.duration(to: clock.now)
       }
       recordVerifiedApplication(
         application,
         proposal: correction.proposal,
-        elapsed: correction.boundaryObservedAt.map {
-          $0.duration(to: clock.now)
-        }
+        elapsed: correctionElapsed
       )
+      if !application.report.isVerifiedApplication {
+        diagnostics.recordPostWriteReconciled()
+        logger.error(
+          "Automatic correction recovered reversibility after post-write status: \(application.report.status.rawValue, privacy: .public)"
+        )
+      }
       tracePrivate(
         "outcome=deferredApplied original=\(correction.proposal.correction.original.debugDescription) replacement=\(correction.proposal.correction.replacement.debugDescription) range=\(correction.targetRange.location):\(correction.targetRange.length)"
       )
       // Keep the canonical marker shared with immediate applications so the
       // physical HID harness counts both execution paths consistently.
-      logger.notice("Automatic correction applied")
+      logger.notice(
+        "Automatic correction applied latencyMs=\(correctionElapsed.traceMilliseconds, privacy: .public)"
+      )
       await Task.yield()
       guard applicationGeneration == typingInputGeneration else {
         let remainingIndex = pending.index(after: index)
@@ -835,12 +911,12 @@ final class BearAutomaticCorrectionCoordinator {
           )
         }
         scheduleDeferredCorrectionsIfNeeded()
-        rebaseline()
+        await rebaseline()
         return
       }
     }
     suppressesNextRedundantAutomaticValueChange = true
-    rebaseline()
+    await rebaseline()
   }
 
   private func recordVerifiedApplication(
@@ -850,9 +926,16 @@ final class BearAutomaticCorrectionCoordinator {
   ) {
     suppressesNextRedundantAutomaticValueChange = true
     learningStore.recordApplied(proposal)
+    annotationTracker.recordVerifiedEdit(
+      BearAnnotationVerifiedEdit(
+        replacedRange: application.report.targetRange,
+        replacementLength: application.correction.replacement.utf16.count
+      )
+    )
     annotationTracker.trackWithResolution(
       application,
       alternatives: proposal.alternatives,
+      userRecency: proposal.correction.createdAt,
       onInteractionLatency: { [weak self] elapsed in
         self?.diagnostics.recordInteractionLatency(elapsed)
       },
@@ -862,6 +945,25 @@ final class BearAutomaticCorrectionCoordinator {
       onFinished: nil
     )
     diagnostics.recordApplied(elapsed: elapsed)
+  }
+
+  private func openMutationCircuit(
+    status writeStatus: BearExactRangeReplacementStatus,
+    range: AccessibilityTextRange
+  ) {
+    isMutationCircuitOpen = true
+    stopSettling()
+    invalidationMonitor.stop()
+    typingInputMonitor.stop()
+    annotationTracker.stop()
+    lastSnapshot = nil
+    status = .pausedAfterIndeterminateWrite
+    tracePrivate(
+      "outcome=postWriteReconciliationFailed status=\(writeStatus.rawValue) range=\(range.location):\(range.length)"
+    )
+    logger.fault(
+      "Automatic correction paused after an unreconciled AX write: \(writeStatus.rawValue, privacy: .public)"
+    )
   }
 
   private func clearDeferredCorrections() {
@@ -903,12 +1005,12 @@ final class BearAutomaticCorrectionCoordinator {
     )
   }
 
-  private func appendDeferredCorrectionsFromRapidScan() {
+  private func appendDeferredCorrectionsFromRapidScan() async {
     guard let requestedStart = deferredScanStartLocation else {
       return
     }
     deferredScanStartLocation = nil
-    guard case .ready(let snapshot) = contextReader.read() else {
+    guard case .ready(let snapshot) = await readContext() else {
       tracePrivate("outcome=rapidScanUnavailable")
       return
     }
@@ -937,9 +1039,10 @@ final class BearAutomaticCorrectionCoordinator {
         location: availableStart + word.range.location,
         length: word.range.length
       )
-      guard !deferredCorrections.contains(where: {
-        $0.targetRange == targetRange
-      }),
+      guard
+        !deferredCorrections.contains(where: {
+          $0.targetRange == targetRange
+        }),
         let engineProposal = correctionEngine.proposal(for: word.text),
         let proposal = learningStore.applyingPreference(to: engineProposal),
         proposal.correction.original == word.text
@@ -960,8 +1063,8 @@ final class BearAutomaticCorrectionCoordinator {
     }
   }
 
-  private func rebaseline() {
-    let result = contextReader.read()
+  private func rebaseline() async {
+    let result = await readContext()
     if case .ready(let snapshot) = result {
       lastSnapshot = snapshot
       tracePrivate("baseline snapshot={\(snapshot.traceDescription)}")
@@ -972,11 +1075,27 @@ final class BearAutomaticCorrectionCoordinator {
     updateStatus(for: result)
   }
 
+  private func readContext() async -> BearTypingContextReadResult {
+    let reader = contextReader
+    return await BearAccessibilityOperationLane.shared.run {
+      reader.read()
+    }
+  }
+
   private func tracePrivate(_ message: String) {
+    logger.notice(
+      "Diagnostic \(BearPrivateDiagnosticsStore.contentFreeEvent(from: message), privacy: .public)"
+    )
     guard privateDiagnosticsEnabled() else {
       return
     }
-    logger.notice("PRIVATE_DIAGNOSTIC \(message, privacy: .public)")
+    BearPrivateDiagnosticsStore.shared.record(message)
+  }
+
+  private static func milliseconds(_ duration: Duration) -> Double {
+    let components = duration.components
+    return Double(components.seconds) * 1_000
+      + Double(components.attoseconds) / 1_000_000_000_000_000
   }
 
   private func updateStatus(for result: BearTypingContextReadResult) {
@@ -1051,8 +1170,8 @@ final class BearAutomaticCorrectionCoordinator {
   }
 }
 
-private extension BearTypingInputIntent {
-  var traceLabel: String {
+extension BearTypingInputIntent {
+  fileprivate var traceLabel: String {
     switch self {
     case .completionBoundary(let character):
       "completionBoundary(\(character.debugDescription))"
@@ -1064,8 +1183,8 @@ private extension BearTypingInputIntent {
   }
 }
 
-private extension BearTypingContextReadResult {
-  var traceLabel: String {
+extension BearTypingContextReadResult {
+  fileprivate var traceLabel: String {
     switch self {
     case .ready:
       "ready"
@@ -1085,14 +1204,14 @@ private extension BearTypingContextReadResult {
   }
 }
 
-private extension BearTypingContextSnapshot {
-  var traceDescription: String {
+extension BearTypingContextSnapshot {
+  fileprivate var traceDescription: String {
     "caret=\(caretLocation) documentLength=\(documentLength) leadingRange=\(leadingRange.location):\(leadingRange.length) leading=\(leadingText.debugDescription) trailing=\(trailingText.debugDescription)"
   }
 }
 
-private extension Optional where Wrapped == BearTypingContextSnapshot {
-  var traceDescription: String {
+extension Optional where Wrapped == BearTypingContextSnapshot {
+  fileprivate var traceDescription: String {
     switch self {
     case .some(let snapshot):
       snapshot.traceDescription
@@ -1102,8 +1221,8 @@ private extension Optional where Wrapped == BearTypingContextSnapshot {
   }
 }
 
-private extension Optional where Wrapped == Duration {
-  var traceMilliseconds: String {
+extension Optional where Wrapped == Duration {
+  fileprivate var traceMilliseconds: String {
     guard let duration = self else {
       return "none"
     }

@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-07-31
+- Updated: 2026-08-01
 - Current milestone: 1 — Bear word-correction beta
 
 ## Goal
@@ -36,8 +36,17 @@ Bear now supports guarded exact-range replacement, independent Change Back,
 ranked alternatives, bounded context re-anchoring, wrapped-range geometry, a
 nonactivating clickable overlay, continued typing, and automatic word-level
 Apple Spelling. Up to 24 recent Bear corrections can remain independently
-reversible. The feature remains opt-in because most automatic-writing scenarios
-still need permissioned installed-app validation.
+reversible. Each primary squiggle exposes direct Accessibility actions for
+Change Back and safe alternatives. A scoped Control–Option–Command–M global
+shortcut is wired to change back the newest tracked correction without
+activating Typover or opening an inactive menu. Its original Carbon registration
+accepted the physical chord but did not deliver a callback in the installed
+app. The shortcut now uses the same AppKit global key-event path already proven
+by automatic Bear correction. Deterministic coverage and an installed physical
+one-chord retest pass: one key-down plus release restored exactly the newest
+remaining correction while preserving Bear focus, the caret, and all other
+text. The feature remains opt-in because most
+automatic-writing scenarios still need permissioned installed-app validation.
 
 Bear focus recovery now has a safe two-stage observer. Typover can wait on
 content-free application focus notifications when Bear has not exposed an
@@ -48,13 +57,12 @@ correction dormant.
 
 Bear's keyboard and Accessibility notifications are independent asynchronous
 streams, and exact-range replacement is a comparatively slow Accessibility
-transaction. Typover now measures recent input cadence. It corrects ordinary
-typing immediately, but defers a correction when the preceding key interval is
-under 80 milliseconds. After 220 milliseconds of idle time it scans only the
-bounded text observed since that rapid burst began, queues eligible completed
-words, and applies exact-verified ranges from end to beginning. Focus changes,
-Undo/Redo, an unavailable burst start, or text outside the 96-unit live window
-still fail closed.
+transaction. Typover now uses one idle-first rule for every mutation. After
+220 milliseconds without physical input it scans only the bounded text
+observed since the current burst began, queues eligible completed words, and
+applies exact-verified ranges from end to beginning. Focus changes, Undo/Redo,
+an unavailable burst start, or text outside the 96-unit live window still fail
+closed.
 
 The quiet physical HID baseline now passes 20/20 corrections at 160, 100, 60,
 and 40 milliseconds per character. The 60 and 40 millisecond rows deliberately
@@ -70,7 +78,10 @@ every later correction. Typover now broadcasts its own verified edits across
 the active collection, transforms nonoverlapping ranges, and rebuilds their
 anchors from Bear's current text. Automated coverage reverts correction five
 of 21 while retaining the other 20 and separately covers length-changing and
-overlapping edits. A post-fix installed interaction pass remains.
+overlapping edits. The post-fix installed interaction pass now also succeeds:
+an early direct Accessibility action changed only its word and retained all 19
+siblings, and a later sibling's pointer menu opened without moving focus or
+changing text.
 
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
@@ -121,11 +132,12 @@ Back action, and alternatives.
   checks on macOS 27.0.
 - [x] Make temporary observer and typed-boundary monitoring failures explicit
   and recover from a fresh baseline on the next application lifecycle event.
-- [ ] Replace the temporary single-user private Bear trace before broader beta
-  testing. The development trace may contain the actual bounded text around the
-  caret in local unified logs. The beta design must default off, provide an
-  explicit in-app consent and retention explanation, support export and delete,
-  redact or hash text by default, cap retention, and never upload automatically.
+- [x] Replace the temporary single-user private Bear trace before broader beta
+  testing. Unified logs now contain only content-free event names. The optional
+  file-backed trace defaults off; its default enabled mode redacts writing, and
+  including bounded context is a separate explicit choice. Settings explains
+  the 24-hour/1 MB local retention cap and no-upload boundary and provides
+  export and delete controls. Focused store and settings-render tests pass.
 - [x] Add a bounded post-burst catch-up pass for rapid physical typing. It may
   inspect only the verified insertion since a recent caret baseline, must wait
   for a short idle
@@ -147,8 +159,36 @@ Back action, and alternatives.
   baseline and exclusive Bear focus, captures exact inserted-range and local
   private-trace evidence, and fails closed on focus or range ambiguity. The
   quiet physical baseline now passes at 160, 100, 60, and 40 milliseconds per
-  character. Controlled CPU, WindowServer, and Accessibility-load profiles
-  remain pending.
+  character. The harness now implements bounded `cpu`, `window-server`,
+  `accessibility`, and `combined` profiles after the same quiet admission gate,
+  records Typover/Bear/WindowServer CPU and resident memory plus per-correction
+  latency, resolves the fixture's mDNS name once, and holds a macOS wake
+  assertion for the run. The first CPU attempt was rejected because the session
+  locked before the wake assertion existed; no product result was credited.
+  Fresh unlocked installed passes remain. A reported rainbow wait cursor while opening an early
+  squiggle exposed collection-scaled main-thread churn: every overlay fallback
+  refresh synchronously queried LaunchServices and reissued unchanged
+  WindowServer operations. Frontmost state is now event-cached and panel
+  presentation is idempotent. The full 248-test gate passes; the installed
+  multi-correction click check now passes against a fresh 20-overlay physical
+  run. See
+  [Bear overlay main-thread churn](../bugs/2026-07-31-bear-overlay-main-thread-churn.md).
+  The same installed pass exposed a separate empty-note ambiguity: repeated
+  middle anchors had no unique context while later words were appended. Every
+  verified automatic edit is now serialized through the overlay collection so
+  older corrections re-anchor from their exact transformed ranges. Queue
+  targets are snapshotted before the new annotation is added so a correction
+  cannot invalidate itself; unverified ambiguous edits still fail closed. See
+  [Empty-note repeated anchors](../bugs/2026-07-31-empty-note-repeated-anchor-ambiguity.md).
+  The first idle-first physical burst corrected 20/20 but exposed one remaining
+  settling race: all 20 squiggles appeared initially, then older overlays were
+  retired while Bear value notifications interleaved with sibling re-anchors.
+  Verified edits are now batched to settled text and self-induced invalidations
+  are deferred until the batch completes. Existing verified panels remain
+  visible while serialized re-anchoring is in flight. A 2026-08-01 installed
+  run corrected 20/20 physical words and recorded 20 exact visible overlay
+  ranges with zero lifecycle hides after settling. See
+  [Bear post-burst overlay retirement](../bugs/2026-07-31-bear-post-burst-overlay-retirement.md).
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria
@@ -181,15 +221,20 @@ ordinary app or Accessibility lifecycle changes.
 
 ### Work
 
-- Create a benefit-led first-run explanation for Accessibility and Input
+- [x] Create a benefit-led first-run explanation for Accessibility and Input
   Monitoring, with a clear path to System Settings and an option to explore
-  later.
-- Show whether Bear correction is disabled, waiting, observing, paused,
+  later. The reusable permission rows refresh whenever Typover becomes active;
+  installed visual validation remains.
+- [x] Show whether Bear correction is disabled, waiting, observing, paused,
   unsupported, or missing permission.
-- Explain capability and version gating in the interface, including why an
+- [x] Explain capability and version gating in the interface, including why an
   installed Bear version is unsupported.
-- Decide and document background launch and launch-at-login behavior.
-- Provide a privacy summary and a content-free diagnostic export.
+- [x] Decide and document background launch and launch-at-login behavior.
+  ADR-015 keeps the initial beta manually launched until energy, recovery,
+  update, and uninstall evidence passes.
+- [x] Provide a privacy summary and a content-free diagnostic export. The
+  optional local trace now has explicit consent, bounded retention, export,
+  delete, and a separately gated bounded-writing mode.
 - Produce a signed beta build and a repeatable clean-machine install and
   permission test.
 
@@ -341,10 +386,16 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-Manually Change Back an early correction from the latest 20-word Bear burst and
-confirm that its surviving sibling squiggles remain independently clickable.
-The physical harness proves exact inserted text and matching application logs;
-it does not yet count visible overlays or click their menus. Then continue the
-remaining Phase 8 installed matrix. After that normal-load acceptance pass,
-design the severe-load investigation and controlled CPU, WindowServer, and
-Accessibility-contention profiles around the now-proven bounded recovery path.
+The physical 20-word Bear burst now passes correction, overlay retention, and
+all three independently credited interaction rows. One physical
+Control–Option–Command–M chord restored exactly the newest correction. A direct
+Accessibility action on correction five changed only that word and retained
+the other 19 overlays. A real pointer click on a later sibling opened its
+native correction menu while Bear remained frontmost and its text stayed
+unchanged.
+
+Next, run the same fixture under controlled CPU, WindowServer, and Accessibility
+contention. The new runtime bounds AX IPC and concurrent work, but production
+resilience still requires installed evidence. Record correction coverage,
+post-burst convergence time, missing or stale overlays, menu latency, AX
+timeouts, reconciled writes, and circuit-breaker events separately.

@@ -189,10 +189,10 @@ struct BearCorrectionGeometryTests {
     #expect(fixture.reader.boundsQueryCount == 0)
   }
 
-  @Test("Production anchors distinguish sixteen repeated corrections")
+  @Test("Verified edits preserve sixteen repeated corrections in an empty note")
   func retainsRepeatedProductionAnchors() throws {
     let reader = FakeBearGeometryTextClient(
-      text: "# testing\n\n",
+      text: "",
       visibleRange: nil,
       boundsResult: .success(
         AccessibilityBounds(x: 100, y: 200, width: 24, height: 18)
@@ -227,6 +227,19 @@ struct BearCorrectionGeometryTests {
       )
 
       #expect(outcome.report.status == .applied)
+      for index in anchors.indices {
+        let reanchored = BearCorrectionReanchorTransaction().reanchor(
+          BearCorrectionReanchorRequest(
+            targetRange: anchors[index].correctionRange,
+            expectedText: "the",
+            leadingContextLimit: 256,
+            trailingContextLimit: 256
+          ),
+          in: reader
+        )
+        #expect(reanchored.status == .reanchored)
+        anchors[index] = try #require(reanchored.correctionAnchor)
+      }
       anchors.append(try #require(outcome.correctionAnchor))
     }
 
@@ -245,6 +258,49 @@ struct BearCorrectionGeometryTests {
       #expect(report.status == .available)
       #expect(report.resolvedRange == anchor.correctionRange)
     }
+  }
+
+  @Test("An identical prefix insertion remains ambiguous")
+  func refusesIdenticalPrefixInsertion() throws {
+    let reader = FakeBearGeometryTextClient(
+      text: "the teh ",
+      visibleRange: nil,
+      boundsResult: .success(
+        AccessibilityBounds(x: 100, y: 200, width: 24, height: 18)
+      )
+    )
+    reader.selectedRangeValue = AccessibilityTextRange(
+      location: reader.text.length,
+      length: 0
+    )
+    let outcome = BearExactRangeTransaction().applyOutcome(
+      BearExactRangeReplacementRequest(
+        targetRange: AccessibilityTextRange(location: 4, length: 3),
+        expectedOriginal: "teh",
+        replacement: "the"
+      ),
+      to: reader
+    )
+    let anchor = try #require(outcome.correctionAnchor)
+
+    reader.userReplace(
+      AccessibilityTextRange(location: 0, length: 0),
+      with: "the "
+    )
+    reader.visibleRangeValue = AccessibilityTextRange(
+      location: 0,
+      length: reader.text.length
+    )
+
+    let report = BearCorrectionGeometryTransaction().geometry(
+      for: BearCorrectionGeometryRequest(
+        anchor: anchor,
+        expectedReplacement: "the"
+      ),
+      in: reader
+    )
+    #expect(report.status == .ambiguousAnchor)
+    #expect(report.resolvedRange == nil)
   }
 
   @Test("A manually changed correction is not annotated")

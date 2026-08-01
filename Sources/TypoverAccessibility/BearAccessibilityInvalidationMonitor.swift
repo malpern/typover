@@ -92,6 +92,7 @@ public final class BearAccessibilityInvalidationMonitor:
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     let probe = BearAccessibilityProbe()
     let focusedElement = copyElementAttribute(
       applicationElement,

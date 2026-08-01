@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import TypoverAccessibility
 import TypoverBearAdapter
 
@@ -41,6 +42,11 @@ public enum BearAnnotationResolution: Equatable, Sendable {
 public final class BearAnnotationOverlayController {
   public static let fallbackRefreshInterval = Duration.milliseconds(125)
 
+  private let logger = Logger(
+    subsystem: "com.malpern.typover",
+    category: "BearAnnotationOverlay"
+  )
+
   private let adapter: any BearCorrectionServicing
   private let presenter: any BearAnnotationPresenting
   private let invalidationMonitor: any BearAccessibilityInvalidationObserving
@@ -50,6 +56,8 @@ public final class BearAnnotationOverlayController {
   private let textChangeRefreshDelay: Duration
   private let selectionStabilizationDelays: [Duration]
   private let handlesKeyboardShortcut: Bool
+  private let shortcutRegistrar: any BearAnnotationShortcutRegistering
+  private var usesSharedLifecycle = false
 
   private var application: BearCorrectionApplication?
   private var refreshGeneration = 0
@@ -60,15 +68,18 @@ public final class BearAnnotationOverlayController {
   private var interactionTask: Task<Void, Never>?
   private var selectionStabilizationTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
-  private var keyboardMonitor: Any?
+  private var shortcutToken: UUID?
   private var alternatives: [String] = []
   private var onInteractionLatency: (@MainActor @Sendable (Duration) -> Void)?
   private var onFinished: (@MainActor @Sendable () -> Void)?
   private var onResolution: (@MainActor @Sendable (BearAnnotationResolution) -> Void)?
   private var onVerifiedEdit: (@MainActor @Sendable (BearAnnotationVerifiedEdit) -> Void)?
   private var lastResolvedRange: AccessibilityTextRange?
+  private var cachedFrontmostBundleIdentifier: String?
+  private var trackedCorrectionID: String?
+  private var reportedVisible = false
 
-  public init(
+  public convenience init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
     presenter: any BearAnnotationPresenting =
       AppKitBearAnnotationPresenter(),
@@ -89,6 +100,32 @@ public final class BearAnnotationOverlayController {
       .milliseconds(180),
     ]
   ) {
+    self.init(
+      adapter: adapter,
+      presenter: presenter,
+      invalidationMonitor: invalidationMonitor,
+      frontmostBundleIdentifier: frontmostBundleIdentifier,
+      displays: displays,
+      fallbackRefreshInterval: fallbackRefreshInterval,
+      textChangeRefreshDelay: textChangeRefreshDelay,
+      handlesKeyboardShortcut: handlesKeyboardShortcut,
+      selectionStabilizationDelays: selectionStabilizationDelays,
+      shortcutRegistrar: BearAnnotationShortcutCenter.shared
+    )
+  }
+
+  init(
+    adapter: any BearCorrectionServicing,
+    presenter: any BearAnnotationPresenting,
+    invalidationMonitor: any BearAccessibilityInvalidationObserving,
+    frontmostBundleIdentifier: @escaping @MainActor @Sendable () -> String?,
+    displays: @escaping @MainActor @Sendable () -> [BearOverlayDisplay],
+    fallbackRefreshInterval: Duration,
+    textChangeRefreshDelay: Duration,
+    handlesKeyboardShortcut: Bool,
+    selectionStabilizationDelays: [Duration],
+    shortcutRegistrar: any BearAnnotationShortcutRegistering
+  ) {
     self.adapter = adapter
     self.presenter = presenter
     self.invalidationMonitor = invalidationMonitor
@@ -98,6 +135,7 @@ public final class BearAnnotationOverlayController {
     self.textChangeRefreshDelay = textChangeRefreshDelay
     self.handlesKeyboardShortcut = handlesKeyboardShortcut
     self.selectionStabilizationDelays = selectionStabilizationDelays
+    self.shortcutRegistrar = shortcutRegistrar
   }
 
   isolated deinit {
@@ -160,18 +198,25 @@ public final class BearAnnotationOverlayController {
     self.onResolution = onResolution
     self.onVerifiedEdit = onVerifiedEdit
     self.onFinished = onFinished
+    trackedCorrectionID = application.correction.id.uuidString
     lastResolvedRange = application.correctionAnchor?.correctionRange
-    installWorkspaceObservers()
-    if handlesKeyboardShortcut {
-      installKeyboardMonitor()
+    cachedFrontmostBundleIdentifier = frontmostBundleIdentifier()
+    if !usesSharedLifecycle {
+      installWorkspaceObservers()
     }
-    restartInvalidationMonitor()
-    startFallbackRefresh()
+    if handlesKeyboardShortcut {
+      registerKeyboardShortcut()
+    }
+    if !usesSharedLifecycle {
+      restartInvalidationMonitor()
+      startFallbackRefresh()
+    }
     refresh(hideFirst: true)
     scheduleSelectionStabilization(for: application)
   }
 
   public func stop() {
+    hideAnnotation(reason: "stop")
     application = nil
     refreshGeneration += 1
     refreshTask?.cancel()
@@ -187,21 +232,36 @@ public final class BearAnnotationOverlayController {
     selectionStabilizationTask = nil
     invalidationMonitor.stop()
     removeWorkspaceObservers()
-    removeKeyboardMonitor()
-    presenter.hide()
+    unregisterKeyboardShortcut()
     alternatives = []
     onInteractionLatency = nil
     onResolution = nil
     onVerifiedEdit = nil
     onFinished = nil
     lastResolvedRange = nil
+    cachedFrontmostBundleIdentifier = nil
+    trackedCorrectionID = nil
   }
 
   public func showMenu() {
-    guard isBearFrontmost else {
+    guard isBearFrontmost, let correctionID = trackedCorrectionID else {
       return
     }
+    logger.notice(
+      "Overlay menu opened id=\(correctionID, privacy: .public) range=\(self.lastResolvedRange?.location ?? -1, privacy: .public):\(self.lastResolvedRange?.length ?? 0, privacy: .public)"
+    )
     presenter.showMenu()
+  }
+
+  /// Performs the correction's primary reversible action without activating
+  /// Typover or routing a follow-up key event through an AppKit menu.
+  @discardableResult
+  public func changeBack() -> Bool {
+    guard isBearFrontmost, application != nil, interactionTask == nil else {
+      return false
+    }
+    perform(.changeBack)
+    return true
   }
 
   private func refresh(
@@ -209,14 +269,14 @@ public final class BearAnnotationOverlayController {
     finishIfInvalidated: Bool = false
   ) {
     guard let application else {
-      presenter.hide()
+      hideAnnotation(reason: "missingApplication")
       return
     }
     if hideFirst {
-      presenter.hide()
+      hideAnnotation(reason: "refresh")
     }
     guard isBearFrontmost else {
-      presenter.hide()
+      hideAnnotation(reason: "notFrontmost")
       return
     }
 
@@ -225,9 +285,9 @@ public final class BearAnnotationOverlayController {
     refreshTask?.cancel()
     let adapter = adapter
     refreshTask = Task { [weak self] in
-      let report = await Task.detached(priority: .userInitiated) {
+      let report = await BearAccessibilityOperationLane.shared.run {
         adapter.geometry(for: application)
-      }.value
+      }
       guard !Task.isCancelled, let self,
         generation == self.refreshGeneration,
         self.isBearFrontmost
@@ -255,7 +315,7 @@ public final class BearAnnotationOverlayController {
         displays: displays()
       )
     else {
-      presenter.hide()
+      hideAnnotation(reason: report.status.rawValue)
       if report.status.endsTracking
         || (finishIfInvalidated && report.status.isInvalidatedAnchor)
       {
@@ -264,7 +324,7 @@ public final class BearAnnotationOverlayController {
       return
     }
     guard let application else {
-      presenter.hide()
+      hideAnnotation(reason: "missingApplication")
       return
     }
     presenter.show(
@@ -281,6 +341,7 @@ public final class BearAnnotationOverlayController {
         self?.perform(action)
       }
     )
+    reportVisible(range: report.resolvedRange)
   }
 
   private func handle(
@@ -302,13 +363,35 @@ public final class BearAnnotationOverlayController {
     }
   }
 
+  /// Transfers observer, workspace, and fallback ownership to a collection.
+  /// This must be called before `trackWithResolution`.
+  func useSharedLifecycle() {
+    usesSharedLifecycle = true
+  }
+
+  public func handleSharedInvalidation(
+    _ event: BearAccessibilityInvalidationEvent
+  ) {
+    guard usesSharedLifecycle else {
+      return
+    }
+    handle(event)
+  }
+
+  public func refreshFromSharedFallback() {
+    guard usesSharedLifecycle, textChangeRefreshTask == nil else {
+      return
+    }
+    refresh(hideFirst: false)
+  }
+
   private func scheduleTextChangeRefresh(
     _ event: BearAccessibilityInvalidationEvent
   ) {
     pendingTextChangeMayInvalidateAnchor =
       pendingTextChangeMayInvalidateAnchor || event == .valueChanged
     if event == .valueChanged {
-      presenter.hide()
+      hideAnnotation(reason: "valueChanged")
     }
     refreshGeneration += 1
     refreshTask?.cancel()
@@ -383,9 +466,16 @@ public final class BearAnnotationOverlayController {
     guard let application else {
       return
     }
+    let actionName = switch action {
+    case .changeBack: "changeBack"
+    case .chooseAlternative: "chooseAlternative"
+    }
+    logger.notice(
+      "Overlay action selected id=\(application.correction.id.uuidString, privacy: .public) action=\(actionName, privacy: .public)"
+    )
     selectionStabilizationTask?.cancel()
     selectionStabilizationTask = nil
-    presenter.hide()
+    hideAnnotation(reason: "interaction")
     refreshGeneration += 1
     refreshTask?.cancel()
     let adapter = adapter
@@ -394,9 +484,9 @@ public final class BearAnnotationOverlayController {
     interactionTask = Task { [weak self] in
       switch action {
       case .changeBack:
-        let result = await Task.detached(priority: .userInitiated) {
+        let result = await BearAccessibilityOperationLane.shared.run {
           adapter.changeBack(application)
-        }.value
+        }
         guard !Task.isCancelled, let self,
           self.application == application
         else {
@@ -453,9 +543,9 @@ public final class BearAnnotationOverlayController {
         }
 
       case .chooseAlternative(let replacement):
-        let result = await Task.detached(priority: .userInitiated) {
+        let result = await BearAccessibilityOperationLane.shared.run {
           adapter.chooseAlternative(replacement, for: application)
-        }.value
+        }
         guard !Task.isCancelled, let self,
           self.application == application
         else {
@@ -481,7 +571,9 @@ public final class BearAnnotationOverlayController {
             at: 0
           )
           self.application = updatedApplication
-          self.restartInvalidationMonitor()
+          if !self.usesSharedLifecycle {
+            self.restartInvalidationMonitor()
+          }
           self.refresh(hideFirst: true)
           self.scheduleSelectionStabilization(for: updatedApplication)
         } else {
@@ -496,18 +588,36 @@ public final class BearAnnotationOverlayController {
     }
   }
 
-  func applyVerifiedEdit(_ edit: BearAnnotationVerifiedEdit) async {
+  public func applyVerifiedEdit(_ edit: BearAnnotationVerifiedEdit) async {
+    await applyVerifiedEdits([edit])
+  }
+
+  /// Applies a burst of already-verified sibling edits with one final AX
+  /// re-anchor. Transforming the range is deterministic; querying Bear after
+  /// every sibling mutation only creates transient stale-anchor windows.
+  public func applyVerifiedEdits(
+    _ edits: [BearAnnotationVerifiedEdit]
+  ) async {
     guard
       let application,
-      let currentRange = lastResolvedRange
-        ?? application.correctionAnchor?.correctionRange,
-      let transformedRange = edit.transformedRange(for: currentRange)
+      var transformedRange = lastResolvedRange
+        ?? application.correctionAnchor?.correctionRange
     else {
       finishTracking()
       return
     }
+    for edit in edits {
+      guard let nextRange = edit.transformedRange(for: transformedRange) else {
+        finishTracking()
+        return
+      }
+      transformedRange = nextRange
+    }
 
-    presenter.hide()
+    // Keep the last verified placement visible while the serialized AX lane
+    // refreshes this controller's anchor. Hiding here makes a burst appear to
+    // shed overlays in re-anchor order even though their exact ranges remain
+    // valid. A failed re-anchor still ends tracking and hides the presenter.
     cancelTextChangeRefresh()
     refreshGeneration += 1
     refreshTask?.cancel()
@@ -515,9 +625,10 @@ public final class BearAnnotationOverlayController {
     lastResolvedRange = transformedRange
 
     let adapter = adapter
-    let result = await Task.detached(priority: .userInitiated) {
-      adapter.reanchor(application, at: transformedRange)
-    }.value
+    let finalRange = transformedRange
+    let result = await BearAccessibilityOperationLane.shared.run {
+      adapter.reanchor(application, at: finalRange)
+    }
     guard !Task.isCancelled, self.application == application else {
       return
     }
@@ -526,8 +637,10 @@ public final class BearAnnotationOverlayController {
       return
     }
     self.application = updatedApplication
-    lastResolvedRange = transformedRange
-    restartInvalidationMonitor()
+    lastResolvedRange = finalRange
+    if !usesSharedLifecycle {
+      restartInvalidationMonitor()
+    }
     refresh(hideFirst: false)
   }
 
@@ -573,40 +686,28 @@ public final class BearAnnotationOverlayController {
       } catch {
         return
       }
-      let status = await Task.detached(priority: .userInitiated) {
+      let status = await BearAccessibilityOperationLane.shared.run {
         adapter.stabilizeSelection(request)
-      }.value
+      }
       if status == .userMovedSelection || status == .staleAnchor {
         return
       }
     }
   }
 
-  private func installKeyboardMonitor() {
-    keyboardMonitor = NSEvent.addGlobalMonitorForEvents(
-      matching: .keyDown
-    ) { [weak self] event in
-      let modifiers = event.modifierFlags.intersection(
-        .deviceIndependentFlagsMask
-      )
-      guard event.keyCode == 36,
-        modifiers == [.control, .option, .command]
-      else {
-        return
-      }
-      Task { @MainActor in
-        guard let self, self.isBearFrontmost else {
-          return
-        }
-        self.presenter.showMenu()
-      }
+  private func registerKeyboardShortcut() {
+    guard shortcutToken == nil else {
+      return
+    }
+    shortcutToken = shortcutRegistrar.register { [weak self] in
+      self?.changeBack()
     }
   }
 
-  private func removeKeyboardMonitor() {
-    if let keyboardMonitor {
-      NSEvent.removeMonitor(keyboardMonitor)
-      self.keyboardMonitor = nil
+  private func unregisterKeyboardShortcut() {
+    if let shortcutToken {
+      shortcutRegistrar.unregister(shortcutToken)
+      self.shortcutToken = nil
     }
   }
 
@@ -648,16 +749,30 @@ public final class BearAnnotationOverlayController {
       return
     }
 
-    presenter.hide()
+    if name == NSWorkspace.didActivateApplicationNotification {
+      cachedFrontmostBundleIdentifier = bundleIdentifier
+    } else if name == NSWorkspace.didHideApplicationNotification,
+      bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
+    {
+      cachedFrontmostBundleIdentifier = nil
+    } else {
+      return
+    }
+
+    hideAnnotation(reason: "workspaceActivation")
     refreshGeneration += 1
     refreshTask?.cancel()
     if isBearFrontmost {
-      restartInvalidationMonitor()
+      if !usesSharedLifecycle {
+        restartInvalidationMonitor()
+      }
       refresh(hideFirst: false)
     } else {
       selectionStabilizationTask?.cancel()
       selectionStabilizationTask = nil
-      invalidationMonitor.stop()
+      if !usesSharedLifecycle {
+        invalidationMonitor.stop()
+      }
     }
   }
 
@@ -675,8 +790,29 @@ public final class BearAnnotationOverlayController {
     onFinished?()
   }
 
+  private func reportVisible(range: AccessibilityTextRange?) {
+    guard !reportedVisible, let correctionID = trackedCorrectionID else {
+      return
+    }
+    reportedVisible = true
+    logger.notice(
+      "Overlay visible id=\(correctionID, privacy: .public) range=\(range?.location ?? -1, privacy: .public):\(range?.length ?? 0, privacy: .public)"
+    )
+  }
+
+  private func hideAnnotation(reason: String) {
+    presenter.hide()
+    guard reportedVisible, let correctionID = trackedCorrectionID else {
+      return
+    }
+    reportedVisible = false
+    logger.notice(
+      "Overlay hidden id=\(correctionID, privacy: .public) reason=\(reason, privacy: .public)"
+    )
+  }
+
   private var isBearFrontmost: Bool {
-    frontmostBundleIdentifier()
+    cachedFrontmostBundleIdentifier
       == BearAccessibilityProbe.bearBundleIdentifier
   }
 

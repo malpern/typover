@@ -102,6 +102,7 @@ public struct BearCorrectionRetargeter:
     let applicationElement = AXUIElementCreateApplication(
       application.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,

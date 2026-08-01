@@ -128,6 +128,7 @@ public struct BearExactRangeReplacer: BearExactRangeReplacing, Sendable {
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,
@@ -456,6 +457,7 @@ final class AXBearEditableTextClient: BearEditableTextClient {
 
   init(element: AXUIElement) {
     self.element = element
+    configureBearAccessibilityMessagingTimeout(element)
   }
 
   func selectedRange() -> AccessibilityTextRange? {

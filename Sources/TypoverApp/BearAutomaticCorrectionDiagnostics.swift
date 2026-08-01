@@ -3,6 +3,8 @@ import Observation
 
 enum BearAutomaticCorrectionDiagnosticOutcome: String, Equatable, Sendable {
   case applied
+  case postWriteReconciled
+  case postWriteReconciliationFailed
   case rapidTypingDeferred
   case unarmedValueChange
   case contextUnavailable
@@ -119,6 +121,10 @@ final class BearAutomaticCorrectionDiagnostics {
         correctionToAnnotationMilliseconds.count - maximumLatencySamples
       )
     }
+  }
+
+  func recordPostWriteReconciled() {
+    lastOutcome = .postWriteReconciled
   }
 
   func recordInteractionLatency(_ elapsed: Duration) {

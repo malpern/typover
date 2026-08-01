@@ -46,7 +46,8 @@ per character. This covers ordinary deliberate typing through a fast burst.
 - the existing fixture client is executable;
 - the AppKit Jig launcher and monitor client are executable;
 - the fixture is reachable and its USB keyboard is mounted;
-- Typover is running with local private diagnostics enabled;
+- Typover is running; optional private diagnostics are reported but are not a
+  run prerequisite;
 - Bear exposes the supported focused text editor contract; and
 - Bear is frontmost.
 
@@ -62,12 +63,23 @@ the Mac while the matrix runs. Then execute:
 Scripts/typover-hid-harness run --exclusive-desktop-confirmed
 ```
 
+After a quiet baseline, controlled contention can be selected explicitly:
+
+```bash
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile cpu
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile window-server
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile accessibility
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile combined
+```
+
 The runner waits for three host samples with at least 60% CPU idle and no
 active Swift compiler. It refuses to start unless Typover is running and the
 fixture reports a mounted USB keyboard. Before the quiet-host wait it opens the
 Jig monitor and shows a focus gate. After the host becomes quiet, the harness
 activates Bear itself and waits up to two minutes for a focused collapsed caret
-at the end of the editor. It rechecks that caret after load, arm, and monitor
+at the end of the editor. It holds an explicit macOS display/system wake
+assertion until the run ends, and every generated load source is terminated on
+normal completion or failure. It rechecks the caret after load, arm, and monitor
 setup, watches the frontmost application throughout the delayed start and HID
 burst, and aborts the fixture if Bear loses focus. The monitor remains visible
 on the final verified result.
@@ -89,9 +101,10 @@ to Typover.
 The default evidence directory is
 `~/.local/state/typover/bear-hid/<run-id>/`. Each JSON file is mode `0600` and
 contains the synthetic inserted range, fixture status and trace, quiet-machine
-samples, and Typover unified-log lines for the case. Because the development
-private trace is enabled, those log lines can include bounded Bear context. The
-files stay local and should be deleted or redacted before sharing.
+samples, controlled-load process samples, per-correction timing, and
+content-free Typover unified-log events for the case. Optional bounded-writing
+diagnostics live in a separate capped local file and are never copied into the
+harness artifact. The harness files stay local.
 
 ## What this establishes
 
@@ -102,9 +115,9 @@ The matrix separates three layers that manual typing mixes together:
 3. the Typover trace explains applied corrections and safe skips such as
    `contextChanged`.
 
-The first quiet run is a baseline. Later work can add controlled CPU and
-Accessibility contention using the same artifact schema, then compare current
-behavior with the bounded post-burst catch-up design.
+The first quiet run is a baseline. Schema version 2 adds controlled CPU,
+WindowServer, Accessibility, and combined contention using the same exact-text
+and fail-closed evidence contract.
 
 ## Quiet baseline result: 2026-07-31
 

@@ -13,7 +13,7 @@ if [[ ! -x "$binary" ]]; then
   exit 2
 fi
 
-if [[ "${1:-}" != "plan" && -z "${KEYPATH_FIXTURE_TOKEN:-}" ]]; then
+if [[ "${1:-}" != "plan" && "${1:-}" != "snapshot" && -z "${KEYPATH_FIXTURE_TOKEN:-}" ]]; then
   secrets_file="${KEYPATH_FIXTURE_SECRETS_FILE:-$HOME/dotfiles/secrets.env}"
   if ! command -v sops >/dev/null 2>&1 || [[ ! -f "$secrets_file" ]]; then
     echo "Could not load KEYPATH_FIXTURE_TOKEN from encrypted secrets." >&2
@@ -28,7 +28,7 @@ if [[ "${1:-}" != "plan" && -z "${KEYPATH_FIXTURE_TOKEN:-}" ]]; then
   done < <(sops -d "$secrets_file")
 fi
 
-if [[ "${1:-}" != "plan" && -z "${KEYPATH_FIXTURE_TOKEN:-}" ]]; then
+if [[ "${1:-}" != "plan" && "${1:-}" != "snapshot" && -z "${KEYPATH_FIXTURE_TOKEN:-}" ]]; then
   echo "KEYPATH_FIXTURE_TOKEN is not configured." >&2
   exit 2
 fi

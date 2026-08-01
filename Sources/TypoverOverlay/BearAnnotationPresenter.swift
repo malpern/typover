@@ -38,15 +38,15 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
       let horizontalInset = 4.0
       let lowerInset = 3.0
       let upperInset = 5.0
-      panel.setFrame(
-        NSRect(
-          x: placement.x - horizontalInset,
-          y: placement.y - lowerInset,
-          width: placement.width + horizontalInset * 2,
-          height: placement.height + lowerInset + upperInset
-        ),
-        display: false
+      let panelFrame = NSRect(
+        x: placement.x - horizontalInset,
+        y: placement.y - lowerInset,
+        width: placement.width + horizontalInset * 2,
+        height: placement.height + lowerInset + upperInset
       )
+      if panel.frame != panelFrame {
+        panel.setFrame(panelFrame, display: false)
+      }
       panel.configure(
         squiggleFrame: NSRect(
           x: horizontalInset,
@@ -57,7 +57,9 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
         interaction: interaction,
         isPrimaryAccessibilityElement: index == 0
       )
-      panel.orderFrontRegardless()
+      if !panel.isVisible {
+        panel.orderFrontRegardless()
+      }
     }
   }
 
@@ -66,7 +68,7 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
   }
 
   public func hide() {
-    for panel in panels {
+    for panel in panels where panel.isVisible {
       panel.orderOut(nil)
     }
   }
@@ -116,7 +118,7 @@ final class BearSquigglePanel: NSPanel {
       "typover.bear.correction-options"
     )
     squiggleView.setAccessibilityHelp(
-      "Opens the menu for reverting this correction or choosing another suggestion."
+      "Opens correction options. Accessibility actions can revert the correction or choose another suggestion without moving focus."
     )
     setAccessibilityElement(isPrimaryAccessibilityElement)
     setAccessibilityRole(.window)
@@ -160,6 +162,30 @@ final class BearSquiggleView: NSView {
       self?.showMenu()
     }
     return true
+  }
+
+  override func accessibilityCustomActions()
+    -> [NSAccessibilityCustomAction]?
+  {
+    guard let interaction else {
+      return nil
+    }
+    let interactionID = interaction.id
+    return interaction.items.map { item in
+      NSAccessibilityCustomAction(name: item.title) { [weak self] in
+        guard let self,
+          let currentInteraction = self.interaction,
+          currentInteraction.id == interactionID,
+          currentInteraction.items.contains(where: {
+            $0.action == item.action
+          })
+        else {
+          return false
+        }
+        currentInteraction.handler(item.action)
+        return true
+      }
+    }
   }
 
   func showMenu() {

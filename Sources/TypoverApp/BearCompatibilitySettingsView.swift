@@ -227,6 +227,10 @@ extension BearAutomaticCorrectionDiagnosticOutcome {
       "The last correction was refused because its source no longer matched"
     case .replacementRefused:
       "The last correction was refused because exact-range verification failed"
+    case .postWriteReconciled:
+      "The last correction was safely recovered after Bear delayed verification"
+    case .postWriteReconciliationFailed:
+      "Typover paused because Bear changed text but the correction could not be safely tracked"
     case .capabilityUnavailable:
       "Automatic correction is waiting for Bear’s required editor capabilities"
     case .inputMonitoringUnavailable:
@@ -260,6 +264,8 @@ extension BearAutomaticCorrectionStatus {
       "Click in an editable Bear note to resume"
     case .inputMonitoringUnavailable:
       "Typover could not observe typing; reopen Typover and try again"
+    case .pausedAfterIndeterminateWrite:
+      "Paused after an uncertain Bear edit; turn automatic correction off and on to resume"
     }
   }
 
@@ -274,6 +280,8 @@ extension BearAutomaticCorrectionStatus {
       "exclamationmark.triangle.fill"
     case .pausedForSelection:
       "pause.circle"
+    case .pausedAfterIndeterminateWrite:
+      "exclamationmark.octagon.fill"
     case .disabled, .waitingForBear, .editorUnavailable,
       .inputMonitoringUnavailable:
       "info.circle"
@@ -365,7 +373,9 @@ extension BearOverlayPreviewStatus {
       case .selectionWriteFailed, .replacementWriteFailed:
         "Bear did not allow the selected word to be replaced; nothing was changed"
       case .contextUnavailable, .selectionRestoreFailed, .verificationFailed:
-        "Bear changed while Typover checked the selection; nothing was changed"
+        status == .contextUnavailable
+          ? "Bear changed while Typover checked the selection; nothing was changed"
+          : "Bear may have changed the word, but Typover could not safely verify the result"
       default:
         "Typover refused an unsafe correction; nothing was changed"
       }

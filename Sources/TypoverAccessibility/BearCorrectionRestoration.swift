@@ -134,6 +134,7 @@ public struct BearCorrectionRestorer: BearCorrectionRestoring, Sendable {
     let applicationElement = AXUIElementCreateApplication(
       application.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,

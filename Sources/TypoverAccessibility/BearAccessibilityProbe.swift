@@ -33,6 +33,7 @@ public struct BearAccessibilityProbe: BearAccessibilityProbing, Sendable {
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,
@@ -495,6 +496,7 @@ public struct BearAccessibilityEventMonitor:
     let applicationElement = AXUIElementCreateApplication(
       runningApplication.processIdentifier
     )
+    configureBearAccessibilityMessagingTimeout(applicationElement)
     guard
       let focusedElement = copyElementAttribute(
         applicationElement,

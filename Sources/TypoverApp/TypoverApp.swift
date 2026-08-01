@@ -4,6 +4,8 @@ import TypoverCore
 
 @main
 struct TypoverApp: App {
+  @AppStorage("typover-onboarding-pending")
+  private var isShowingOnboarding = true
   @State private var behaviorSettings: CorrectionBehaviorSettings
   @State private var learningStore: CorrectionLearningStore
   @State private var bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator
@@ -35,6 +37,12 @@ struct TypoverApp: App {
         behaviorSettings: behaviorSettings,
         learningStore: learningStore
       )
+      .sheet(isPresented: $isShowingOnboarding) {
+        TypoverOnboardingView {
+          isShowingOnboarding = false
+        }
+        .interactiveDismissDisabled()
+      }
     }
     .defaultSize(width: 760, height: 540)
     .windowResizability(.contentMinSize)

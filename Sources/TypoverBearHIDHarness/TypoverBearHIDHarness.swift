@@ -1,5 +1,7 @@
 import AppKit
+import Darwin
 import Foundation
+import QuartzCore
 import TypoverAccessibility
 import TypoverHIDTesting
 
@@ -62,6 +64,21 @@ private struct TypoverTelemetrySummary: Codable {
   let baselineUnavailable: Int
   let learnedSuppression: Int
   let replacementRefused: Int
+  let correctionLatencyMilliseconds: [Double]
+}
+
+private struct ProcessLoadSample: Codable, Equatable {
+  let cpuPercent: Double?
+  let residentMemoryKiB: Int?
+  let powerScore: Double?
+}
+
+private struct HostLoadSample: Codable, Equatable {
+  let timestamp: Date
+  let cpuIdlePercent: Double?
+  let typover: ProcessLoadSample
+  let bear: ProcessLoadSample
+  let windowServer: ProcessLoadSample
 }
 
 private struct CaseArtifact: Codable {
@@ -70,6 +87,7 @@ private struct CaseArtifact: Codable {
   let startedAt: Date
   let finishedAt: Date
   let focusRemainedValid: Bool
+  let focusLossBundleIdentifier: String?
   let baselineCaret: Int
   let finalCaret: Int?
   let baselineDocumentLength: Int
@@ -81,6 +99,7 @@ private struct CaseArtifact: Codable {
   let telemetry: TypoverTelemetrySummary
   let typoverLog: [String]
   let readinessSamples: [HostReadinessSample]
+  let loadSamples: [HostLoadSample]
 }
 
 private struct MatrixArtifact: Codable {
@@ -89,6 +108,7 @@ private struct MatrixArtifact: Codable {
   let createdAt: Date
   let host: String
   let plan: BearHIDTestPlan
+  let loadProfile: BearHIDLoadProfile
   let classification: String
   let cases: [CaseArtifact]
   let privacyNote: String
@@ -108,6 +128,15 @@ private struct DoctorReport: Encodable {
   let readyToRun: Bool
   let jigToolReady: Bool
   let jigClientReady: Bool
+}
+
+private struct SnapshotReport: Encodable {
+  let status: String
+  let leadingRange: AccessibilityTextRange?
+  let leadingText: String?
+  let trailingText: String?
+  let caretLocation: Int?
+  let documentLength: Int?
 }
 
 private struct ProcessResult {
@@ -187,6 +216,333 @@ private struct CommandRunner {
         as: UTF8.self
       )
     )
+  }
+}
+
+private final class AwakeSession {
+  private var process: Process?
+
+  func start() throws {
+    guard process == nil else { return }
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/caffeinate")
+    process.arguments = [
+      "-dimsu", "-w", String(ProcessInfo.processInfo.processIdentifier),
+    ]
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try process.run()
+    self.process = process
+  }
+
+  func stop() {
+    if process?.isRunning == true {
+      process?.terminate()
+    }
+    process = nil
+  }
+}
+
+private final class LockedLoadState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stopped = false
+  private var storedSamples: [HostLoadSample] = []
+
+  func requestStop() {
+    lock.withLock { stopped = true }
+  }
+
+  var shouldStop: Bool {
+    lock.withLock { stopped }
+  }
+
+  func append(_ sample: HostLoadSample) {
+    lock.withLock { storedSamples.append(sample) }
+  }
+
+  var samples: [HostLoadSample] {
+    lock.withLock { storedSamples }
+  }
+}
+
+private final class HostLoadSampler: @unchecked Sendable {
+  private let state = LockedLoadState()
+  private var thread: Thread?
+
+  func start() {
+    guard thread == nil else { return }
+    let state = state
+    let worker = Thread {
+      while !state.shouldStop {
+        autoreleasepool {
+          state.append(Self.readSample())
+        }
+        for _ in 0 ..< 10 where !state.shouldStop {
+          Thread.sleep(forTimeInterval: 0.1)
+        }
+      }
+    }
+    worker.name = "Typover HID resource sampler"
+    thread = worker
+    worker.start()
+  }
+
+  func stop() -> [HostLoadSample] {
+    state.requestStop()
+    let deadline = Date().addingTimeInterval(6)
+    while thread?.isExecuting == true, Date() < deadline {
+      Thread.sleep(forTimeInterval: 0.02)
+    }
+    thread = nil
+    return state.samples
+  }
+
+  private static func readSample() -> HostLoadSample {
+    let runner = CommandRunner()
+    let processList = try? runner.run(
+      "/bin/ps",
+      ["-axo", "pid=,pcpu=,rss=,comm="],
+      timeout: 3
+    )
+    var processSamples = parseProcessSamples(processList?.output ?? "")
+    let processIdentifiers = processList?.output.split(separator: "\n")
+      .compactMap { line -> String? in
+        let fields = line.split(
+          maxSplits: 3,
+          omittingEmptySubsequences: true,
+          whereSeparator: { $0.isWhitespace }
+        )
+        guard fields.count == 4 else { return nil }
+        let name = URL(fileURLWithPath: String(fields[3])).lastPathComponent
+        return ["Typover", "Bear", "WindowServer"].contains(name)
+          ? String(fields[0])
+          : nil
+      } ?? []
+    var topArguments = [
+      "-l", "2", "-s", "0.2",
+      "-stats", "pid,cpu,mem,power,command",
+    ]
+    for processIdentifier in processIdentifiers {
+      topArguments += ["-pid", processIdentifier]
+    }
+    let top = try? runner.run(
+      "/usr/bin/top",
+      topArguments,
+      timeout: 5
+    )
+    let idle = top.flatMap { result -> Double? in
+      guard
+        let line = result.output.split(separator: "\n").first(where: {
+          $0.contains("CPU usage:")
+        }),
+        let range = line.range(
+          of: #"([0-9.]+)% idle"#,
+          options: .regularExpression
+        )
+      else { return nil }
+      return Double(line[range].dropLast("% idle".count))
+    }
+    for (name, powerScore) in parsePowerScores(top?.output ?? "") {
+      let existing = processSamples[name] ?? emptyProcessSample
+      processSamples[name] = ProcessLoadSample(
+        cpuPercent: existing.cpuPercent,
+        residentMemoryKiB: existing.residentMemoryKiB,
+        powerScore: powerScore
+      )
+    }
+    return HostLoadSample(
+      timestamp: Date(),
+      cpuIdlePercent: idle,
+      typover: processSamples["Typover"] ?? emptyProcessSample,
+      bear: processSamples["Bear"] ?? emptyProcessSample,
+      windowServer: processSamples["WindowServer"] ?? emptyProcessSample
+    )
+  }
+
+  private static let emptyProcessSample = ProcessLoadSample(
+    cpuPercent: nil,
+    residentMemoryKiB: nil,
+    powerScore: nil
+  )
+
+  private static func parseProcessSamples(
+    _ processList: String
+  ) -> [String: ProcessLoadSample] {
+    var result: [String: ProcessLoadSample] = [:]
+    for line in processList.split(separator: "\n") {
+      let fields = line.split(
+        maxSplits: 3,
+        omittingEmptySubsequences: true,
+        whereSeparator: { $0.isWhitespace }
+      )
+      guard fields.count == 4 else { continue }
+      let name = URL(fileURLWithPath: String(fields[3])).lastPathComponent
+      guard ["Typover", "Bear", "WindowServer"].contains(name) else {
+        continue
+      }
+      result[name] = ProcessLoadSample(
+        cpuPercent: Double(fields[1]),
+        residentMemoryKiB: Int(fields[2]),
+        powerScore: nil
+      )
+    }
+    return result
+  }
+
+  private static func parsePowerScores(_ topOutput: String) -> [String: Double] {
+    var result: [String: Double] = [:]
+    for line in topOutput.split(separator: "\n") {
+      let fields = line.split(
+        maxSplits: 4,
+        omittingEmptySubsequences: true,
+        whereSeparator: { $0.isWhitespace }
+      )
+      guard fields.count == 5 else { continue }
+      let name = String(fields[4])
+      guard ["Typover", "Bear", "WindowServer"].contains(name),
+        let power = Double(fields[3])
+      else { continue }
+      result[name] = power
+    }
+    return result
+  }
+}
+
+private final class AccessibilityLoadWorker: @unchecked Sendable {
+  private let state = LockedLoadState()
+  private var thread: Thread?
+
+  func start() {
+    guard thread == nil else { return }
+    let state = state
+    let worker = Thread {
+      let reader = BearTypingContextReader(leadingLimit: 32, trailingLimit: 8)
+      while !state.shouldStop {
+        autoreleasepool { _ = reader.read() }
+        Thread.sleep(forTimeInterval: 0.01)
+      }
+    }
+    worker.name = "Typover HID AX contention"
+    thread = worker
+    worker.start()
+  }
+
+  func stop() {
+    state.requestStop()
+    let deadline = Date().addingTimeInterval(2)
+    while thread?.isExecuting == true, Date() < deadline {
+      Thread.sleep(forTimeInterval: 0.01)
+    }
+    thread = nil
+  }
+}
+
+@MainActor
+private final class ControlledLoadSession {
+  let profile: BearHIDLoadProfile
+  private var cpuProcesses: [Process] = []
+  private var panels: [NSPanel] = []
+  private var accessibilityWorker: AccessibilityLoadWorker?
+
+  init(profile: BearHIDLoadProfile) {
+    self.profile = profile
+  }
+
+  func start() throws {
+    if profile.stressesCPU {
+      try startCPULoad()
+    }
+    if profile.stressesWindowServer {
+      startWindowServerLoad()
+    }
+    if profile.stressesAccessibility {
+      let worker = AccessibilityLoadWorker()
+      accessibilityWorker = worker
+      worker.start()
+    }
+  }
+
+  func stop() {
+    accessibilityWorker?.stop()
+    accessibilityWorker = nil
+    for panel in panels {
+      panel.contentView?.layer?.removeAllAnimations()
+      panel.orderOut(nil)
+    }
+    panels.removeAll()
+    for process in cpuProcesses where process.isRunning {
+      process.terminate()
+    }
+    let deadline = Date().addingTimeInterval(1)
+    while cpuProcesses.contains(where: \.isRunning), Date() < deadline {
+      RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+    }
+    for process in cpuProcesses where process.isRunning {
+      kill(process.processIdentifier, SIGKILL)
+    }
+    cpuProcesses.removeAll()
+  }
+
+  private func startCPULoad() throws {
+    let processorCount = ProcessInfo.processInfo.activeProcessorCount
+    let workers = max(1, processorCount / 2)
+    for _ in 0 ..< workers {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/nice")
+      process.arguments = [
+        "-n", "10", "/bin/sh", "-c", "while :; do :; done",
+      ]
+      process.standardOutput = FileHandle.nullDevice
+      process.standardError = FileHandle.nullDevice
+      try process.run()
+      cpuProcesses.append(process)
+    }
+  }
+
+  private func startWindowServerLoad() {
+    guard let screen = NSScreen.main else { return }
+    let frame = screen.visibleFrame
+    for index in 0 ..< 24 {
+      let size = 28.0
+      let x = frame.minX + 8 + Double(index % 12) * (size + 5)
+      let y = index < 12 ? frame.minY + 8 : frame.maxY - size - 8
+      let panel = NSPanel(
+        contentRect: NSRect(x: x, y: y, width: size, height: size),
+        styleMask: [.borderless, .nonactivatingPanel],
+        backing: .buffered,
+        defer: false
+      )
+      panel.isOpaque = false
+      panel.backgroundColor = .clear
+      panel.alphaValue = 0.22
+      panel.ignoresMouseEvents = true
+      panel.hidesOnDeactivate = false
+      panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+      panel.level = .floating
+      let view = NSView(frame: panel.contentView?.bounds ?? .zero)
+      view.wantsLayer = true
+      view.layer?.backgroundColor = NSColor.systemOrange.cgColor
+      view.layer?.cornerRadius = 8
+      view.setAccessibilityElement(false)
+      panel.contentView = view
+
+      let rotation = CABasicAnimation(keyPath: "transform.rotation")
+      rotation.fromValue = 0
+      rotation.toValue = Double.pi * 2
+      rotation.duration = 0.3 + Double(index % 5) * 0.04
+      rotation.repeatCount = .infinity
+      view.layer?.add(rotation, forKey: "rotation")
+
+      let pulse = CABasicAnimation(keyPath: "opacity")
+      pulse.fromValue = 0.2
+      pulse.toValue = 1.0
+      pulse.duration = 0.18 + Double(index % 4) * 0.03
+      pulse.autoreverses = true
+      pulse.repeatCount = .infinity
+      view.layer?.add(pulse, forKey: "pulse")
+      panel.orderFrontRegardless()
+      panels.append(panel)
+    }
   }
 }
 
@@ -270,7 +626,8 @@ private struct JigController {
       "bear-prepare",
       "--run-id", runID,
       "--case-count", String(caseCount),
-      "--message", "Focus the disposable Bear note; the Jig will stay visible without taking keyboard focus.",
+      "--message",
+      "Focus the disposable Bear note; the Jig will stay visible without taking keyboard focus.",
     ])
   }
 
@@ -333,27 +690,32 @@ private struct JigController {
 
 private struct Options {
   var command = ""
-  var fixtureClient = ProcessInfo.processInfo.environment[
-    "TYPOVER_HID_FIXTURE_CLIENT"
-  ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/pico-hid-fixture-client"
-  var fixtureHost = ProcessInfo.processInfo.environment[
-    "KEYPATH_FIXTURE_HOST"
-  ] ?? "keypath-hid-fixture.local"
-  var jigTool = ProcessInfo.processInfo.environment[
-    "TYPOVER_HID_JIG_TOOL"
-  ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-tool"
-  var jigClient = ProcessInfo.processInfo.environment[
-    "TYPOVER_HID_JIG_CLIENT"
-  ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-client"
+  var fixtureClient =
+    ProcessInfo.processInfo.environment[
+      "TYPOVER_HID_FIXTURE_CLIENT"
+    ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/pico-hid-fixture-client"
+  var fixtureHost =
+    ProcessInfo.processInfo.environment[
+      "KEYPATH_FIXTURE_HOST"
+    ] ?? "keypath-hid-fixture.local"
+  var jigTool =
+    ProcessInfo.processInfo.environment[
+      "TYPOVER_HID_JIG_TOOL"
+    ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-tool"
+  var jigClient =
+    ProcessInfo.processInfo.environment[
+      "TYPOVER_HID_JIG_CLIENT"
+    ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-client"
   var intervals = [160, 100, 60, 40]
   var words = 20
   var quietTimeoutSeconds = 600
+  var loadProfile = BearHIDLoadProfile.quiet
   var exclusiveDesktopConfirmed = false
   var outputDirectory: String?
 
   static func parse(_ arguments: [String]) throws -> Options {
     guard let command = arguments.first,
-      ["plan", "doctor", "run"].contains(command)
+      ["plan", "snapshot", "doctor", "run"].contains(command)
     else {
       throw HarnessError.usage(usage)
     }
@@ -367,7 +729,8 @@ private struct Options {
         options.exclusiveDesktopConfirmed = true
         index += 1
       case "--fixture-client", "--fixture-host", "--jig-tool", "--jig-client",
-        "--intervals", "--words", "--quiet-timeout-seconds", "--output-directory":
+        "--intervals", "--words", "--quiet-timeout-seconds", "--output-directory",
+        "--load-profile":
         guard index + 1 < arguments.count else {
           throw HarnessError.usage("Missing value for \(argument).")
         }
@@ -394,6 +757,13 @@ private struct Options {
           }
           options.quietTimeoutSeconds = timeout
         case "--output-directory": options.outputDirectory = value
+        case "--load-profile":
+          guard let profile = BearHIDLoadProfile(rawValue: value) else {
+            throw HarnessError.usage(
+              "Load profile must be quiet, cpu, window-server, accessibility, or combined."
+            )
+          }
+          options.loadProfile = profile
         default: break
         }
         index += 2
@@ -405,15 +775,32 @@ private struct Options {
   }
 
   static let usage = """
-    Usage: typover-hid-harness <plan|doctor|run> [options]
+    Usage: typover-hid-harness <plan|snapshot|doctor|run> [options]
 
       plan      Print the deterministic test matrix; no board or UI needed.
+      snapshot  Read bounded text around Bear's focused caret; no board needed.
       doctor    Check Typover, Bear, Accessibility, and fixture readiness.
       run       Wait for a quiet Mac, then type the matrix into focused Bear.
 
+    Load profiles: quiet (default), cpu, window-server, accessibility, combined.
+    Every contention run first requires the same three-sample quiet baseline.
+
     Run requires --exclusive-desktop-confirmed because the ESP32 is a real
     keyboard and can only type into the active desktop.
-    """
+  """
+}
+
+private extension SnapshotReport {
+  static func empty(status: String) -> SnapshotReport {
+    SnapshotReport(
+      status: status,
+      leadingRange: nil,
+      leadingText: nil,
+      trailingText: nil,
+      caretLocation: nil,
+      documentLength: nil
+    )
+  }
 }
 
 @main
@@ -429,6 +816,8 @@ private enum TypoverBearHIDHarness {
       switch options.command {
       case "plan":
         try printJSON(plan)
+      case "snapshot":
+        try snapshot()
       case "doctor":
         try doctor(options: options, plan: plan)
       case "run":
@@ -442,6 +831,36 @@ private enum TypoverBearHIDHarness {
     }
   }
 
+  private static func snapshot() throws {
+    let report: SnapshotReport = switch BearTypingContextReader(
+      leadingLimit: 256,
+      trailingLimit: 64
+    ).read() {
+    case .ready(let value):
+      SnapshotReport(
+        status: "ready",
+        leadingRange: value.leadingRange,
+        leadingText: value.leadingText,
+        trailingText: value.trailingText,
+        caretLocation: value.caretLocation,
+        documentLength: value.documentLength
+      )
+    case .accessibilityPermissionRequired:
+      SnapshotReport.empty(status: "accessibilityPermissionRequired")
+    case .bearNotRunning:
+      SnapshotReport.empty(status: "bearNotRunning")
+    case .bearNotFrontmost:
+      SnapshotReport.empty(status: "bearNotFrontmost")
+    case .focusedEditorUnavailable:
+      SnapshotReport.empty(status: "focusedEditorUnavailable")
+    case .selectionActive:
+      SnapshotReport.empty(status: "selectionActive")
+    case .contextUnavailable:
+      SnapshotReport.empty(status: "contextUnavailable")
+    }
+    try printJSON(report)
+  }
+
   private static func doctor(options: Options, plan: BearHIDTestPlan) throws {
     let fileManager = FileManager.default
     let clientReady = fileManager.isExecutableFile(atPath: options.fixtureClient)
@@ -450,19 +869,25 @@ private enum TypoverBearHIDHarness {
     let typoverRunning = !NSRunningApplication.runningApplications(
       withBundleIdentifier: "com.malpern.typover"
     ).isEmpty
-    let privateDiagnostics = UserDefaults.standard.persistentDomain(
-      forName: "com.malpern.typover"
-    )?["bear-private-diagnostics-enabled"] as? Bool ?? false
+    let privateDiagnostics =
+      UserDefaults.standard.persistentDomain(
+        forName: "com.malpern.typover"
+      )?["bear-private-diagnostics-enabled"] as? Bool ?? false
     let probe = BearAccessibilityProbe().run()
-    let bearFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    let bearFrontmost =
+      NSWorkspace.shared.frontmostApplication?.bundleIdentifier
       == BearAccessibilityProbe.bearBundleIdentifier
     var fixtureStatus: FixtureStatus?
     var fixtureError: String?
     if clientReady {
       do {
+        let fixtureHost = resolvedFixtureHost(
+          options.fixtureHost,
+          runner: CommandRunner()
+        )
         fixtureStatus = try FixtureController(
           clientPath: options.fixtureClient,
-          host: options.fixtureHost,
+          host: fixtureHost,
           runner: CommandRunner()
         ).status(timeout: 3)
       } catch {
@@ -483,7 +908,7 @@ private enum TypoverBearHIDHarness {
         wordsPerCase: plan.wordsPerCase,
         readyToRun: clientReady && fixtureStatus?.usbMounted == true
           && jigToolReady && jigClientReady && typoverRunning
-          && privateDiagnostics && probe.status == .ready && bearFrontmost,
+          && probe.status == .ready && bearFrontmost,
         jigToolReady: jigToolReady,
         jigClientReady: jigClientReady
       )
@@ -508,15 +933,28 @@ private enum TypoverBearHIDHarness {
         "The HID Capture Jig tool or client is missing."
       )
     }
-    guard !NSRunningApplication.runningApplications(
-      withBundleIdentifier: "com.malpern.typover"
-    ).isEmpty else {
+    guard
+      !NSRunningApplication.runningApplications(
+        withBundleIdentifier: "com.malpern.typover"
+      ).isEmpty
+    else {
       throw HarnessError.commandFailed("Typover is not running.")
     }
 
+    let awakeSession = AwakeSession()
+    try awakeSession.start()
+    defer { awakeSession.stop() }
+
+    let fixtureHost = resolvedFixtureHost(
+      options.fixtureHost,
+      runner: CommandRunner()
+    )
+    if fixtureHost != options.fixtureHost {
+      print("Resolved fixture \(options.fixtureHost) to \(fixtureHost).")
+    }
     let fixture = FixtureController(
       clientPath: options.fixtureClient,
-      host: options.fixtureHost,
+      host: fixtureHost,
       runner: CommandRunner()
     )
     let jig = JigController(
@@ -557,10 +995,19 @@ private enum TypoverBearHIDHarness {
     }
     try waitForSafeBearCaret(timeoutSeconds: 120)
 
-    let outputDirectory = URL(fileURLWithPath: options.outputDirectory ?? (
-      FileManager.default.homeDirectoryForCurrentUser.path
-        + "/.local/state/typover/bear-hid/\(matrixRunID)"
-    ))
+    let loadSession = ControlledLoadSession(profile: options.loadProfile)
+    if options.loadProfile != .quiet {
+      print("Starting controlled \(options.loadProfile.rawValue) contention…")
+    }
+    try loadSession.start()
+    defer { loadSession.stop() }
+    RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+    try requireSafeBearCaret()
+
+    let outputDirectory = URL(
+      fileURLWithPath: options.outputDirectory
+        ?? (FileManager.default.homeDirectoryForCurrentUser.path
+          + "/.local/state/typover/bear-hid/\(matrixRunID)"))
     try FileManager.default.createDirectory(
       at: outputDirectory,
       withIntermediateDirectories: true,
@@ -614,14 +1061,16 @@ private enum TypoverBearHIDHarness {
     }
 
     let summary = MatrixArtifact(
-      schemaVersion: 1,
+      schemaVersion: 2,
       runID: matrixRunID,
       createdAt: Date(),
-      host: options.fixtureHost,
+      host: fixture.host,
       plan: plan,
+      loadProfile: options.loadProfile,
       classification: classification,
       cases: caseArtifacts,
-      privacyNote: "Contains synthetic test text and local Typover unified-log lines, which may include bounded Bear context while private diagnostics are enabled. File permissions are 0600."
+      privacyNote:
+        "Contains only synthetic test text, content-free Typover unified-log events, and process/resource samples. File permissions are 0600. Typover's optional bounded-writing trace is stored separately and is never copied into this artifact."
     )
     let summaryURL = outputDirectory.appendingPathComponent("summary.json")
     try writeJSON(summary, to: summaryURL)
@@ -637,6 +1086,14 @@ private enum TypoverBearHIDHarness {
     caseCount: Int,
     readiness: [HostReadinessSample]
   ) throws -> CaseArtifact {
+    let loadSampler = HostLoadSampler()
+    loadSampler.start()
+    var samplerStopped = false
+    defer {
+      if !samplerStopped {
+        _ = loadSampler.stop()
+      }
+    }
     let reader = BearTypingContextReader(leadingLimit: 256, trailingLimit: 24)
     guard case .ready(let baseline) = reader.read(),
       baseline.caretLocation == baseline.documentLength,
@@ -647,7 +1104,8 @@ private enum TypoverBearHIDHarness {
       )
     }
 
-    let shortMatrixID = matrixRunID
+    let shortMatrixID =
+      matrixRunID
       .replacingOccurrences(of: "typover-hid-", with: "th-")
     let runID = String(
       "\(shortMatrixID)-i\(testCase.intervalMilliseconds)".prefix(48)
@@ -725,11 +1183,14 @@ private enum TypoverBearHIDHarness {
       ) / 1_000
     )
     var focusRemainedValid = true
+    var focusLossBundleIdentifier: String?
     while Date() < typingDeadline {
-      if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        != BearAccessibilityProbe.bearBundleIdentifier
+      let frontmostBundleIdentifier =
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+      if frontmostBundleIdentifier != BearAccessibilityProbe.bearBundleIdentifier
       {
         focusRemainedValid = false
+        focusLossBundleIdentifier = frontmostBundleIdentifier ?? "unavailable"
         fixture.abort()
         jig.update(
           phase: "failed",
@@ -749,9 +1210,12 @@ private enum TypoverBearHIDHarness {
 
     var finalStatus: FixtureStatus?
     if focusRemainedValid {
-      let deadline = Date().addingTimeInterval(5)
+      // The ESP32 status endpoint can take a little over five seconds after a
+      // display-heavy run. Preserve the fixture proof instead of invalidating
+      // an otherwise complete trace at the former two-second request limit.
+      let deadline = Date().addingTimeInterval(12)
       repeat {
-        finalStatus = try? fixture.status(timeout: 2)
+        finalStatus = try? fixture.status(timeout: 8)
         if finalStatus?.state == "complete" { break }
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
       } while Date() < deadline
@@ -807,19 +1271,21 @@ private enum TypoverBearHIDHarness {
     } else {
       evidenceClassification = analysis.classification.rawValue
     }
-    let monitorPhase: String = switch evidenceClassification {
-    case "passed": "passed"
-    case "safe-misses-observed": "safeMisses"
-    default: "failed"
-    }
-    let monitorMessage: String = switch evidenceClassification {
-    case "passed":
-      "All \(analysis.correctedWords) corrections matched Typover log evidence."
-    case "safe-misses-observed":
-      "\(analysis.correctedWords) corrected · \(analysis.missedWords) preserved safe misses."
-    default:
-      "Focus, fixture, text, or Typover-log evidence was incomplete."
-    }
+    let monitorPhase: String =
+      switch evidenceClassification {
+      case "passed": "passed"
+      case "safe-misses-observed": "safeMisses"
+      default: "failed"
+      }
+    let monitorMessage: String =
+      switch evidenceClassification {
+      case "passed":
+        "All \(analysis.correctedWords) corrections matched Typover log evidence."
+      case "safe-misses-observed":
+        "\(analysis.correctedWords) corrected · \(analysis.missedWords) preserved safe misses."
+      default:
+        "Focus, fixture, text, or Typover-log evidence was incomplete."
+      }
     jig.update(
       phase: monitorPhase,
       correctedWords: analysis.correctedWords,
@@ -827,16 +1293,18 @@ private enum TypoverBearHIDHarness {
       message: monitorMessage,
       bearFocused: focusRemainedValid
     )
-    let fixtureResult = switch evidenceClassification {
-    case "passed": "pass"
-    case "safe-misses-observed": "inconclusive"
-    default: "fail"
-    }
-    let fixtureTitle = switch evidenceClassification {
-    case "passed": "BEAR TEST PASSED"
-    case "safe-misses-observed": "BEAR NEEDS REVIEW"
-    default: "BEAR TEST INVALID"
-    }
+    let fixtureResult =
+      switch evidenceClassification {
+      case "passed": "pass"
+      case "safe-misses-observed": "inconclusive"
+      default: "fail"
+      }
+    let fixtureTitle =
+      switch evidenceClassification {
+      case "passed": "BEAR TEST PASSED"
+      case "safe-misses-observed": "BEAR NEEDS REVIEW"
+      default: "BEAR TEST INVALID"
+      }
     try? fixture.presentBear(
       phase: "result",
       result: fixtureResult,
@@ -849,12 +1317,15 @@ private enum TypoverBearHIDHarness {
     if let brandedStatus = try? fixture.status(timeout: 2) {
       finalStatus = brandedStatus
     }
+    let loadSamples = loadSampler.stop()
+    samplerStopped = true
     return CaseArtifact(
       testCase: testCase,
       runID: runID,
       startedAt: startedAt,
       finishedAt: finishedAt,
       focusRemainedValid: focusRemainedValid,
+      focusLossBundleIdentifier: focusLossBundleIdentifier,
       baselineCaret: baseline.caretLocation,
       finalCaret: finalSnapshot?.caretLocation,
       baselineDocumentLength: baseline.documentLength,
@@ -865,7 +1336,8 @@ private enum TypoverBearHIDHarness {
       fixtureTraceJSON: trace,
       telemetry: telemetry,
       typoverLog: logs,
-      readinessSamples: readiness
+      readinessSamples: readiness,
+      loadSamples: loadSamples
     )
   }
 
@@ -906,12 +1378,27 @@ private enum TypoverBearHIDHarness {
   }
 
   private static func activateBear() -> Bool {
-    guard let bear = NSRunningApplication.runningApplications(
-      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
-    ).first else {
+    guard
+      let bear = NSRunningApplication.runningApplications(
+        withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+      ).first
+    else {
       return false
     }
-    return bear.activate(options: [.activateAllWindows])
+    // `NSRunningApplication.activate` alone is advisory and can leave the
+    // nonactivating jig frontmost. LaunchServices provides the reliable app
+    // handoff; the bounded AX check that follows remains authoritative for the
+    // exact focused editor and caret position.
+    let openResult = try? CommandRunner().run(
+      "/usr/bin/open",
+      ["-b", BearAccessibilityProbe.bearBundleIdentifier],
+      timeout: 5
+    )
+    // Activation is asynchronous. Its immediate return value can be false even
+    // though Bear is running and becomes frontmost moments later. The bounded
+    // wait that follows is the authoritative focus and caret proof.
+    _ = bear.activate(options: [.activateAllWindows])
+    return openResult?.status == 0
   }
 
   private static func waitForQuietHost(
@@ -943,26 +1430,54 @@ private enum TypoverBearHIDHarness {
       timeout: 5
     )
     let idle = top.flatMap { result -> Double? in
-      guard let line = result.output.split(separator: "\n").first(where: {
-        $0.contains("CPU usage:")
-      }),
+      guard
+        let line = result.output.split(separator: "\n").first(where: {
+          $0.contains("CPU usage:")
+        }),
         let range = line.range(of: #"([0-9.]+)% idle"#, options: .regularExpression)
       else { return nil }
       return Double(line[range].dropLast("% idle".count))
     }
-    let pgrep = try? runner.run(
-      "/usr/bin/pgrep",
-      ["-fl", "swift-frontend|swift-driver|swift-build|swift-test"],
+    let processList = try? runner.run(
+      "/bin/ps",
+      ["-axo", "pid=,comm="],
       timeout: 2
     )
-    let compilers = pgrep?.status == 0
-      ? pgrep!.output.split(separator: "\n").map(String.init)
+    let compilers =
+      processList?.status == 0
+      ? SwiftCompilerProcessDetector.compilerProcesses(
+        in: processList!.output
+      )
       : []
     return HostReadinessSample(
       timestamp: Date(),
       cpuIdlePercent: idle,
       activeSwiftCompilers: compilers
     )
+  }
+
+  private static func resolvedFixtureHost(
+    _ host: String,
+    runner: CommandRunner
+  ) -> String {
+    guard host.hasSuffix(".local") else { return host }
+    guard
+      let result = try? runner.run(
+        "/usr/bin/dscacheutil",
+        ["-q", "host", "-a", "name", host],
+        timeout: 8
+      ),
+      result.status == 0,
+      let line = result.output.split(separator: "\n").first(where: {
+        $0.trimmingCharacters(in: .whitespaces).hasPrefix("ip_address:")
+      }),
+      let address = line.split(separator: ":", maxSplits: 1).last?
+        .trimmingCharacters(in: .whitespaces),
+      !address.isEmpty
+    else {
+      return host
+    }
+    return address
   }
 
   private static func typoverLog(from start: Date, to end: Date) -> [String] {
@@ -995,8 +1510,19 @@ private enum TypoverBearHIDHarness {
       baselineUnavailable: count("outcome=baselineUnavailable"),
       learnedSuppression: count("outcome=learnedSuppression"),
       replacementRefused: count("outcome=replacementRefused")
-        + count("outcome=deferredReplacementRefused")
+        + count("outcome=deferredReplacementRefused"),
+      correctionLatencyMilliseconds: logs.compactMap(correctionLatency)
     )
+  }
+
+  private static func correctionLatency(_ line: String) -> Double? {
+    guard
+      let range = line.range(
+        of: #"latencyMs=([0-9]+(?:\.[0-9]+)?)"#,
+        options: .regularExpression
+      )
+    else { return nil }
+    return Double(line[range].dropFirst("latencyMs=".count))
   }
 
   private static func printJSON<T: Encodable>(_ value: T) throws {

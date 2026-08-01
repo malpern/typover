@@ -96,9 +96,9 @@ final class BearOverlayPreviewCoordinator {
           at: selectedRange
         )
       }.value
-      if let failure = BearOverlayPreviewStatus.failure(
-        for: application.report
-      ) {
+      if !application.isReversibleApplication,
+        let failure = BearOverlayPreviewStatus.failure(for: application.report)
+      {
         returnApplication.activate(options: [.activateAllWindows])
         status = failure
         logger.error(
