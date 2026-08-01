@@ -53,6 +53,11 @@ for resource_bundle in "$binary_directory"/Typover_*.bundle; do
   fi
 done
 
+# Do not carry local build provenance, quarantine, or Finder metadata into the
+# public code signature or zip. `ditto` otherwise serializes those attributes
+# as AppleDouble `._*` files, which are unnecessary distribution noise.
+/usr/bin/xattr -cr "$app_path"
+
 /usr/bin/codesign \
   --force \
   --options runtime \
@@ -61,7 +66,8 @@ done
   "$app_path"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 
-/usr/bin/ditto -c -k --keepParent "$app_path" "$archive_path"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+  "$app_path" "$archive_path"
 
 if [[ "$notarize" == "--notarize" ]]; then
   key_path="${TYPOVER_NOTARY_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_XQ4565NYZ7.p8}"
@@ -78,8 +84,16 @@ if [[ "$notarize" == "--notarize" ]]; then
     --wait
   /usr/bin/xcrun stapler staple "$app_path"
   /bin/rm -f "$archive_path"
-  /usr/bin/ditto -c -k --keepParent "$app_path" "$archive_path"
+  /usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+    "$app_path" "$archive_path"
   /usr/sbin/spctl --assess --type execute --verbose=2 "$app_path"
+fi
+
+if /usr/bin/unzip -Z1 "$archive_path" \
+  | /usr/bin/grep -Eq '(^__MACOSX/|/\._)'
+then
+  echo "Beta archive contains unexpected AppleDouble metadata." >&2
+  exit 1
 fi
 
 echo "$archive_path"

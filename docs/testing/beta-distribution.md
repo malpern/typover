@@ -15,6 +15,7 @@ Scripts/build-beta-app.sh 0.1
 ```
 
 This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
+strips local extended attributes, excludes AppleDouble metadata from the zip,
 and does not contact Apple.
 
 The 2026-08-01 local beta artifact was signed successfully with the configured
