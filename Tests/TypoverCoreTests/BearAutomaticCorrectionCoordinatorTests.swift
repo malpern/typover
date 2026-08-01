@@ -258,6 +258,249 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
   }
 
+  @Test("Rapid typing defers correction until input becomes idle")
+  func defersCorrectionDuringRapidTyping() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(80)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome
+        == .rapidTypingDeferred
+    )
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    #expect(
+      fixture.applicator.requests.first?.range
+        == AccessibilityTextRange(location: 0, length: 3)
+    )
+    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
+  }
+
+  @Test("Post-burst catch-up applies queued corrections from end to beginning")
+  func catchesUpInReverseDocumentOrder() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(150)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh teh", caret: 7))
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 3
+      }
+    )
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 2
+      }
+    )
+    #expect(fixture.applicator.requests.isEmpty)
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 2
+      }
+    )
+    #expect(fixture.applicator.requests.map(\.range) == [
+      AccessibilityTextRange(location: 4, length: 3),
+      AccessibilityTextRange(location: 0, length: 3),
+    ])
+    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 2)
+  }
+
+  @Test("Post-burst scan recovers boundaries coalesced by Accessibility")
+  func catchesUpCoalescedRapidBoundaries() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(80)
+    )
+    fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh t", caret: 5))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 2
+      }
+    )
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount >= 3
+      }
+    )
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 2
+      }
+    )
+    #expect(fixture.applicator.requests.map(\.range) == [
+      AccessibilityTextRange(location: 4, length: 3),
+      AccessibilityTextRange(location: 0, length: 3),
+    ])
+    #expect(fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 2)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 0)
+  }
+
+  @Test("Post-burst scan excludes text before rapid typing began")
+  func catchUpScanIsBoundedToRapidTyping() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(60)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh te", caret: 6))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    #expect(
+      fixture.applicator.requests.first?.range
+        == AccessibilityTextRange(location: 4, length: 3)
+    )
+  }
+
+  @Test("Post-burst scan fails closed when the typed start was never observed")
+  func catchUpRequiresObservedBurstStart() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(50)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+      }
+    )
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
+    )
+  }
+
+  @Test("New input during the idle scan postpones every queued write")
+  func inputDuringScanReschedulesCatchUp() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(100)
+    )
+    fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
+    fixture.coordinator.setEnabled(true)
+
+    var scanWasInterrupted = false
+    fixture.engine.onProposal = {
+      scanWasInterrupted = true
+      fixture.inputMonitor.emitOther()
+    }
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        scanWasInterrupted
+      }
+    )
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+  }
+
+  @Test("Changing focused editors cancels queued rapid corrections")
+  func focusChangeCancelsDeferredCorrections() async throws {
+    let fixture = try Fixture(
+      minimumImmediateCorrectionInputInterval: .seconds(1),
+      deferredCorrectionIdleDelay: .milliseconds(100)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+
+    fixture.monitor.emit(.focusedElementChanged)
+    #expect(
+      await waitUntil {
+        fixture.monitor.startCount == 2
+      }
+    )
+    try await Task.sleep(for: .milliseconds(150))
+
+    #expect(fixture.applicator.requests.isEmpty)
+  }
+
   @Test("A coalesced next character still fails closed")
   func refusesBoundaryCoalescedWithRapidTyping() async throws {
     let fixture = try Fixture()
@@ -659,7 +902,9 @@ private final class Fixture {
   init(
     environmentSupport: BearEnvironmentSupport = .supported,
     settleDelay: Duration = .milliseconds(1),
-    maximumBoundaryPairingDelay: Duration = .seconds(10)
+    maximumBoundaryPairingDelay: Duration = .seconds(10),
+    minimumImmediateCorrectionInputInterval: Duration = .zero,
+    deferredCorrectionIdleDelay: Duration = .milliseconds(20)
   ) throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -686,6 +931,9 @@ private final class Fixture {
       },
       settleDelay: settleDelay,
       maximumBoundaryPairingDelay: maximumBoundaryPairingDelay,
+      minimumImmediateCorrectionInputInterval:
+        minimumImmediateCorrectionInputInterval,
+      deferredCorrectionIdleDelay: deferredCorrectionIdleDelay,
       observationRestartDelay: .milliseconds(1),
       workspaceNotificationCenter: workspaceNotificationCenter
     )
@@ -795,8 +1043,12 @@ private final class TestInvalidationMonitor:
 @MainActor
 private final class TestCorrectionEngine: CorrectionEngine {
   var responses: [CorrectionUserResponse] = []
+  var onProposal: (() -> Void)?
 
   func proposal(for word: String) -> CorrectionProposal? {
+    let callback = onProposal
+    onProposal = nil
+    callback?()
     guard word == "teh" else {
       return nil
     }

@@ -265,6 +265,12 @@ enum BearTypingTransition {
 @MainActor
 @Observable
 final class BearAutomaticCorrectionCoordinator {
+  private struct DeferredCorrection {
+    let proposal: CorrectionProposal
+    let targetRange: AccessibilityTextRange
+    let boundaryObservedAt: ContinuousClock.Instant?
+  }
+
   private(set) var status: BearAutomaticCorrectionStatus = .disabled
   let diagnostics: BearAutomaticCorrectionDiagnostics
 
@@ -279,6 +285,8 @@ final class BearAutomaticCorrectionCoordinator {
   private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let settleDelay: Duration
   private let maximumBoundaryPairingDelay: Duration
+  private let minimumImmediateCorrectionInputInterval: Duration
+  private let deferredCorrectionIdleDelay: Duration
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let privateDiagnosticsEnabled: @MainActor @Sendable () -> Bool
@@ -294,6 +302,12 @@ final class BearAutomaticCorrectionCoordinator {
   private var pendingInputIntent: BearTypingInputIntent = .other
   private var pendingBoundaryObservedAt: ContinuousClock.Instant?
   private var scheduledBoundaryObservedAt: ContinuousClock.Instant?
+  private var pendingBoundaryRequiresIdle = false
+  private var lastTypingInputObservedAt: ContinuousClock.Instant?
+  private var typingInputGeneration = 0
+  private var deferredCorrections: [DeferredCorrection] = []
+  private var deferredScanStartLocation: Int?
+  private var deferredCorrectionTask: Task<Void, Never>?
   private var suppressesNextRedundantAutomaticValueChange = false
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
@@ -335,6 +349,8 @@ final class BearAutomaticCorrectionCoordinator {
     },
     settleDelay: Duration = .milliseconds(35),
     maximumBoundaryPairingDelay: Duration = .milliseconds(750),
+    minimumImmediateCorrectionInputInterval: Duration = .milliseconds(80),
+    deferredCorrectionIdleDelay: Duration = .milliseconds(220),
     observationRestartDelay: Duration = .milliseconds(250),
     privateDiagnosticsEnabled: @escaping @MainActor @Sendable () -> Bool = {
       UserDefaults.standard.bool(
@@ -356,6 +372,9 @@ final class BearAutomaticCorrectionCoordinator {
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.settleDelay = settleDelay
     self.maximumBoundaryPairingDelay = maximumBoundaryPairingDelay
+    self.minimumImmediateCorrectionInputInterval =
+      minimumImmediateCorrectionInputInterval
+    self.deferredCorrectionIdleDelay = deferredCorrectionIdleDelay
     self.observationRestartDelay = observationRestartDelay
     self.privateDiagnosticsEnabled = privateDiagnosticsEnabled
     self.workspaceNotificationCenter = workspaceNotificationCenter
@@ -364,6 +383,7 @@ final class BearAutomaticCorrectionCoordinator {
 
   isolated deinit {
     settleTask?.cancel()
+    deferredCorrectionTask?.cancel()
     invalidationMonitor.stop()
     typingInputMonitor.stop()
     for observer in workspaceObservers {
@@ -414,12 +434,27 @@ final class BearAutomaticCorrectionCoordinator {
       guard let self else {
         return
       }
+      let observedAt = self.clock.now
+      let inputInterval = self.lastTypingInputObservedAt.map {
+        $0.duration(to: observedAt)
+      }
+      self.lastTypingInputObservedAt = observedAt
+      self.typingInputGeneration += 1
+      self.scheduleDeferredCorrectionsIfNeeded()
       self.tracePrivate("input intent=\(intent.traceLabel)")
       switch intent {
       case .completionBoundary:
         self.pendingInputIntent = intent
         self.diagnostics.recordBoundaryInput()
-        self.pendingBoundaryObservedAt = self.clock.now
+        self.pendingBoundaryObservedAt = observedAt
+        let requiresIdle = inputInterval.map {
+          $0 < self.minimumImmediateCorrectionInputInterval
+        } ?? false
+        self.pendingBoundaryRequiresIdle = requiresIdle
+        if requiresIdle {
+          self.markDeferredScanStart()
+          self.scheduleDeferredCorrectionsIfNeeded()
+        }
         self.logger.debug("Completion boundary key observed")
         if self.pendingValueChange {
           // Bear occasionally publishes the matching AX value change just
@@ -429,6 +464,8 @@ final class BearAutomaticCorrectionCoordinator {
       case .undoOrRedo:
         self.pendingInputIntent = intent
         self.pendingBoundaryObservedAt = nil
+        self.pendingBoundaryRequiresIdle = false
+        self.clearDeferredCorrections()
         self.logger.debug("Undo or Redo input observed; correction disarmed")
       case .other:
         // Bear can deliver the value-change notification for a completed word
@@ -465,6 +502,10 @@ final class BearAutomaticCorrectionCoordinator {
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
     scheduledBoundaryObservedAt = nil
+    pendingBoundaryRequiresIdle = false
+    lastTypingInputObservedAt = nil
+    typingInputGeneration += 1
+    clearDeferredCorrections()
     suppressesNextRedundantAutomaticValueChange = false
   }
 
@@ -548,6 +589,7 @@ final class BearAutomaticCorrectionCoordinator {
     let valueChangeWasObserved = pendingValueChange
     let boundaryObservedAt = pendingBoundaryObservedAt
     let pendingBoundaryCharacter: String?
+    let boundaryRequiresIdle = pendingBoundaryRequiresIdle
     if case .completionBoundary(let character) = pendingInputIntent {
       pendingBoundaryCharacter = character
     } else {
@@ -572,6 +614,7 @@ final class BearAutomaticCorrectionCoordinator {
     pendingValueChange = false
     pendingInputIntent = .other
     pendingBoundaryObservedAt = nil
+    pendingBoundaryRequiresIdle = false
     suppressesNextRedundantAutomaticValueChange = false
 
     let result = contextReader.read()
@@ -630,6 +673,12 @@ final class BearAutomaticCorrectionCoordinator {
         expectedBoundary: pendingBoundaryCharacter ?? ""
       )
     else {
+      if boundaryRequiresIdle, deferredScanStartLocation != nil {
+        tracePrivate("outcome=rapidTypingCoalesced")
+        logger.debug("Coalesced rapid input deferred to bounded idle scan")
+        scheduleDeferredCorrectionsIfNeeded()
+        return
+      }
       tracePrivate("outcome=contextChanged")
       diagnostics.recordSafeSkip(.contextChanged)
       return
@@ -656,6 +705,27 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
 
+    if boundaryRequiresIdle {
+      deferredScanStartLocation = min(
+        deferredScanStartLocation ?? completion.targetRange.location,
+        completion.targetRange.location
+      )
+      deferredCorrections.append(
+        DeferredCorrection(
+          proposal: proposal,
+          targetRange: completion.targetRange,
+          boundaryObservedAt: boundaryObservedAt
+        )
+      )
+      diagnostics.recordDeferred()
+      tracePrivate(
+        "outcome=rapidTypingDeferred range=\(completion.targetRange.location):\(completion.targetRange.length)"
+      )
+      logger.debug("Correction deferred until typing is idle")
+      scheduleDeferredCorrectionsIfNeeded()
+      return
+    }
+
     let application = correctionApplicator.apply(
       original: proposal.correction.original,
       replacement: proposal.correction.replacement,
@@ -672,8 +742,113 @@ final class BearAutomaticCorrectionCoordinator {
       rebaseline()
       return
     }
-    suppressesNextRedundantAutomaticValueChange = true
+    recordVerifiedApplication(
+      application,
+      proposal: proposal,
+      elapsed: boundaryPairingElapsed
+    )
+    tracePrivate(
+      "outcome=applied original=\(proposal.correction.original.debugDescription) replacement=\(proposal.correction.replacement.debugDescription) range=\(completion.targetRange.location):\(completion.targetRange.length)"
+    )
+    logger.notice("Automatic correction applied")
+    rebaseline()
+  }
 
+  private func scheduleDeferredCorrectionsIfNeeded() {
+    guard
+      !deferredCorrections.isEmpty || deferredScanStartLocation != nil
+    else {
+      deferredCorrectionTask?.cancel()
+      deferredCorrectionTask = nil
+      return
+    }
+    deferredCorrectionTask?.cancel()
+    let generation = typingInputGeneration
+    let delay = deferredCorrectionIdleDelay
+    deferredCorrectionTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: delay)
+      } catch {
+        return
+      }
+      guard let self, generation == self.typingInputGeneration else {
+        return
+      }
+      await self.applyDeferredCorrections()
+    }
+  }
+
+  private func applyDeferredCorrections() async {
+    deferredCorrectionTask = nil
+    guard
+      frontmostBundleIdentifier()
+        == BearAccessibilityProbe.bearBundleIdentifier
+    else {
+      clearDeferredCorrections()
+      return
+    }
+
+    let scanGeneration = typingInputGeneration
+    appendDeferredCorrectionsFromRapidScan()
+    await Task.yield()
+    guard scanGeneration == typingInputGeneration else {
+      scheduleDeferredCorrectionsIfNeeded()
+      return
+    }
+    let pending = deferredCorrections.sorted {
+      $0.targetRange.location > $1.targetRange.location
+    }
+    deferredCorrections.removeAll(keepingCapacity: true)
+    let applicationGeneration = typingInputGeneration
+    for (index, correction) in pending.enumerated() {
+      let application = correctionApplicator.apply(
+        original: correction.proposal.correction.original,
+        replacement: correction.proposal.correction.replacement,
+        at: correction.targetRange
+      )
+      guard application.report.isVerifiedApplication else {
+        tracePrivate(
+          "outcome=deferredReplacementRefused status=\(application.report.status.rawValue) range=\(correction.targetRange.location):\(correction.targetRange.length)"
+        )
+        diagnostics.recordRefusal(.replacementRefused)
+        continue
+      }
+      recordVerifiedApplication(
+        application,
+        proposal: correction.proposal,
+        elapsed: correction.boundaryObservedAt.map {
+          $0.duration(to: clock.now)
+        }
+      )
+      tracePrivate(
+        "outcome=deferredApplied original=\(correction.proposal.correction.original.debugDescription) replacement=\(correction.proposal.correction.replacement.debugDescription) range=\(correction.targetRange.location):\(correction.targetRange.length)"
+      )
+      // Keep the canonical marker shared with immediate applications so the
+      // physical HID harness counts both execution paths consistently.
+      logger.notice("Automatic correction applied")
+      await Task.yield()
+      guard applicationGeneration == typingInputGeneration else {
+        let remainingIndex = pending.index(after: index)
+        if remainingIndex < pending.endIndex {
+          deferredCorrections.append(
+            contentsOf: pending[remainingIndex...]
+          )
+        }
+        scheduleDeferredCorrectionsIfNeeded()
+        rebaseline()
+        return
+      }
+    }
+    suppressesNextRedundantAutomaticValueChange = true
+    rebaseline()
+  }
+
+  private func recordVerifiedApplication(
+    _ application: BearCorrectionApplication,
+    proposal: CorrectionProposal,
+    elapsed: Duration?
+  ) {
+    suppressesNextRedundantAutomaticValueChange = true
     learningStore.recordApplied(proposal)
     annotationTracker.trackWithResolution(
       application,
@@ -686,14 +861,103 @@ final class BearAutomaticCorrectionCoordinator {
       },
       onFinished: nil
     )
-    diagnostics.recordApplied(
-      elapsed: boundaryPairingElapsed
+    diagnostics.recordApplied(elapsed: elapsed)
+  }
+
+  private func clearDeferredCorrections() {
+    deferredCorrectionTask?.cancel()
+    deferredCorrectionTask = nil
+    deferredCorrections.removeAll(keepingCapacity: true)
+    deferredScanStartLocation = nil
+  }
+
+  private func markDeferredScanStart() {
+    guard let snapshot = lastSnapshot else {
+      return
+    }
+    let localCaret = snapshot.caretLocation - snapshot.leadingRange.location
+    guard
+      localCaret >= 0,
+      localCaret <= snapshot.leadingText.utf16.count
+    else {
+      return
+    }
+
+    let leadingText = snapshot.leadingText as NSString
+    let textBeforeCaret = leadingText.substring(
+      with: NSRange(location: 0, length: localCaret)
     )
-    tracePrivate(
-      "outcome=applied original=\(proposal.correction.original.debugDescription) replacement=\(proposal.correction.replacement.debugDescription) range=\(completion.targetRange.location):\(completion.targetRange.length)"
+    let syntheticBoundaryText = textBeforeCaret + " "
+    let activeWord = CompletedWordDetector.immediatelyBeforeCaret(
+      in: syntheticBoundaryText,
+      caretUTF16Offset: syntheticBoundaryText.utf16.count
     )
-    logger.notice("Automatic correction applied")
-    rebaseline()
+    guard let word = activeWord else {
+      return
+    }
+
+    let absoluteStart = snapshot.leadingRange.location + word.range.location
+    deferredScanStartLocation = min(
+      deferredScanStartLocation ?? absoluteStart,
+      absoluteStart
+    )
+  }
+
+  private func appendDeferredCorrectionsFromRapidScan() {
+    guard let requestedStart = deferredScanStartLocation else {
+      return
+    }
+    deferredScanStartLocation = nil
+    guard case .ready(let snapshot) = contextReader.read() else {
+      tracePrivate("outcome=rapidScanUnavailable")
+      return
+    }
+
+    let availableStart = snapshot.leadingRange.location
+    let scanStart = max(requestedStart, availableStart)
+    let scanEnd = snapshot.caretLocation
+    guard scanEnd > scanStart else {
+      return
+    }
+    if scanStart != requestedStart {
+      tracePrivate(
+        "outcome=rapidScanTruncated requestedStart=\(requestedStart) availableStart=\(availableStart)"
+      )
+    }
+
+    let localScanRange = NSRange(
+      location: scanStart - availableStart,
+      length: scanEnd - scanStart
+    )
+    for word in CompletedWordDetector.completedWords(
+      in: snapshot.leadingText,
+      utf16Range: localScanRange
+    ) {
+      let targetRange = AccessibilityTextRange(
+        location: availableStart + word.range.location,
+        length: word.range.length
+      )
+      guard !deferredCorrections.contains(where: {
+        $0.targetRange == targetRange
+      }),
+        let engineProposal = correctionEngine.proposal(for: word.text),
+        let proposal = learningStore.applyingPreference(to: engineProposal),
+        proposal.correction.original == word.text
+      else {
+        continue
+      }
+      deferredCorrections.append(
+        DeferredCorrection(
+          proposal: proposal,
+          targetRange: targetRange,
+          boundaryObservedAt: nil
+        )
+      )
+      diagnostics.recordDeferred()
+      tracePrivate(
+        "outcome=rapidScanDeferred range=\(targetRange.location):\(targetRange.length)"
+      )
+    }
   }
 
   private func rebaseline() {

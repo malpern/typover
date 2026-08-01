@@ -192,18 +192,35 @@ public enum BearHIDTextEvidence {
     baselineCaret: Int,
     finalCaret: Int,
     finalLeadingText: String,
+    expectedLength: Int? = nil,
     maximumLength: Int = 256
   ) -> String? {
     let insertedLength = finalCaret - baselineCaret
-    guard insertedLength >= 0,
+    let leadingUnits = Array(finalLeadingText.utf16)
+    if insertedLength >= 0,
       insertedLength <= maximumLength,
-      finalLeadingText.utf16.count >= insertedLength
-    else {
-      return nil
+      leadingUnits.count >= insertedLength
+    {
+      return String(
+        decoding: leadingUnits.suffix(insertedLength),
+        as: UTF16.self
+      )
     }
-    return String(
-      decoding: Array(finalLeadingText.utf16.suffix(insertedLength)),
-      as: UTF16.self
-    )
+
+    // Bear may replace the focused Accessibility fragment when Return creates
+    // a new editor block. The replacement fragment is prefixed by one object
+    // replacement character and then contains the complete inserted burst.
+    // Accept only that exact, caller-sized shape; analysis still rejects any
+    // missing, extra, or unexpected text inside the recovered suffix.
+    if let expectedLength,
+      expectedLength <= maximumLength,
+      finalCaret == expectedLength + 1,
+      leadingUnits.count >= expectedLength + 1
+    {
+      let candidate = leadingUnits.suffix(expectedLength + 1)
+      guard candidate.first == 0xFFFC else { return nil }
+      return String(decoding: candidate.dropFirst(), as: UTF16.self)
+    }
+    return nil
   }
 }

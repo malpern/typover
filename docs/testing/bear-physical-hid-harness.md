@@ -1,6 +1,6 @@
 # Bear physical HID harness
 
-- Status: Harness and visual monitor complete; first board-backed run pending
+- Status: Quiet board-backed baseline passes all four timing rows
 - Fixture: Waveshare ESP32-S3 Touch-LCD-1.69 KeyPath HID fixture
 - Scope: Synthetic text in a disposable Bear note
 
@@ -63,14 +63,14 @@ Scripts/typover-hid-harness run --exclusive-desktop-confirmed
 ```
 
 The runner waits for three host samples with at least 60% CPU idle and no
-active Swift compiler. It refuses to start unless Typover is running, the
-fixture reports a mounted USB keyboard, and Bear has a focused collapsed caret
-at the end of its editor. Before the quiet-host wait it opens the Jig monitor and
-shows a focus gate; the runner then waits up to two minutes for the safe Bear
-caret instead of requiring perfect setup at command launch. It rechecks that
-caret after load, arm, and monitor setup, watches the frontmost application
-throughout the delayed start and HID burst, and aborts the fixture if Bear loses
-focus. The monitor remains visible on the final verified result.
+active Swift compiler. It refuses to start unless Typover is running and the
+fixture reports a mounted USB keyboard. Before the quiet-host wait it opens the
+Jig monitor and shows a focus gate. After the host becomes quiet, the harness
+activates Bear itself and waits up to two minutes for a focused collapsed caret
+at the end of the editor. It rechecks that caret after load, arm, and monitor
+setup, watches the frontmost application throughout the delayed start and HID
+burst, and aborts the fixture if Bear loses focus. The monitor remains visible
+on the final verified result.
 
 Each case is classified as:
 
@@ -105,3 +105,35 @@ The matrix separates three layers that manual typing mixes together:
 The first quiet run is a baseline. Later work can add controlled CPU and
 Accessibility contention using the same artifact schema, then compare current
 behavior with the bounded post-burst catch-up design.
+
+## Quiet baseline result: 2026-07-31
+
+The installed development build passed every 20-word row:
+
+| Interval per character | Corrected | Missed | Unexpected text |
+| --- | ---: | ---: | ---: |
+| 160 ms | 20 | 0 | 0 |
+| 100 ms | 20 | 0 | 0 |
+| 60 ms | 20 | 0 | 0 |
+| 40 ms | 20 | 0 | 0 |
+
+The valid 160 and 100 millisecond case artifacts are in the local run ending
+`02-17-52Z`; an unrelated frontmost-app interruption stopped that matrix before
+the faster rows. The final 60 and 40 millisecond evidence is in the run ending
+`02-27-12Z`, classified `all-corrections-observed`. Each row submitted all 162
+fixture reports with zero late reports, preserved exactly 20 `the` words plus
+the trailing newline, and contained 20 matching Typover application logs.
+
+This baseline exposed two distinct issues before passing. First,
+selection-based replacement could overlap the next physical key and corrupt
+`teh ` into a joined token. Typover now defers fast boundaries until idle.
+Second, Bear coalesced multiple character changes at 40 milliseconds, so
+per-boundary reads could not recover every word. The idle pass now scans only
+the bounded text observed since the rapid burst began and exact-verifies
+reverse-ordered ranges. If that burst start is unavailable or has fallen
+outside the bounded live window, Typover leaves the text unchanged.
+
+The harness proves physical input delivery, final Bear text, and matching
+Typover writes. It does not count visible overlay panels or exercise Change
+Back; those remain separate automated collection tests and an installed manual
+interaction row.

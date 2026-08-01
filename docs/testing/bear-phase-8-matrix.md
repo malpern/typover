@@ -227,6 +227,35 @@ gate passes 62 tests across four relevant suites; the complete gate passes 228
 tests in 24 suites. The installed build still needs the same early Change Back
 interaction to confirm all 20 sibling squiggles remain visible in Bear.
 
+## Physical cadence and bounded catch-up pass: 2026-07-31
+
+The ESP32-S3 physical fixture reproduced 20 continuous `teh ` words plus Return
+at 160, 100, 60, and 40 milliseconds per character. Immediate selection-based
+replacement passed the two slower rows but could overlap the next key at 60
+milliseconds, producing an unexpected joined token. Deferring rapid
+corrections removed that corruption. A first valid deferred run preserved every
+missed word but corrected only 16/20 at 60 milliseconds and 3/20 at 40
+milliseconds because Bear coalesced several Accessibility changes before the
+35-millisecond read.
+
+Typover now retains the earliest observed word start for a rapid burst. After
+220 milliseconds without physical input, it reads only the available bounded
+leading context, enumerates completed words from that start, applies learning
+preferences, and exact-verifies replacements from the highest range to the
+lowest. It never scans the whole note. Focus changes and Undo/Redo clear the
+queue; an unobserved or truncated start remains a safe miss. The catch-up task
+yields between writes and requeues untouched ranges if new physical input is
+observed.
+
+The final installed physical evidence passes 20/20 at both 60 and 40
+milliseconds. Combined with the earlier valid cases, all four timing rows pass
+with exact expected Bear text, 20 matching Typover application logs per row,
+all 162 fixture reports submitted, zero late reports, and no unexpected text.
+Focused coverage now includes 30 coordinator tests, nine completed-word tests,
+and seven HID-plan/evidence tests; the complete gate passes 244 tests in 25
+suites. The physical harness does not count gray squiggles or click Change Back,
+so the early-correction interaction remains the next installed row.
+
 For this single-user development phase, an opt-in local private trace can log
 the actual bounded Bear context, input intents, Accessibility event order,
 pairing latency, proposals, ranges, and outcomes through unified logging. It is

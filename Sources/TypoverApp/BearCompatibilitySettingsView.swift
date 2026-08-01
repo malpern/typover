@@ -156,10 +156,10 @@ private struct BearAutomaticCorrectionControl: View {
           .padding(.leading, 20)
 
         Text(
-          "This session: \(diagnostics.correctionsApplied.formatted()) applied, \(diagnostics.safeSkips.formatted()) skipped safely, \(diagnostics.refusals.formatted()) refused. No writing is recorded.",
+          "This session: \(diagnostics.correctionsApplied.formatted()) applied, \(diagnostics.correctionsDeferred.formatted()) deferred during rapid typing, \(diagnostics.safeSkips.formatted()) skipped safely, \(diagnostics.refusals.formatted()) refused. No writing is recorded.",
           bundle: #bundle,
           comment:
-            "Content-free Bear correction diagnostics. The first value is applied corrections, the second is safe skips, and the third is refusals."
+            "Content-free Bear correction diagnostics. The values are applied corrections, corrections deferred during rapid typing, safe skips, and refusals."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -207,6 +207,8 @@ extension BearAutomaticCorrectionDiagnosticOutcome {
     switch self {
     case .applied:
       "The last eligible correction was applied"
+    case .rapidTypingDeferred:
+      "The last correction waited for a safe pause in typing"
     case .unarmedValueChange:
       "The last change was skipped because no typed boundary was observed"
     case .contextUnavailable:

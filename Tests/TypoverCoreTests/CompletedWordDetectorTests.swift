@@ -101,4 +101,42 @@ struct CompletedWordDetectorTests {
 
     #expect(completedWord.range == (text as NSString).range(of: "teh"))
   }
+
+  @Test("A bounded scan returns every completed word in UTF-16 order")
+  func scansCompletedWordsInRange() {
+    let text = "existing 😀 teh café, final"
+    let scanStart = (text as NSString).range(of: "teh").location
+    let words = CompletedWordDetector.completedWords(
+      in: text,
+      utf16Range: NSRange(
+        location: scanStart,
+        length: (text as NSString).length - scanStart
+      )
+    )
+
+    #expect(words.map(\.text) == ["teh", "café"])
+    #expect(words.map(\.range) == [
+      (text as NSString).range(of: "teh"),
+      (text as NSString).range(of: "café"),
+    ])
+  }
+
+  @Test("A bounded scan never reaches backward into pre-existing text")
+  func boundedScanExcludesEarlierWord() {
+    let text = "teh keep teh "
+    let secondTypo = (text as NSString).range(
+      of: "teh",
+      options: .backwards
+    )
+
+    #expect(
+      CompletedWordDetector.completedWords(
+        in: text,
+        utf16Range: NSRange(
+          location: secondTypo.location,
+          length: (text as NSString).length - secondTypo.location
+        )
+      ).map(\.range) == [secondTypo]
+    )
+  }
 }

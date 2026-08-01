@@ -48,13 +48,22 @@ correction dormant.
 
 Bear's keyboard and Accessibility notifications are independent asynchronous
 streams, and exact-range replacement is a comparatively slow Accessibility
-transaction. This does not prevent reliable ordinary typing, but it places a
-real ceiling on instantaneous correction during arbitrary input bursts. Typover
-must prefer an explainable safe miss over guessing when Bear has already
-coalesced several edits.
+transaction. Typover now measures recent input cadence. It corrects ordinary
+typing immediately, but defers a correction when the preceding key interval is
+under 80 milliseconds. After 220 milliseconds of idle time it scans only the
+bounded text observed since that rapid burst began, queues eligible completed
+words, and applies exact-verified ranges from end to beginning. Focus changes,
+Undo/Redo, an unavailable burst start, or text outside the 96-unit live window
+still fail closed.
 
-The quiet-machine rapid-typing passes corrected every completed typo, including
-21 consecutive `teh ` insertions in the latest run. All 21 corrections retained
+The quiet physical HID baseline now passes 20/20 corrections at 160, 100, 60,
+and 40 milliseconds per character. The 60 and 40 millisecond rows deliberately
+exercise post-burst recovery after Bear coalesces Accessibility notifications.
+Every row preserved exact expected text and had matching Typover application
+logs; the ESP32 delivered all 162 reports per row with no late reports.
+
+An earlier quiet-machine rapid-typing pass corrected every completed typo,
+including 21 consecutive `teh ` insertions. All 21 corrections retained
 their overlays. Changing back the fifth word then exposed a collection-level
 anchor dependency: its verified edit changed the long leading fingerprint of
 every later correction. Typover now broadcasts its own verified edits across
@@ -117,9 +126,9 @@ Back action, and alternatives.
   caret in local unified logs. The beta design must default off, provide an
   explicit in-app consent and retention explanation, support export and delete,
   redact or hash text by default, cap retention, and never upload automatically.
-- [ ] If the fixed boundary deadline still misses words at realistic physical
-  typing speed, add a bounded post-burst catch-up pass. It may inspect only the
-  verified insertion since a recent caret baseline, must wait for a short idle
+- [x] Add a bounded post-burst catch-up pass for rapid physical typing. It may
+  inspect only the verified insertion since a recent caret baseline, must wait
+  for a short idle
   interval, and must refuse any selection, focus, deletion, replacement, or
   ambiguous-context transition. Do not use whole-note or Bear-database writes.
 - [ ] Investigate resilience under severe system load as a separate,
@@ -137,8 +146,9 @@ Back action, and alternatives.
   reuses the existing Waveshare ESP32-S3 fixture, requires a quiet-machine
   baseline and exclusive Bear focus, captures exact inserted-range and local
   private-trace evidence, and fails closed on focus or range ambiguity. The
-  first physical baseline and controlled-load profiles remain pending until
-  the board is connected.
+  quiet physical baseline now passes at 160, 100, 60, and 40 milliseconds per
+  character. Controlled CPU, WindowServer, and Accessibility-load profiles
+  remain pending.
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
 ### Exit criteria
@@ -331,11 +341,10 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-Repeat the 16-word physical `teh` sequence in the disposable Bear 2.9.1 fixture
-against the deployed 256-unit anchor build. Confirm that all completed typos
-become `the`, all 16 corrections retain independent gray squiggles, and an
-early squiggle can still Change Back only its own word. Then continue the
-remaining Phase 8 installed matrix. After the normal-load acceptance pass,
-design the severe-load investigation and its controlled fixtures. The
-high-load trace demonstrates real coalesced safe misses, but it does not yet
-establish the recovery algorithm or the supported load envelope.
+Manually Change Back an early correction from the latest 20-word Bear burst and
+confirm that its surviving sibling squiggles remain independently clickable.
+The physical harness proves exact inserted text and matching application logs;
+it does not yet count visible overlays or click their menus. Then continue the
+remaining Phase 8 installed matrix. After that normal-load acceptance pass,
+design the severe-load investigation and controlled CPU, WindowServer, and
+Accessibility-contention profiles around the now-proven bounded recovery path.

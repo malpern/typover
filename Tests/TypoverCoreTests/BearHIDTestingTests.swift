@@ -116,5 +116,21 @@ struct BearHIDTestingTests {
         finalLeadingText: "text"
       ) == nil
     )
+    #expect(
+      BearHIDTextEvidence.insertedText(
+        baselineCaret: 90,
+        finalCaret: 10,
+        finalLeadingText: "\u{FFFC}the teh \n",
+        expectedLength: 9
+      ) == "the teh \n"
+    )
+    #expect(
+      BearHIDTextEvidence.insertedText(
+        baselineCaret: 90,
+        finalCaret: 10,
+        finalLeadingText: "Xthe teh \n",
+        expectedLength: 9
+      ) == nil
+    )
   }
 }

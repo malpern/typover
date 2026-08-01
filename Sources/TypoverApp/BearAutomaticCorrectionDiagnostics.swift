@@ -3,6 +3,7 @@ import Observation
 
 enum BearAutomaticCorrectionDiagnosticOutcome: String, Equatable, Sendable {
   case applied
+  case rapidTypingDeferred
   case unarmedValueChange
   case contextUnavailable
   case baselineUnavailable
@@ -21,6 +22,7 @@ struct BearAutomaticCorrectionDiagnosticsSnapshot: Equatable, Sendable {
   let boundaryInputs: Int
   let valueChanges: Int
   let correctionsApplied: Int
+  let correctionsDeferred: Int
   let safeSkips: Int
   let refusals: Int
   let correctionToAnnotationSampleCount: Int
@@ -38,6 +40,7 @@ final class BearAutomaticCorrectionDiagnostics {
   private(set) var boundaryInputs = 0
   private(set) var valueChanges = 0
   private(set) var correctionsApplied = 0
+  private(set) var correctionsDeferred = 0
   private(set) var safeSkips = 0
   private(set) var refusals = 0
   private(set) var lastOutcome: BearAutomaticCorrectionDiagnosticOutcome?
@@ -51,6 +54,7 @@ final class BearAutomaticCorrectionDiagnostics {
       boundaryInputs: boundaryInputs,
       valueChanges: valueChanges,
       correctionsApplied: correctionsApplied,
+      correctionsDeferred: correctionsDeferred,
       safeSkips: safeSkips,
       refusals: refusals,
       correctionToAnnotationSampleCount:
@@ -82,6 +86,11 @@ final class BearAutomaticCorrectionDiagnostics {
 
   func recordValueChange() {
     valueChanges += 1
+  }
+
+  func recordDeferred() {
+    correctionsDeferred += 1
+    lastOutcome = .rapidTypingDeferred
   }
 
   func recordSafeSkip(
@@ -121,6 +130,7 @@ final class BearAutomaticCorrectionDiagnostics {
     boundaryInputs = 0
     valueChanges = 0
     correctionsApplied = 0
+    correctionsDeferred = 0
     safeSkips = 0
     refusals = 0
     lastOutcome = nil

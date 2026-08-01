@@ -56,6 +56,7 @@ private struct HostReadinessSample: Codable, Equatable {
 
 private struct TypoverTelemetrySummary: Codable {
   let applied: Int
+  let rapidTypingCoalesced: Int
   let contextChanged: Int
   let staleBoundaryInput: Int
   let baselineUnavailable: Int
@@ -548,7 +549,12 @@ private enum TypoverBearHIDHarness {
     let readiness = try waitForQuietHost(
       timeoutSeconds: options.quietTimeoutSeconds
     )
-    print("Focus Bear and place the caret at the end of the disposable test note.")
+    print("Activating Bear and verifying the collapsed caret at the end of the test note…")
+    guard activateBear() else {
+      throw HarnessError.unsafeFocus(
+        "Bear is not running or could not be activated for physical input."
+      )
+    }
     try waitForSafeBearCaret(timeoutSeconds: 120)
 
     let outputDirectory = URL(fileURLWithPath: options.outputDirectory ?? (
@@ -777,7 +783,8 @@ private enum TypoverBearHIDHarness {
       BearHIDTextEvidence.insertedText(
         baselineCaret: baseline.caretLocation,
         finalCaret: $0.caretLocation,
-        finalLeadingText: $0.leadingText
+        finalLeadingText: $0.leadingText,
+        expectedLength: testCase.expectedUTF16Length
       )
     }
     let analysis = BearHIDCaseAnalysis(
@@ -898,6 +905,15 @@ private enum TypoverBearHIDHarness {
     )
   }
 
+  private static func activateBear() -> Bool {
+    guard let bear = NSRunningApplication.runningApplications(
+      withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    ).first else {
+      return false
+    }
+    return bear.activate(options: [.activateAllWindows])
+  }
+
   private static func waitForQuietHost(
     timeoutSeconds: Int
   ) throws -> [HostReadinessSample] {
@@ -973,11 +989,13 @@ private enum TypoverBearHIDHarness {
     }
     return TypoverTelemetrySummary(
       applied: count("Automatic correction applied"),
+      rapidTypingCoalesced: count("outcome=rapidTypingCoalesced"),
       contextChanged: count("outcome=contextChanged"),
       staleBoundaryInput: count("outcome=staleBoundaryInput"),
       baselineUnavailable: count("outcome=baselineUnavailable"),
       learnedSuppression: count("outcome=learnedSuppression"),
       replacementRefused: count("outcome=replacementRefused")
+        + count("outcome=deferredReplacementRefused")
     )
   }
 

@@ -62,6 +62,41 @@ public enum CompletedWordDetector {
     return CompletedWord(range: wordRange, text: word)
   }
 
+  public static func completedWords(
+    in text: String,
+    utf16Range requestedRange: NSRange? = nil
+  ) -> [CompletedWord] {
+    let text = text as NSString
+    let fullRange = NSRange(location: 0, length: text.length)
+    let scanRange = requestedRange.map {
+      NSIntersectionRange($0, fullRange)
+    } ?? fullRange
+    guard scanRange.length > 0 else {
+      return []
+    }
+
+    var words: [CompletedWord] = []
+    var location = scanRange.location
+    let upperBound = NSMaxRange(scanRange)
+    while location < upperBound {
+      let characterRange = text.rangeOfComposedCharacterSequence(at: location)
+      let character = text.substring(with: characterRange)
+      let caret = NSMaxRange(characterRange)
+      if caret <= upperBound,
+        isCompletionBoundary(character),
+        let word = immediatelyBeforeCaret(
+          in: text as String,
+          caretUTF16Offset: caret
+        ),
+        word.range.location >= scanRange.location
+      {
+        words.append(word)
+      }
+      location = caret
+    }
+    return words
+  }
+
   private static func isCompletionBoundary(_ character: String) -> Bool {
     character.unicodeScalars.allSatisfy { scalar in
       CharacterSet.whitespacesAndNewlines.contains(scalar)
