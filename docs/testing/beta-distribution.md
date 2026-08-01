@@ -18,6 +18,14 @@ This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
 strips local extended attributes, excludes AppleDouble metadata from the zip,
 and does not contact Apple.
 
+The local, read-only package verifier checks the expected bundle identity,
+version fields, executable, strict signature, system-only dynamic dependencies,
+and archive metadata:
+
+```bash
+Scripts/verify-beta-app.sh
+```
+
 The 2026-08-01 local beta artifact was signed successfully with the configured
 Developer ID identity. A fresh temporary bundle identifier simulated a clean
 preferences domain: the onboarding sheet appeared, both permissions showed
@@ -35,7 +43,9 @@ Scripts/build-beta-app.sh 0.1 --notarize
 This submits the zip to Apple's notary service, waits for the result, staples
 the accepted ticket to the app, recreates the zip with the stapled bundle, and
 runs Gatekeeper assessment. It does not publish the artifact or create a public
-release.
+release. Afterward, `Scripts/verify-beta-app.sh` accepts the app and archive
+paths followed by `--gatekeeper` to repeat Gatekeeper and stapled-ticket
+validation.
 
 ## Clean-machine gate
 

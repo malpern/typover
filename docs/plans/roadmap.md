@@ -251,8 +251,10 @@ ordinary app or Accessibility lifecycle changes.
 - [ ] Produce a signed beta build and a repeatable clean-machine install and
   permission test. The Developer ID/notarization script and clean-machine
   checklist are implemented in
-  [Beta distribution](../testing/beta-distribution.md); building and validating
-  the notarized candidate remain.
+  [Beta distribution](../testing/beta-distribution.md). The local Developer ID
+  archive now passes strict signature, bundle metadata, system-dependency, and
+  clean-zip verification; building and validating the notarized candidate and
+  executing the clean-machine permission checklist remain.
 
 ### Exit criteria
 
