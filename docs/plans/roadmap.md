@@ -287,8 +287,13 @@ contract.
 
 ### Work
 
-- Detect a verified completed sentence after punctuation.
-- Capture only the most recent sentence, capped at 400 UTF-16 units.
+- Detect a verified completed sentence after punctuation. The dormant Bear
+  capture primitive now requires the observed terminator to match the bounded
+  Accessibility text exactly.
+- Capture only the most recent sentence, capped at 400 UTF-16 units. Bounded
+  reads now resolve document coordinates only when the sentence begins at the
+  document start or an earlier terminator is visible; truncated beginnings
+  fail closed. Runtime scheduling remains gated on Milestone 1 evidence.
 - Run the selected contextual engine asynchronously while continued typing
   remains responsive.
 - Discard a proposal if the captured sentence changes, focus moves, or the

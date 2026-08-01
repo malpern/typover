@@ -9,9 +9,10 @@ The redesigned focused automatic-correction gate passes 31 tests. The focused
 overlay gate now passes 31 tests, including idle-first catch-up, shared
 lifecycle, post-write reconciliation, circuit-breaker regressions, one-owner
 global-hotkey arbitration, direct newest-correction Change Back, and per-item
-Accessibility actions. The current broad gate passes 268 tests in 26 suites,
+Accessibility actions. The current broad gate passes 276 tests in 27 suites,
 including the hardened physical-harness wake, load-sampling, and punctuation
-contracts. Deployment and the
+contracts plus dormant bounded-sentence capture and stale-result validation.
+Deployment and the
 redesigned physical Bear pass are recorded separately below rather than
 inferred from deterministic tests.
 

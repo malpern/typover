@@ -50,7 +50,7 @@ public final class BearTypingContextReader:
     leadingLimit: Int = 96,
     trailingLimit: Int = 24
   ) {
-    self.leadingLimit = max(32, min(leadingLimit, 256))
+    self.leadingLimit = max(32, min(leadingLimit, 400))
     self.trailingLimit = max(0, min(trailingLimit, 64))
   }
 

@@ -61,6 +61,32 @@ struct ContextualCorrectionTests {
     )
   }
 
+  @Test("A bounded detector converts a proven sentence to document coordinates")
+  func resolvesBoundedSentenceInDocumentCoordinates() throws {
+    let text = "Earlier.  Their going home."
+    let sentence = try #require(
+      CompletedSentenceDetector.immediatelyBeforeCaret(
+        inBoundedText: text,
+        documentRange: NSRange(location: 100, length: text.utf16.count),
+        caretDocumentOffset: 100 + text.utf16.count
+      )
+    )
+
+    #expect(sentence.text == "Their going home.")
+    #expect(sentence.range == NSRange(location: 110, length: 17))
+  }
+
+  @Test("A bounded detector refuses an unproven truncated beginning")
+  func refusesTruncatedBoundedSentence() {
+    #expect(
+      CompletedSentenceDetector.immediatelyBeforeCaret(
+        inBoundedText: "middle of a sentence.",
+        documentRange: NSRange(location: 100, length: 21),
+        caretDocumentOffset: 121
+      ) == nil
+    )
+  }
+
   @Test("A unique exact model target resolves to its document range")
   func resolvesUniqueExactTarget() throws {
     let sentence = CompletedSentence(

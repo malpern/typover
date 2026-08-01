@@ -77,6 +77,52 @@ public enum CompletedSentenceDetector {
     )
   }
 
+  /// Resolves a completed sentence from a bounded document fragment while
+  /// refusing a sentence whose beginning may have been truncated. The
+  /// returned range uses document coordinates.
+  public static func immediatelyBeforeCaret(
+    inBoundedText text: String,
+    documentRange: NSRange,
+    caretDocumentOffset: Int
+  ) -> CompletedSentence? {
+    let textLength = text.utf16.count
+    guard
+      documentRange.location >= 0,
+      documentRange.length == textLength,
+      documentRange.location <= Int.max - documentRange.length
+    else {
+      return nil
+    }
+    let documentEnd = documentRange.location + documentRange.length
+    guard
+      caretDocumentOffset >= documentRange.location,
+      caretDocumentOffset <= documentEnd,
+      let localSentence = immediatelyBeforeCaret(
+        in: text,
+        caretUTF16Offset: caretDocumentOffset - documentRange.location
+      )
+    else {
+      return nil
+    }
+
+    if documentRange.location > 0,
+      !hasVerifiedSentenceBoundary(
+        before: localSentence.range.location,
+        in: text
+      )
+    {
+      return nil
+    }
+
+    return CompletedSentence(
+      range: NSRange(
+        location: documentRange.location + localSentence.range.location,
+        length: localSentence.range.length
+      ),
+      text: localSentence.text
+    )
+  }
+
   public static func isSentenceTerminator(_ text: String) -> Bool {
     text.unicodeScalars.allSatisfy(sentenceTerminators.contains)
   }
@@ -88,5 +134,24 @@ public enum CompletedSentenceDetector {
         || scalar == "“"
         || scalar == "”"
     }
+  }
+
+  private static func hasVerifiedSentenceBoundary(
+    before sentenceLocation: Int,
+    in text: String
+  ) -> Bool {
+    let text = text as NSString
+    var location = sentenceLocation
+    while location > 0 {
+      let characterRange = text.rangeOfComposedCharacterSequence(
+        at: location - 1
+      )
+      let character = text.substring(with: characterRange)
+      if !isLeadingSeparator(character) {
+        return isSentenceTerminator(character)
+      }
+      location = characterRange.location
+    }
+    return false
   }
 }
