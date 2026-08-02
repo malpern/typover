@@ -64,7 +64,7 @@ also passes in Bear.
 | Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Pending | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
-| Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
+| Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Passed 2026-08-01 with physical Space, Command-Z, and Shift-Command-Z | Cancel the queued correction; do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
 | Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
 | Close and reopen Typover's main window | Passed with an AppKit reopen delegate targeting the stable `main` scene | Passed 2026-08-01 while the existing process remained alive | Reactivating Typover restores its main window without creating a duplicate process |
@@ -109,6 +109,13 @@ binds every queued correction to its transient bounded context and permits only
 append-only growth before mutation. Repeating the exact six-report sequence
 preserved `tehx ` and logged `deferredContextChanged`; a separate 5/5 physical
 append burst proves ordinary continued typing still corrects.
+
+The installed Undo/Redo control began with `teh`, physically typed Space,
+issued Command-Z before the idle write, then issued Shift-Command-Z. Bear ended
+at exact text `teh `. Typover classified both shortcuts as `undoOrRedo`, cleared
+the deferred queue, treated Bear's resulting value changes as unarmed, and
+logged no correction. All six fixture reports arrived with at most 27
+microseconds of lateness.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

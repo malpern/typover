@@ -80,7 +80,8 @@ within 1.59–3.79 seconds. The physical punctuation row passes 5/5 across `.`,
 Installed lifecycle controls now cover paste and boundary-only paste refusal,
 matched disabled/enabled physical controls, closing and reopening Typover's
 main window in the same process, active-selection boundary refusal, bounded
-caret/context drift, and two 24-annotation memory cycles. A real
+caret/context drift, physical Undo/Redo cancellation, and two 24-annotation
+memory cycles. A real
 ESP32 Command-Tab and Command-F establish the inactive and retired energy
 boundaries: Typover remains at 0.0% CPU after either transition. The current
 debug build plateaus below a provisional 200 MiB RSS budget after two complete

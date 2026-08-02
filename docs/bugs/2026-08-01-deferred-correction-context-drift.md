@@ -51,4 +51,6 @@ build. Bear ended at exact physical text `tehx `, Typover logged
 reports arrived with at most 42 microseconds of lateness. A separate normal
 append control corrected 5/5 physical `teh ` words at 100 milliseconds per
 character with valid Bear focus and fixture evidence in the local run ending
-`02-56-15Z`.
+`02-56-15Z`. The clean installed product commit repeated the exact six-report
+safety control with maximum lateness of 30 microseconds, then passed a second
+5/5 normal append control in the local run ending `03-00-53Z`.
