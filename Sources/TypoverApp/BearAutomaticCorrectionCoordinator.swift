@@ -1230,8 +1230,10 @@ extension Optional where Wrapped == Duration {
     let milliseconds =
       Double(components.seconds) * 1_000
       + Double(components.attoseconds) / 1_000_000_000_000_000
-    return milliseconds.formatted(
-      .number.precision(.fractionLength(3))
+    return String(
+      format: "%.3f",
+      locale: Locale(identifier: "en_US_POSIX"),
+      arguments: [milliseconds]
     )
   }
 }

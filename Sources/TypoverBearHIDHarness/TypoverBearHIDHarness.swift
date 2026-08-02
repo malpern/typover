@@ -79,11 +79,17 @@ private struct HostLoadSample: Codable, Equatable {
   let typover: ProcessLoadSample
   let bear: ProcessLoadSample
   let windowServer: ProcessLoadSample
+  let targetedProcessCount: Int
+  let powerRowsSeen: Int
+  let powerCommandStatus: Int32?
 }
 
 private extension HostLoadSample {
   var isComplete: Bool {
-    cpuIdlePercent != nil
+    targetedProcessCount == 3
+      && powerRowsSeen == 3
+      && powerCommandStatus == 0
+      && cpuIdlePercent != nil
       && [typover, bear, windowServer].allSatisfy {
         $0.cpuPercent != nil
           && $0.residentMemoryKiB != nil
@@ -112,6 +118,8 @@ private struct CaseArtifact: Codable {
   let readinessSamples: [HostReadinessSample]
   let loadSamples: [HostLoadSample]
   let loadEvidenceComplete: Bool
+  let postFixtureObservationMilliseconds: Double
+  let convergedAfterMilliseconds: Double?
 }
 
 private struct MatrixArtifact: Codable {
@@ -149,6 +157,10 @@ private struct SnapshotReport: Encodable {
   let trailingText: String?
   let caretLocation: Int?
   let documentLength: Int?
+}
+
+private struct BearCLIContent: Decodable {
+  let content: String
 }
 
 private struct ProcessResult {
@@ -322,19 +334,10 @@ private final class HostLoadSampler: @unchecked Sendable {
       timeout: 3
     )
     var processSamples = parseProcessSamples(processList?.output ?? "")
-    let processIdentifiers = processList?.output.split(separator: "\n")
-      .compactMap { line -> String? in
-        let fields = line.split(
-          maxSplits: 3,
-          omittingEmptySubsequences: true,
-          whereSeparator: { $0.isWhitespace }
-        )
-        guard fields.count == 4 else { return nil }
-        let name = URL(fileURLWithPath: String(fields[3])).lastPathComponent
-        return ["Typover", "Bear", "WindowServer"].contains(name)
-          ? String(fields[0])
-          : nil
-      } ?? []
+    let processIdentifiersByName = parseProcessIdentifiers(
+      processList?.output ?? ""
+    )
+    let processIdentifiers = processIdentifiersByName.values.sorted()
     let topArguments = HostLoadSamplingPlan.topArguments(
       processIdentifiers: processIdentifiers
     )
@@ -346,10 +349,13 @@ private final class HostLoadSampler: @unchecked Sendable {
     let idle = top.flatMap {
       HostLoadSamplingPlan.cpuIdlePercent(from: $0.output)
     }
-    for (name, powerScore) in HostLoadSamplingPlan.powerScores(
-      from: top?.output ?? "",
-      processNames: ["Typover", "Bear", "WindowServer"]
-    ) {
+    let powerScoresByProcessIdentifier =
+      HostLoadSamplingPlan.powerScoresByProcessIdentifier(
+        from: top?.output ?? ""
+      )
+    for (name, processIdentifier) in processIdentifiersByName {
+      guard let powerScore = powerScoresByProcessIdentifier[processIdentifier]
+      else { continue }
       let existing = processSamples[name] ?? emptyProcessSample
       processSamples[name] = ProcessLoadSample(
         cpuPercent: existing.cpuPercent,
@@ -362,8 +368,31 @@ private final class HostLoadSampler: @unchecked Sendable {
       cpuIdlePercent: idle,
       typover: processSamples["Typover"] ?? emptyProcessSample,
       bear: processSamples["Bear"] ?? emptyProcessSample,
-      windowServer: processSamples["WindowServer"] ?? emptyProcessSample
+      windowServer: processSamples["WindowServer"] ?? emptyProcessSample,
+      targetedProcessCount: processIdentifiers.count,
+      powerRowsSeen: powerScoresByProcessIdentifier.count,
+      powerCommandStatus: top?.status
     )
+  }
+
+  private static func parseProcessIdentifiers(
+    _ processList: String
+  ) -> [String: String] {
+    var result: [String: String] = [:]
+    for line in processList.split(separator: "\n") {
+      let fields = line.split(
+        maxSplits: 3,
+        omittingEmptySubsequences: true,
+        whereSeparator: { $0.isWhitespace }
+      )
+      guard fields.count == 4 else { continue }
+      let name = URL(fileURLWithPath: String(fields[3])).lastPathComponent
+      guard ["Typover", "Bear", "WindowServer"].contains(name) else {
+        continue
+      }
+      result[name] = String(fields[0])
+    }
+    return result
   }
 
   private static let emptyProcessSample = ProcessLoadSample(
@@ -695,6 +724,11 @@ private struct Options {
     ProcessInfo.processInfo.environment[
       "TYPOVER_HID_JIG_CLIENT"
     ] ?? "/Users/malpern/local-code/keypath-pico-hid-fixture/Scripts/lab/hid-capture-jig-client"
+  var bearCLI =
+    ProcessInfo.processInfo.environment[
+      "TYPOVER_BEAR_CLI"
+    ] ?? "/Applications/Bear.app/Contents/MacOS/bearcli"
+  var bearNoteID: String?
   var intervals = [160, 100, 60, 40]
   var words = 20
   var quietTimeoutSeconds = 600
@@ -719,6 +753,7 @@ private struct Options {
         options.exclusiveDesktopConfirmed = true
         index += 1
       case "--fixture-client", "--fixture-host", "--jig-tool", "--jig-client",
+        "--bear-cli", "--bear-note-id",
         "--intervals", "--words", "--quiet-timeout-seconds", "--output-directory",
         "--load-profile", "--scenario":
         guard index + 1 < arguments.count else {
@@ -730,6 +765,8 @@ private struct Options {
         case "--fixture-host": options.fixtureHost = value
         case "--jig-tool": options.jigTool = value
         case "--jig-client": options.jigClient = value
+        case "--bear-cli": options.bearCLI = value
+        case "--bear-note-id": options.bearNoteID = value
         case "--intervals":
           let values = value.split(separator: ",").compactMap { Int($0) }
           guard values.count == value.split(separator: ",").count else {
@@ -768,6 +805,11 @@ private struct Options {
         throw HarnessError.usage("Unknown argument: \(argument)\n\n\(usage)")
       }
     }
+    if let noteID = options.bearNoteID,
+      !BearHIDNoteFocusPlan.isValid(noteID: noteID)
+    {
+      throw HarnessError.usage("Bear note ID must be a UUID.")
+    }
     return options
   }
 
@@ -784,8 +826,9 @@ private struct Options {
 
     Scenarios: repeated-words (default) or punctuation.
 
-    Run requires --exclusive-desktop-confirmed because the ESP32 is a real
-    keyboard and can only type into the active desktop.
+    Run requires --exclusive-desktop-confirmed and --bear-note-id <UUID>.
+    The explicit disposable note prevents physical input from reaching a
+    different Bear note after the nonactivating Jig opens.
   """
 }
 
@@ -926,6 +969,16 @@ private enum TypoverBearHIDHarness {
         "Fixture client is missing or not executable: \(options.fixtureClient)"
       )
     }
+    guard FileManager.default.isExecutableFile(atPath: options.bearCLI) else {
+      throw HarnessError.commandFailed(
+        "Bear CLI is missing or not executable: \(options.bearCLI)"
+      )
+    }
+    guard let bearNoteID = options.bearNoteID else {
+      throw HarnessError.usage(
+        "run requires --bear-note-id <UUID>; physical input may target only an explicit disposable note."
+      )
+    }
     guard FileManager.default.isExecutableFile(atPath: options.jigTool),
       FileManager.default.isExecutableFile(atPath: options.jigClient)
     else {
@@ -987,12 +1040,8 @@ private enum TypoverBearHIDHarness {
     let readiness = try waitForQuietHost(
       timeoutSeconds: options.quietTimeoutSeconds
     )
-    print("Activating Bear and verifying the collapsed caret at the end of the test note…")
-    guard activateBear() else {
-      throw HarnessError.unsafeFocus(
-        "Bear is not running or could not be activated for physical input."
-      )
-    }
+    print("Opening the explicit Bear test note and verifying its terminal caret…")
+    try focusBearNote(noteID: bearNoteID, cliPath: options.bearCLI)
     try waitForSafeBearCaret(timeoutSeconds: 120)
 
     let loadSession = ControlledLoadSession(profile: options.loadProfile)
@@ -1062,7 +1111,7 @@ private enum TypoverBearHIDHarness {
     }
 
     let summary = MatrixArtifact(
-      schemaVersion: 3,
+      schemaVersion: 4,
       runID: matrixRunID,
       createdAt: Date(),
       host: fixture.host,
@@ -1232,19 +1281,53 @@ private enum TypoverBearHIDHarness {
         title: "CHECKING BEAR",
         detail: "VERIFYING TYPOVER"
       )
-      RunLoop.current.run(
-        until: Date().addingTimeInterval(
-          Double(testCase.settleMilliseconds) / 1_000
-        )
-      )
     }
 
-    let finalSnapshot: BearTypingContextSnapshot?
-    if case .ready(let snapshot) = reader.read() {
-      finalSnapshot = snapshot
-    } else {
-      finalSnapshot = nil
+    let observationStartedAt = Date()
+    let minimumObservationDeadline = observationStartedAt.addingTimeInterval(
+      Double(testCase.settleMilliseconds) / 1_000
+    )
+    let convergenceDeadline = observationStartedAt.addingTimeInterval(
+      Double(testCase.maximumConvergenceMilliseconds) / 1_000
+    )
+    var finalSnapshot: BearTypingContextSnapshot?
+    var convergedAt: Date?
+    while focusRemainedValid, Date() < convergenceDeadline {
+      let frontmostBundleIdentifier =
+        NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+      guard
+        frontmostBundleIdentifier
+          == BearAccessibilityProbe.bearBundleIdentifier
+      else {
+        focusRemainedValid = false
+        focusLossBundleIdentifier = frontmostBundleIdentifier ?? "unavailable"
+        break
+      }
+      if case .ready(let snapshot) = reader.read() {
+        finalSnapshot = snapshot
+        let candidate = BearHIDTextEvidence.insertedText(
+          baselineCaret: baseline.caretLocation,
+          finalCaret: snapshot.caretLocation,
+          finalLeadingText: snapshot.leadingText,
+          expectedLength: testCase.expectedUTF16Length
+        )
+        if candidate == testCase.fullyCorrectedText {
+          if convergedAt == nil {
+            convergedAt = Date()
+          }
+          if Date() >= minimumObservationDeadline {
+            break
+          }
+        } else {
+          convergedAt = nil
+        }
+      }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
     }
+    if finalSnapshot == nil, case .ready(let snapshot) = reader.read() {
+      finalSnapshot = snapshot
+    }
+    let observationFinishedAt = Date()
     let insertedText = finalSnapshot.flatMap {
       BearHIDTextEvidence.insertedText(
         baselineCaret: baseline.caretLocation,
@@ -1343,7 +1426,12 @@ private enum TypoverBearHIDHarness {
       typoverLog: logs,
       readinessSamples: readiness,
       loadSamples: loadSamples,
-      loadEvidenceComplete: loadEvidenceComplete
+      loadEvidenceComplete: loadEvidenceComplete,
+      postFixtureObservationMilliseconds:
+        observationStartedAt.distance(to: observationFinishedAt) * 1_000,
+      convergedAfterMilliseconds: convergedAt.map {
+        observationStartedAt.distance(to: $0) * 1_000
+      }
     )
   }
 
@@ -1383,28 +1471,48 @@ private enum TypoverBearHIDHarness {
     )
   }
 
-  private static func activateBear() -> Bool {
+  private static func focusBearNote(
+    noteID: String,
+    cliPath: String
+  ) throws {
+    let runner = CommandRunner()
+    let contentResult = try runner.run(
+      cliPath,
+      ["cat", noteID, "--format", "json"],
+      timeout: 10
+    )
+    guard contentResult.status == 0,
+      let data = contentResult.output.data(using: .utf8),
+      let note = try? JSONDecoder().decode(BearCLIContent.self, from: data),
+      let arguments = BearHIDNoteFocusPlan.openArguments(
+        noteID: noteID,
+        content: note.content
+      )
+    else {
+      throw HarnessError.commandFailed(
+        "Bear CLI could not read the explicit disposable test note."
+      )
+    }
+    let openResult = try runner.run(cliPath, arguments, timeout: 10)
+    guard openResult.status == 0 else {
+      throw HarnessError.commandFailed(
+        "Bear CLI could not open the explicit disposable test note: "
+          + openResult.error.trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+    }
     guard
       let bear = NSRunningApplication.runningApplications(
         withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
       ).first
     else {
-      return false
+      throw HarnessError.unsafeFocus(
+        "Bear is not running after its CLI opened the disposable test note."
+      )
     }
-    // `NSRunningApplication.activate` alone is advisory and can leave the
-    // nonactivating jig frontmost. LaunchServices provides the reliable app
-    // handoff; the bounded AX check that follows remains authoritative for the
-    // exact focused editor and caret position.
-    let openResult = try? CommandRunner().run(
-      "/usr/bin/open",
-      ["-b", BearAccessibilityProbe.bearBundleIdentifier],
-      timeout: 5
-    )
-    // Activation is asynchronous. Its immediate return value can be false even
-    // though Bear is running and becomes frontmost moments later. The bounded
-    // wait that follows is the authoritative focus and caret proof.
+    // The CLI targets the exact note and terminal UTF-8 offset. App activation
+    // remains advisory; the bounded AX check that follows proves that Bear is
+    // frontmost with a collapsed caret at the document end before HID starts.
     _ = bear.activate(options: [.activateAllWindows])
-    return openResult?.status == 0
   }
 
   private static func waitForQuietHost(
@@ -1517,18 +1625,10 @@ private enum TypoverBearHIDHarness {
       learnedSuppression: count("outcome=learnedSuppression"),
       replacementRefused: count("outcome=replacementRefused")
         + count("outcome=deferredReplacementRefused"),
-      correctionLatencyMilliseconds: logs.compactMap(correctionLatency)
+      correctionLatencyMilliseconds: logs.compactMap {
+        BearHIDTelemetryParsing.correctionLatencyMilliseconds(from: $0)
+      }
     )
-  }
-
-  private static func correctionLatency(_ line: String) -> Double? {
-    guard
-      let range = line.range(
-        of: #"latencyMs=([0-9]+(?:\.[0-9]+)?)"#,
-        options: .regularExpression
-      )
-    else { return nil }
-    return Double(line[range].dropFirst("latencyMs=".count))
   }
 
   private static func printJSON<T: Encodable>(_ value: T) throws {

@@ -1,6 +1,6 @@
 # HID harness wake assertion expired during quiet admission
 
-- Status: Fixed in harness; fresh unlocked physical rerun pending
+- Status: Fixed, covered, and physically verified
 - Observed: 2026-08-01
 - Surface: unattended Bear physical HID evidence
 
@@ -37,5 +37,6 @@ still owned by `caffeinate` after the former five-second expiry point.
 
 `BearHIDTestingTests.wakeAssertionPlan` fixes the complete argument contract,
 including the bounded timeout and parent-process lifetime. The harness target
-builds after the change. A fresh unlocked physical run remains required before
-the controlled-load row can be credited.
+builds after the change. Later CPU, WindowServer, Accessibility, combined, and
+punctuation runs remained unlocked and kept Bear frontmost through completion;
+the canonical combined matrix corrected 80/80 physical words.

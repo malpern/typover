@@ -49,18 +49,47 @@ runtime redesign. It does not explain the memory increase from the earlier
 65 MB build and does not replace an unlocked active-typing or 24-overlay
 sample. Those comparisons remain part of the installed load matrix.
 
+## Installed controlled-load matrix — 2026-08-01
+
+The ESP32 physical harness first admitted a quiet host, then kept each selected
+load active through typing and post-burst convergence. Exact Bear text,
+content-free Typover application logs, the complete fixture trace, and process
+CPU/memory/power samples all agreed.
+
+| Profile | Physical timing | Result | Minimum CPU idle | Peak Typover CPU | Peak Typover RSS |
+| --- | --- | --- | ---: | ---: | ---: |
+| CPU | 160 ms/key | 20/20 | 19.6% | 11.8% | 42,336 KiB |
+| WindowServer | 160 ms/key | 20/20 | 65.4% | 15.6% | 42,496 KiB |
+| Accessibility | 160 ms/key | 20/20 | 57.1% | 27.8% | 43,024 KiB |
+| Combined | 160/100/60/40 ms/key | 80/80 | 9.6% | 130.3% | 152,208 KiB |
+
+The combined rows converged within 1.59–3.79 seconds after the fixture reported
+completion. Typover's peak process power score was 89.1, Bear's was 12.3, and
+WindowServer's was 66.0. No case recorded a refusal, context loss, unexpected
+text, or late HID report; maximum fixture lateness was 65 microseconds.
+
+The combined peak resident memory is materially above the isolated rows and
+the earlier idle samples. It was observed after many synthetic corrections and
+overlays in a debug build, so it is a beta follow-up rather than proof of a
+leak. Repeat the 24-annotation steady-state and post-retirement sample before
+setting a memory budget.
+
+The schema-4 artifact is the local run ending `01-49-31Z`. This is a measured
+envelope on one Apple M5 system, not a compatibility or worst-case guarantee.
+
 ## Remaining samples
 
 Typover now records both timing paths in memory for the current session:
 completion boundary to tracked annotation, and correction-menu choice to a
 verified Change Back or alternative replacement. Settings reports the median
 for each path; the diagnostics retain at most 200 samples and no writing.
-Installed samples remain pending.
+Some installed samples remain pending.
 
 - correction boundary to visible squiggle while typing naturally in Bear;
 - squiggle click to verified Change Back and alternative replacement;
 - sustained typing with several recent annotations;
-- rapid typing and safe-miss behavior;
+- repeated sustained typing and safe-miss behavior beyond the passing physical
+  load matrix;
 - note switching, scrolling, and recovery after Bear or Typover relaunch;
 - idle and active samples on a quiet machine; and
 - memory after the 24-annotation session bound is reached.

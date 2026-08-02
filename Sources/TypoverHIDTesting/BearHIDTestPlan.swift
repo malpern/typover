@@ -12,6 +12,7 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
   public let holdMilliseconds: Int
   public let startDelayMilliseconds: Int
   public let settleMilliseconds: Int
+  public let maximumConvergenceMilliseconds: Int
 
   public init(
     scenario: BearHIDTestScenario = .repeatedWords,
@@ -19,7 +20,8 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
     wordsPerCase: Int = 20,
     holdMilliseconds: Int = 12,
     startDelayMilliseconds: Int = 1_500,
-    settleMilliseconds: Int = 1_500
+    settleMilliseconds: Int = 1_500,
+    maximumConvergenceMilliseconds: Int = 10_000
   ) throws {
     guard !intervalsMilliseconds.isEmpty,
       intervalsMilliseconds.allSatisfy({ $0 >= 4 }),
@@ -41,6 +43,11 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
     guard (250 ... 10_000).contains(settleMilliseconds) else {
       throw BearHIDTestPlanError.invalidSettleDelay
     }
+    guard (settleMilliseconds ... 30_000).contains(
+      maximumConvergenceMilliseconds
+    ) else {
+      throw BearHIDTestPlanError.invalidConvergenceDelay
+    }
 
     self.scenario = scenario
     self.intervalsMilliseconds = intervalsMilliseconds
@@ -48,6 +55,7 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
     self.holdMilliseconds = holdMilliseconds
     self.startDelayMilliseconds = startDelayMilliseconds
     self.settleMilliseconds = settleMilliseconds
+    self.maximumConvergenceMilliseconds = maximumConvergenceMilliseconds
   }
 
   public var cases: [BearHIDTestCase] {
@@ -59,7 +67,8 @@ public struct BearHIDTestPlan: Codable, Equatable, Sendable {
         words: wordsPerCase,
         holdMilliseconds: holdMilliseconds,
         startDelayMilliseconds: startDelayMilliseconds,
-        settleMilliseconds: settleMilliseconds
+        settleMilliseconds: settleMilliseconds,
+        maximumConvergenceMilliseconds: maximumConvergenceMilliseconds
       )
     }
   }
@@ -71,6 +80,7 @@ public enum BearHIDTestPlanError: Error, Equatable, Sendable {
   case invalidHoldDuration
   case invalidStartDelay
   case invalidSettleDelay
+  case invalidConvergenceDelay
 }
 
 public struct BearHIDTestCase: Codable, Equatable, Sendable {
@@ -81,6 +91,7 @@ public struct BearHIDTestCase: Codable, Equatable, Sendable {
   public let holdMilliseconds: Int
   public let startDelayMilliseconds: Int
   public let settleMilliseconds: Int
+  public let maximumConvergenceMilliseconds: Int
 
   public var typedText: String {
     correctionSegments.map(\.typed).joined() + "\n"
@@ -107,7 +118,7 @@ public struct BearHIDTestCase: Codable, Equatable, Sendable {
 
   public var executionMilliseconds: Int {
     expectedUTF16Length * intervalMilliseconds + startDelayMilliseconds
-      + settleMilliseconds
+      + maximumConvergenceMilliseconds
   }
 
   public func fixtureArguments(

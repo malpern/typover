@@ -40,24 +40,50 @@ struct BearHIDTestingTests {
     ])
   }
 
-  @Test("Host load sampling parses the final CPU and process power rows")
+  @Test("Host load sampling parses macOS 27 CPU and PID power rows")
   func hostLoadSamplingParsers() {
     let output = """
       CPU usage: 10.0% user, 5.0% sys, 85.0% idle
-      PID %CPU MEM POWER COMMAND
-      42 1.0 50M 1.5 Typover
+      PID  %CPU MEM  POWER COMMAND
+      760  0.0  68M  0.0   Typover
       CPU usage: 20.0% user, 5.0% sys, 75.0% idle
-      PID %CPU MEM POWER COMMAND
-      84 2.0 60M 2.5 Bear
-      90 3.0 70M 4.5 WindowServer
+      PID  %CPU MEM  POWER COMMAND
+      453  44.2 514M 44.9  WindowServer
+      760  2.1  68M  2.1   Typover
+      737  1.0  135M 1.0   Bear
       """
 
     #expect(HostLoadSamplingPlan.cpuIdlePercent(from: output) == 75)
     #expect(
-      HostLoadSamplingPlan.powerScores(
-        from: output,
-        processNames: ["Typover", "Bear", "WindowServer"]
-      ) == ["Typover": 1.5, "Bear": 2.5, "WindowServer": 4.5]
+      HostLoadSamplingPlan.powerScoresByProcessIdentifier(from: output) == [
+        "453": 44.9,
+        "760": 2.1,
+        "737": 1.0,
+      ]
+    )
+  }
+
+  @Test("Correction latency accepts historical grouped and stable numeric logs")
+  func correctionLatencyParsing() {
+    #expect(
+      BearHIDTelemetryParsing.correctionLatencyMilliseconds(
+        from: "Automatic correction applied latencyMs=4,774.841"
+      ) == 4_774.841
+    )
+    #expect(
+      BearHIDTelemetryParsing.correctionLatencyMilliseconds(
+        from: "Automatic correction applied latencyMs=431.781"
+      ) == 431.781
+    )
+    #expect(
+      BearHIDTelemetryParsing.correctionLatencyMilliseconds(
+        from: "Automatic correction applied latencyMs=none"
+      ) == nil
+    )
+    #expect(
+      BearHIDTelemetryParsing.correctionLatencyMilliseconds(
+        from: "Automatic correction applied latencyMs=4,77.841"
+      ) == nil
     )
   }
 
@@ -69,6 +95,42 @@ struct BearHIDTestingTests {
     #expect(plan.cases.count == 4)
     #expect(plan.cases.allSatisfy { $0.words == 20 })
     #expect(plan.cases.allSatisfy { $0.typedText.utf16.count == 81 })
+    #expect(
+      plan.cases.allSatisfy { $0.maximumConvergenceMilliseconds == 10_000 }
+    )
+  }
+
+  @Test("Explicit Bear note focus targets the terminal CLI byte offset")
+  func explicitBearNoteFocus() throws {
+    let noteID = "01234567-89AB-CDEF-0123-456789ABCDEF"
+    let content = "# Týpover test\n"
+
+    #expect(BearHIDNoteFocusPlan.isValid(noteID: noteID))
+    #expect(BearHIDNoteFocusPlan.terminalByteOffset(for: content) == 16)
+    #expect(
+      BearHIDNoteFocusPlan.openArguments(
+        noteID: noteID,
+        content: content
+      ) == [
+        "app", "open", noteID,
+        "--selection-offset", "16",
+        "--selection-length", "0",
+      ]
+    )
+  }
+
+  @Test("Explicit Bear note focus refuses invalid IDs and handles empty notes")
+  func invalidBearNoteFocus() {
+    #expect(!BearHIDNoteFocusPlan.isValid(noteID: "current-note"))
+    #expect(
+      BearHIDNoteFocusPlan.openArguments(
+        noteID: "current-note",
+        content: ""
+      ) == nil
+    )
+    #expect(BearHIDNoteFocusPlan.terminalByteOffset(for: "") == 0)
+    #expect(BearHIDNoteFocusPlan.terminalByteOffset(for: "body") == 4)
+    #expect(BearHIDNoteFocusPlan.terminalByteOffset(for: "body\n") == 5)
   }
 
   @Test("Punctuation scenario cycles through completion boundaries")
@@ -103,6 +165,12 @@ struct BearHIDTestingTests {
       try BearHIDTestPlan(
         intervalsMilliseconds: [12],
         holdMilliseconds: 12
+      )
+    }
+    #expect(throws: BearHIDTestPlanError.invalidConvergenceDelay) {
+      try BearHIDTestPlan(
+        settleMilliseconds: 1_500,
+        maximumConvergenceMilliseconds: 1_499
       )
     }
   }

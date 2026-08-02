@@ -32,9 +32,8 @@ public enum HostLoadSamplingPlan {
     return Double(line[range].dropLast("% idle".count))
   }
 
-  public static func powerScores(
-    from topOutput: String,
-    processNames: Set<String>
+  public static func powerScoresByProcessIdentifier(
+    from topOutput: String
   ) -> [String: Double] {
     var result: [String: Double] = [:]
     for line in topOutput.split(separator: "\n") {
@@ -44,13 +43,13 @@ public enum HostLoadSamplingPlan {
         whereSeparator: { $0.isWhitespace }
       )
       guard fields.count == 5 else { continue }
-      let name = String(fields[4])
-      guard processNames.contains(name),
+      let processIdentifier = String(fields[0])
+      guard Int(processIdentifier) != nil,
         let power = Double(fields[3])
       else {
         continue
       }
-      result[name] = power
+      result[processIdentifier] = power
     }
     return result
   }

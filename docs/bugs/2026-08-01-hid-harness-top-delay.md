@@ -1,6 +1,6 @@
 # HID harness used an unsupported `top` sample delay
 
-- Status: Fixed and covered; fresh load artifact pending
+- Status: Fixed, covered, and physically verified
 - Observed: 2026-08-01
 - Surface: controlled-load CPU, power, and idle evidence
 
@@ -25,5 +25,8 @@ line and collect the three named power rows. Focused tests pin the exact `top`
 arguments and parser output. A direct command on macOS 27 returned all three
 process rows plus the final CPU-idle sample.
 
-The next controlled-load artifact must contain non-null CPU-idle and power
-values before it can support an energy or load-envelope conclusion.
+Current load artifacts contain non-null CPU-idle, CPU, resident-memory, and
+power values for Typover, Bear, and WindowServer in every sample. The parser now
+joins `top` power rows to the `ps` snapshot by PID, avoiding dependence on a
+displayed command name. Focused macOS 27 output coverage and the canonical
+combined physical matrix verify the corrected contract.

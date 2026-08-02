@@ -70,6 +70,13 @@ exercise post-burst recovery after Bear coalesces Accessibility notifications.
 Every row preserved exact expected text and had matching Typover application
 logs; the ESP32 delivered all 162 reports per row with no late reports.
 
+The first controlled-load envelope is also installed and physical. Isolated
+CPU, WindowServer, and Accessibility rows each pass 20/20 at 160 milliseconds
+per key. A schema-4 combined matrix passes 80/80 across 160, 100, 60, and 40
+milliseconds, with machine CPU idle reaching 9.6% and all rows converging
+within 1.59–3.79 seconds. The physical punctuation row passes 5/5 across `.`,
+`?`, `!`, `;`, and `:` boundaries.
+
 An earlier quiet-machine rapid-typing pass corrected every completed typo,
 including 21 consecutive `teh ` insertions. All 21 corrections retained
 their overlays. Changing back the fifth word then exposed a collection-level
@@ -121,9 +128,10 @@ Back action, and alternatives.
   refusals, false changes, memory, energy, and recovery behavior without
   logging writing. Session-only applied, safe-skip, refusal, and
   correction-to-annotation and menu-to-verified-change measurements are
-  implemented; installed timing, active memory and energy, and recovery
-  samples remain.
-  A locked/waiting idle sanity check is recorded in
+  implemented. Installed load timing, active memory, process power, and
+  post-burst recovery samples are recorded; visible-squiggle timing, menu
+  interaction timing, steady-state overlay memory, and relaunch recovery remain.
+  The evidence log is
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
@@ -143,47 +151,29 @@ Back action, and alternatives.
   for a short idle
   interval, and must refuse any selection, focus, deletion, replacement, or
   ambiguous-context transition. Do not use whole-note or Bear-database writes.
-- [ ] Investigate resilience under severe system load as a separate,
-  reproducible workstream. Create controlled CPU, WindowServer, and
-  Accessibility-contention scenarios; measure keyboard-to-Bear delay,
-  notification coalescing, correction latency, and recovery after the system
-  becomes responsive. Evaluate a bounded idle catch-up pass for recent,
-  append-only text so safely skipped completed words can be corrected after a
-  burst. It must preserve exact-range verification, remain local, avoid
-  whole-note scanning, and never infer or insert a boundary that macOS or Bear
-  did not record. Document the load envelope Typover can recover from and the
-  conditions that must remain an explainable safe miss.
-  The board-independent host harness is implemented and documented in
+- [x] Establish a reproducible severe-load recovery envelope. The
+  board-independent host harness is implemented and documented in
   [Bear physical HID harness](../testing/bear-physical-hid-harness.md). It
   reuses the existing Waveshare ESP32-S3 fixture, requires a quiet-machine
-  baseline and exclusive Bear focus, captures exact inserted-range and local
-  private-trace evidence, and fails closed on focus or range ambiguity. The
-  quiet physical baseline now passes at 160, 100, 60, and 40 milliseconds per
-  character. The harness now implements bounded `cpu`, `window-server`,
-  `accessibility`, and `combined` profiles after the same quiet admission gate,
-  records Typover/Bear/WindowServer CPU and resident memory plus per-correction
-  latency, resolves the fixture's mDNS name once, and holds macOS display,
-  system, and user-active wake assertions for the run. Two CPU attempts were
-  rejected because the five-second default lifetime of `caffeinate -u` expired
-  during quiet admission; no product result was credited. The harness now uses
-  an explicit one-hour bound tied to its own PID, with focused coverage and a
-  direct assertion check. The rejected artifact also exposed an unsupported
-  fractional `top` delay; sampling now uses a macOS 27-compatible one-second
-  interval and has focused argument and parser coverage.
-  A dedicated physical punctuation scenario now cycles through period,
-  question mark, exclamation mark, semicolon, and colon while exact-verifying
-  each corrected or safely missed segment; its installed run remains pending.
-  A first unlocked CPU row produced exact 20/20 text and matching application
-  logs but was correctly rejected after revealing that the wrapper had reused
-  a stale schema-2 release binary without power fields. The wrapper now performs
-  an incremental product build before every command; the row remains
-  diagnostic-only until the current schema-3 binary repeats it.
-  Concurrent full-suite load also exposed an unrealistic test-fixture
-  assumption: its fake physical-input clock always reported a long idle period,
-  allowing a synthetic idle timer to fire between two queued burst events. The
-  coalesced-boundary test now models the production physical-input gate and
-  passes repeated focused runs plus the full suite. This strengthens the load
-  test contract but is not installed severe-load evidence.
+  baseline, an explicit disposable Bear note, and exclusive Bear focus. It
+  captures exact inserted-range, fixture, content-free log, CPU, memory, power,
+  and convergence evidence and fails closed on focus, range, log, or resource
+  ambiguity. The installed CPU, WindowServer, and Accessibility profiles pass
+  20/20 at 160 milliseconds per key. The canonical combined profile passes
+  80/80 at 160, 100, 60, and 40 milliseconds with no late HID reports while
+  machine CPU idle falls to 9.6%. All four combined rows recover within the
+  10-second bound, converging in 1.59–3.79 seconds with no refusal, context loss,
+  unexpected text, or circuit-breaker event. Focus changes, ambiguous context,
+  an unavailable bounded burst start, a non-append edit, or expiry of the
+  10-second observation bound remain explainable safe-refusal boundaries.
+  Schema 4 also fixes explicit-note targeting, PID-based power sampling, bounded
+  convergence observation, and locale-stable latency evidence. Rejected earlier
+  artifacts remain diagnostic-only.
+- [ ] Extend severe-load evidence with repeat runs after fresh app/Bear launches,
+  direct keyboard-to-Bear arrival timing, overlay-retention checks during the
+  load, and a documented steady-state memory budget. The current ESP32 trace
+  proves scheduled reports and final Bear text, but it does not timestamp each
+  character's arrival inside Bear.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
   on stale synthesized SwiftUI restoration identifiers. A clean-bundle
@@ -452,8 +442,11 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, run the same fixture under controlled CPU, WindowServer, and Accessibility
-contention. The new runtime bounds AX IPC and concurrent work, but production
-resilience still requires installed evidence. Record correction coverage,
-post-burst convergence time, missing or stale overlays, menu latency, AX
-timeouts, reconciled writes, and circuit-breaker events separately.
+Next, finish the remaining Phase 8 installed behaviors—selection and paste
+refusals, note/window switching, disable/re-enable, composition, Undo/Redo, and
+relaunch recovery—then record correction-to-visible-squiggle and menu latency.
+Repeat the 24-annotation steady-state memory sample after retirement; the first
+combined-load matrix reached 152,208 KiB RSS in the debug build and needs a
+fresh-launch comparison before a budget is set. Repeat the combined physical
+matrix after fresh Typover and Bear launches and add direct keyboard-to-Bear
+arrival timing rather than inferring it from the ESP32 schedule.

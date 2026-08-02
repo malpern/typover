@@ -1,6 +1,6 @@
 # Bear physical HID harness
 
-- Status: Quiet board-backed baseline passes all four timing rows
+- Status: Quiet and controlled-load board-backed matrices pass
 - Fixture: Waveshare ESP32-S3 Touch-LCD-1.69 KeyPath HID fixture
 - Scope: Synthetic text in a disposable Bear note
 
@@ -54,50 +54,69 @@ per character. This covers ordinary deliberate typing through a fast burst.
 An unplugged board appears as `fixtureReachable: false`; that is an expected
 waiting state, not a Typover failure.
 
-## Physical run
-
-Use a disposable Bear note, place a collapsed caret at the end, and do not use
-the Mac while the matrix runs. Then execute:
+Create a uniquely named disposable note with Bear's official CLI and retain
+the returned UUID. The title and note are test data; never target an ordinary
+note.
 
 ```bash
-Scripts/typover-hid-harness run --exclusive-desktop-confirmed
+/Applications/Bear.app/Contents/MacOS/bearcli create \
+  "Typover Physical Test" --content '\n' --format json --fields id,title
+```
+
+## Physical run
+
+Do not use the Mac while the matrix runs. Supply the disposable note UUID so
+the harness can restore that exact target after Jig setup:
+
+```bash
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID>
 ```
 
 After a quiet baseline, controlled contention can be selected explicitly:
 
 ```bash
-Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile cpu
-Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile window-server
-Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile accessibility
-Scripts/typover-hid-harness run --exclusive-desktop-confirmed --load-profile combined
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID> --load-profile cpu
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID> --load-profile window-server
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID> --load-profile accessibility
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID> --load-profile combined
 ```
 
 The focused punctuation row uses the same physical and exact-text contract:
 
 ```bash
 Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
-  --scenario punctuation --intervals 100 --words 5
+  --bear-note-id <UUID> --scenario punctuation --intervals 100 --words 5
 ```
 
 It cycles through `.`, `?`, `!`, `;`, and `:` completion boundaries, preserving
 the punctuation and following spaces while distinguishing each `teh` safe miss
-from an exact `the` correction. This closes the gap between deterministic
-punctuation coverage and a repeatable installed Bear run once the desktop is
-unlocked.
+from an exact `the` correction.
 
 The runner waits for three host samples with at least 60% CPU idle and no
-active Swift compiler. It refuses to start unless Typover is running and the
-fixture reports a mounted USB keyboard. Before the quiet-host wait it opens the
-Jig monitor and shows a focus gate. After the host becomes quiet, the harness
-activates Bear itself and waits up to two minutes for a focused collapsed caret
-at the end of the editor. It holds explicit macOS display, system, and
-one-hour-bounded user-active wake assertions until the run ends, and every
-generated load source is terminated on normal completion or failure. The
-explicit timeout matters because macOS gives an otherwise unbounded
-`caffeinate -u` assertion only five seconds. It rechecks the caret after load, arm, and monitor
-setup, watches the frontmost application throughout the delayed start and HID
-burst, and aborts the fixture if Bear loses focus. The monitor remains visible
-on the final verified result.
+active Swift compiler. It refuses to start unless Typover is running, the
+fixture reports a mounted USB keyboard, and the operator supplied a valid Bear
+note UUID. Before the quiet-host wait it opens the Jig monitor and shows a
+focus gate. After the host becomes quiet, the harness uses Bear's official CLI
+to reopen that exact note at its current terminal UTF-8 byte offset, activates
+Bear, and waits up to two minutes for Accessibility to prove a focused
+collapsed caret at the end of the editor. It holds explicit macOS display,
+system, and one-hour-bounded user-active wake assertions until the run ends,
+and every generated load source is terminated on normal completion or failure.
+The explicit timeout matters because macOS gives an otherwise unbounded
+`caffeinate -u` assertion only five seconds. It rechecks the caret after load,
+arm, and monitor setup, watches the frontmost application throughout the
+delayed start and HID burst, and aborts the fixture if Bear loses focus. After
+the fixture completes,
+the harness keeps the selected load active and observes the exact inserted
+range for at least 1.5 seconds and at most 10 seconds. It records the time to
+full convergence; if the range never converges, the final exact text is still
+classified as a safe miss, unexpected text, or invalid evidence. The monitor
+remains visible on the final verified result.
 
 The wrapper incrementally rebuilds the release harness before every command.
 This happens before quiet admission and prevents a checked-in schema or safety
@@ -135,20 +154,23 @@ The matrix separates three layers that manual typing mixes together:
 3. the Typover trace explains applied corrections and safe skips such as
    `contextChanged`.
 
-The first quiet run is a baseline. Schema version 3 adds named scenarios and
+The first quiet run is a baseline. Schema version 4 includes named scenarios,
 requires complete CPU-idle, CPU, resident-memory, and power evidence for every
-controlled CPU, WindowServer, Accessibility, or combined contention case. The
-same exact-text and fail-closed evidence contract still applies.
+controlled CPU, WindowServer, Accessibility, or combined contention case, and
+records bounded post-fixture observation and convergence times. Process power
+rows are joined to the `ps` sample by PID rather than the presentation-only
+command name. The same exact-text and fail-closed evidence contract still
+applies.
 
 The first two CPU attempts were safely rejected after `loginwindow` became
 frontmost. They exposed an expired user-active assertion in the harness, not a
-Typover correction result. The wake contract is fixed and covered; fresh
-unlocked controlled-load evidence remains pending. See
+Typover correction result. The wake contract is fixed, covered, and verified by
+the later credited load matrix. See
 [HID harness wake assertion timeout](../bugs/2026-08-01-hid-harness-user-active-timeout.md).
 
 The same rejected artifact revealed that macOS 27 refuses fractional `top`
 sample delays. The sampler now uses a supported one-second interval and tests
-the complete argument and parser contract. A valid load artifact must contain
+the complete argument and PID parser contract. A valid load artifact must contain
 CPU-idle, CPU, resident-memory, and power fields for Typover, Bear, and
 WindowServer in every sample; a contention case with missing resource evidence
 is now classified `invalid-evidence`. See
@@ -157,8 +179,54 @@ is now classified `invalid-evidence`. See
 A later CPU row observed exact 20/20 correction behavior but was also rejected:
 the wrapper had silently executed a stale schema-2 release binary, so no power
 fields were present. The wrapper now rebuilds incrementally before execution;
-the affected row remains diagnostic-only pending a current-binary rerun. See
+the affected row remains diagnostic-only, while later current-schema runs are
+credited. See
 [Stale physical-harness release binary](../bugs/2026-08-01-stale-hid-harness-binary.md).
+
+The next CPU attempt passed quiet admission but stopped before HID input because
+generic Bear activation could not restore the previously prepared disposable
+note and terminal caret after Jig setup. Runs now require a note UUID and reopen
+that exact note through Bear's CLI immediately before the Accessibility gate.
+See [Explicit Bear note targeting](../bugs/2026-08-01-hid-harness-explicit-note-target.md).
+
+The first combined 40 millisecond row sampled Bear after 1.5 seconds while the
+bounded catch-up pass was still applying corrections. The artifact correctly
+rejected the mismatch between 7 visible corrections and 11 application logs;
+a read-only check moments later showed 20/20. Schema 4 now observes for a
+bounded 10 seconds while load remains active. It also parses grouped latency
+values such as `4,774.841` without truncating them to `4`. See
+[Post-burst convergence observation](../bugs/2026-08-01-hid-harness-convergence-window.md).
+
+## Controlled-load result: 2026-08-01
+
+The installed development build passed each isolated 160 millisecond load row
+and a consolidated schema-4 combined matrix:
+
+| Profile | Intervals | Corrected | Minimum CPU idle | Peak Typover CPU | Peak WindowServer CPU | Late reports |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| CPU | 160 ms | 20/20 | 19.6% | 11.8% | 25.4% | 0 |
+| WindowServer | 160 ms | 20/20 | 65.4% | 15.6% | 52.6% | 0 |
+| Accessibility | 160 ms | 20/20 | 57.1% | 27.8% | 44.1% | 0 |
+| Combined | 160/100/60/40 ms | 80/80 | 9.6% | 130.3% | 72.1% | 0 |
+
+Every row retained Bear focus, contained only exact corrected text and its
+trailing newline, had matching Typover application logs, captured all required
+resource fields, and received all 162 scheduled fixture reports. Maximum HID
+lateness was 65 microseconds. Under combined contention the four rows converged
+within 1.59, 3.02, 3.26, and 3.79 seconds after fixture completion. Process CPU
+can exceed 100% on macOS because the value spans multiple cores.
+
+The evidence is local in the runs ending `01-39-14Z`, `01-40-39Z`,
+`01-41-27Z`, and the canonical combined run `01-49-31Z`. These runs establish
+a tested recovery envelope, not a universal guarantee for arbitrary system
+load or future Bear versions.
+
+## Punctuation result: 2026-08-01
+
+The schema-4 run ending `01-48-30Z` corrected all five physical segments to
+`the. the? the! the; the: `, preserved every boundary and the trailing newline,
+logged five Typover applications, and received all 52 fixture reports with no
+late reports.
 
 ## Quiet baseline result: 2026-07-31
 
