@@ -10,6 +10,7 @@ configuration="release"
 output_directory="$repository_root/.build/beta"
 app_path="$output_directory/Typover.app"
 archive_path="$output_directory/Typover-$version.zip"
+receipt_path="$output_directory/Typover-$version.json"
 build_number="${TYPOVER_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M%S)}"
 
 if [[ "$notarize" != "" && "$notarize" != "--notarize" ]]; then
@@ -114,9 +115,41 @@ if [[ "$notarize" == "--notarize" ]]; then
 fi
 
 verify_arguments=("$app_path" "$archive_path")
+is_notarized=false
 if [[ "$notarize" == "--notarize" ]]; then
   verify_arguments+=("--gatekeeper")
+  is_notarized=true
 fi
 "$script_directory/verify-beta-app.sh" "${verify_arguments[@]}"
 
+archive_sha256="$(
+  /usr/bin/shasum -a 256 "$archive_path" | /usr/bin/awk '{ print $1 }'
+)"
+# macOS 27's Swift-backed plutil does not reliably persist a sequence of
+# insertions into a newly created JSON plist. Build the typed property list in
+# its native XML format, then convert the complete document to readable JSON.
+/usr/bin/plutil -create xml1 "$receipt_path"
+/usr/bin/plutil -insert schemaVersion -integer 1 "$receipt_path"
+/usr/bin/plutil -insert bundleIdentifier -string com.malpern.typover \
+  "$receipt_path"
+/usr/bin/plutil -insert version -string "$version" "$receipt_path"
+/usr/bin/plutil -insert build -string "$build_number" "$receipt_path"
+/usr/bin/plutil -insert sourceRevision -string "$source_revision" \
+  "$receipt_path"
+/usr/bin/plutil -insert sourceDirty -bool "$source_dirty" "$receipt_path"
+/usr/bin/plutil -insert minimumSystemVersion -string 27.0 "$receipt_path"
+/usr/bin/plutil -insert teamIdentifier -string X2RKZ5TG99 "$receipt_path"
+/usr/bin/plutil -insert archive -string "$(basename "$archive_path")" \
+  "$receipt_path"
+/usr/bin/plutil -insert archiveSHA256 -string "$archive_sha256" \
+  "$receipt_path"
+/usr/bin/plutil -insert notarized -bool "$is_notarized" "$receipt_path"
+/usr/bin/plutil -convert json -r "$receipt_path"
+
+"$script_directory/verify-beta-receipt.sh" \
+  "$app_path" "$archive_path" "$receipt_path"
+"$script_directory/test-beta-receipt.sh" \
+  "$app_path" "$archive_path" "$receipt_path"
+
+echo "$receipt_path"
 echo "$archive_path"

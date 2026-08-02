@@ -14,7 +14,8 @@ the script does not read or place a password in argv.
 Scripts/build-beta-app.sh 0.1
 ```
 
-This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
+This produces `.build/beta/Typover-0.1.zip` and a matching
+`.build/beta/Typover-0.1.json` receipt, verifies the strict code signature,
 expected Developer ID team, hardened runtime, and secure signing timestamp,
 strips local extended attributes, excludes AppleDouble metadata from the zip,
 and does not contact Apple. Versions must contain two or three numeric
@@ -23,6 +24,15 @@ before a build or output-path mutation occurs. Every bundle records its exact
 40-character Git revision and whether the local tree contained changes. Local
 signed artifacts may be dirty for development testing; notarized candidates
 fail before submission unless the worktree is clean.
+
+The machine-readable receipt records its schema version, bundle identifier,
+version, build, source revision and cleanliness, minimum macOS version, signing
+team, archive filename and SHA-256, and notarization claim. Its verifier derives
+the same values independently from the signed app and archive. A receipt that
+names different app metadata or archive bytes fails closed; a receipt claiming
+notarization additionally requires Gatekeeper and stapled-ticket validation.
+The beta build runs both the positive verifier and the adversarial receipt suite
+before returning an artifact path.
 
 The local, read-only package verifier checks the expected bundle identity,
 version fields, executable, strict signature, system-only dynamic dependencies,
@@ -58,6 +68,7 @@ unsafe version/build inputs:
 
 ```bash
 Scripts/test-beta-verifier.sh
+Scripts/test-beta-receipt.sh
 ```
 
 The 2026-08-01 local beta artifact was signed successfully with the configured

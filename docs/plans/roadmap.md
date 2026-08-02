@@ -272,6 +272,10 @@ ordinary app or Accessibility lifecycle changes.
   [Beta distribution](../testing/beta-distribution.md). The local Developer ID
   archive now passes strict signature, expected-team, hardened-runtime, secure
   timestamp, bundle metadata, system-dependency, and clean-zip verification.
+  Every package now also emits a machine-readable receipt tying the archive's
+  SHA-256 to its version, build, source provenance, signing team, deployment
+  floor, and notarization claim; positive and adversarial receipt verification
+  remain part of the package gate.
   Every build now extracts the archive, rejects unsafe
   or unexpected paths, compares the distributed bundle byte-for-byte with the
   signed build output, and verifies the extracted signature; adversarial extra-

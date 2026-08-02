@@ -26,6 +26,9 @@ separate explicit actions.
 - Release notes identify the marketing version, build number, revision,
   supported macOS and Bear versions, known limitations, privacy changes, data
   migrations, and rollback compatibility.
+- Keep the generated JSON receipt beside every accepted zip. Its checksum and
+  independently verified bundle metadata identify the exact artifact used for
+  installation, update, or rollback; a filename alone is not release evidence.
 
 ## Initial beta update policy
 
@@ -34,7 +37,7 @@ update is an explicit replacement:
 
 1. Export any diagnostic trace needed for an open investigation, then quit
    Typover.
-2. Verify the new notarized zip and its expanded app.
+2. Verify the new notarized zip, expanded app, and matching JSON receipt.
 3. Keep the previous notarized zip until the new build passes its installed
    smoke test.
 4. Replace `Typover.app` in `/Applications`; do not run two copies.
