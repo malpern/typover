@@ -61,7 +61,7 @@ also passes in Bear.
 | Change Back | Passed with learning, collection-wide sibling re-anchoring, direct Accessibility actions, and an exact AppKit global shortcut that targets only the newest correction | AppKit global shortcut and an early correction's direct Accessibility action both passed independently; the direct action retained every unaffected sibling | Restore only the word and suppress the same learned correction without activating Typover |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
-| Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Pending | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
+| Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Passed 2026-08-01 by switching between two disposable notes during the idle window | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Passed 2026-08-01 with physical Space, Command-Z, and Shift-Command-Z | Cancel the queued correction; do not treat Undo/Redo as new typing |
@@ -116,6 +116,13 @@ at exact text `teh `. Typover classified both shortcuts as `undoOrRedo`, cleared
 the deferred queue, treated Bear's resulting value changes as unarmed, and
 logged no correction. All six fixture reports arrived with at most 27
 microseconds of lateness.
+
+The installed note-switch control physically typed Space after `teh` in the
+primary disposable note, then opened a second uniquely identified synthetic
+note before the idle write. The first note retained `teh `, the second retained
+`SAFE TARGET`, and Typover logged focused-editor changes without a correction.
+Both fixture reports arrived with no late reports. The second note was then
+soft-deleted and Bear was returned to the primary fixture.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree
