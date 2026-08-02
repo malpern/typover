@@ -173,6 +173,11 @@ Back action, and alternatives.
   A dedicated physical punctuation scenario now cycles through period,
   question mark, exclamation mark, semicolon, and colon while exact-verifying
   each corrected or safely missed segment; its installed run remains pending.
+  A first unlocked CPU row produced exact 20/20 text and matching application
+  logs but was correctly rejected after revealing that the wrapper had reused
+  a stale schema-2 release binary without power fields. The wrapper now performs
+  an incremental product build before every command; the row remains
+  diagnostic-only until the current schema-3 binary repeats it.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
   on stale synthesized SwiftUI restoration identifiers. A clean-bundle

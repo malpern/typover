@@ -7,9 +7,17 @@ repository_root="$(cd "$script_directory/.." && pwd)"
 configuration="${TYPOVER_HID_HARNESS_CONFIGURATION:-release}"
 binary="$repository_root/.build/$configuration/TypoverBearHIDHarness"
 
+if [[ "${TYPOVER_HID_HARNESS_SKIP_BUILD:-0}" != "1" ]]; then
+  (
+    cd "$repository_root"
+    swift build \
+      --configuration "$configuration" \
+      --product TypoverBearHIDHarness >&2
+  )
+fi
+
 if [[ ! -x "$binary" ]]; then
-  echo "TypoverBearHIDHarness is not built." >&2
-  echo "Run: swift build --configuration $configuration --product TypoverBearHIDHarness" >&2
+  echo "TypoverBearHIDHarness is not built at $binary." >&2
   exit 2
 fi
 

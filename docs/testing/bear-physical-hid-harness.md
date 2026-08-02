@@ -99,6 +99,11 @@ setup, watches the frontmost application throughout the delayed start and HID
 burst, and aborts the fixture if Bear loses focus. The monitor remains visible
 on the final verified result.
 
+The wrapper incrementally rebuilds the release harness before every command.
+This happens before quiet admission and prevents a checked-in schema or safety
+change from being masked by a stale `.build/release` executable. Do not set
+`TYPOVER_HID_HARNESS_SKIP_BUILD=1` for credited evidence.
+
 Each case is classified as:
 
 - `passed`: all 20 words became `the`;
@@ -148,6 +153,12 @@ CPU-idle, CPU, resident-memory, and power fields for Typover, Bear, and
 WindowServer in every sample; a contention case with missing resource evidence
 is now classified `invalid-evidence`. See
 [HID harness top delay](../bugs/2026-08-01-hid-harness-top-delay.md).
+
+A later CPU row observed exact 20/20 correction behavior but was also rejected:
+the wrapper had silently executed a stale schema-2 release binary, so no power
+fields were present. The wrapper now rebuilds incrementally before execution;
+the affected row remains diagnostic-only pending a current-binary rerun. See
+[Stale physical-harness release binary](../bugs/2026-08-01-stale-hid-harness-binary.md).
 
 ## Quiet baseline result: 2026-07-31
 
