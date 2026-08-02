@@ -178,6 +178,12 @@ Back action, and alternatives.
   a stale schema-2 release binary without power fields. The wrapper now performs
   an incremental product build before every command; the row remains
   diagnostic-only until the current schema-3 binary repeats it.
+  Concurrent full-suite load also exposed an unrealistic test-fixture
+  assumption: its fake physical-input clock always reported a long idle period,
+  allowing a synthetic idle timer to fire between two queued burst events. The
+  coalesced-boundary test now models the production physical-input gate and
+  passes repeated focused runs plus the full suite. This strengthens the load
+  test contract but is not installed severe-load evidence.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
   on stale synthesized SwiftUI restoration identifiers. A clean-bundle

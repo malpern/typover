@@ -398,8 +398,10 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
   @Test("Post-burst scan recovers boundaries coalesced by Accessibility")
   func catchesUpCoalescedRapidBoundaries() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.zero)
     let fixture = try Fixture(
-      deferredCorrectionIdleDelay: .milliseconds(80)
+      deferredCorrectionIdleDelay: .milliseconds(80),
+      physicalInputIdleDuration: { physicalIdle.value }
     )
     fixture.reader.result = .ready(snapshot(text: "te", caret: 2))
     fixture.coordinator.setEnabled(true)
@@ -423,6 +425,12 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.coordinator.diagnostics.snapshot.valueChanges == 2
       }
     )
+
+    // Full-suite contention may delay this test past the logical idle timer.
+    // Model the production physical-input gate so no write can begin until the
+    // complete burst has reached the coordinator, regardless of main-actor
+    // scheduling latency.
+    physicalIdle.value = .seconds(1)
 
     #expect(
       await waitUntil {
