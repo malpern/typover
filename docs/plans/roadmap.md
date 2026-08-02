@@ -261,7 +261,9 @@ ordinary app or Accessibility lifecycle changes.
   clean-zip verification. Every build now extracts the archive, rejects unsafe
   or unexpected paths, compares the distributed bundle byte-for-byte with the
   signed build output, and verifies the extracted signature; adversarial extra-
-  path and mismatched-bundle tests pass. Building and validating the notarized
+  path and mismatched-bundle tests pass. The bundle and executable now both
+  declare the supported macOS 27.0 deployment floor, and the verifier requires
+  them to match. Building and validating the notarized
   candidate and executing the clean-machine permission checklist remain.
   A 2026-08-02 clean-revision local build recorded its exact Git SHA with
   `dirty=false`; the integrated verifier and negative distribution tests pass.

@@ -27,13 +27,18 @@ The local, read-only package verifier checks the expected bundle identity,
 version fields, executable, strict signature, system-only dynamic dependencies,
 source revision and cleanliness marker, and archive metadata. It also expands
 the zip into a temporary directory, rejects unsafe or unexpected archive paths,
-proves its bundle is byte-for-byte
-identical to the signed build output, and verifies the extracted signature. The
+proves its bundle is byte-for-byte identical to the signed build output, and
+verifies the extracted signature. The
 build script runs this verifier automatically, so a zip that does not contain
 the exact reviewed app cannot be reported as a successful beta build. The
 verifier also rejects embedded launch agents, daemons, privileged helpers, XPC
 services, login items, and background-only bundle declarations, matching the
 initial beta's manually launched architecture:
+
+The bundle declares macOS 27.0 as its minimum system version. Verification
+also reads the executable's `LC_BUILD_VERSION` command and requires its `minos`
+value to match, preventing the Finder-facing compatibility declaration from
+drifting away from the compiled deployment target.
 
 ```bash
 Scripts/verify-beta-app.sh

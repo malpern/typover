@@ -63,6 +63,25 @@ fi
   "The beta app contains a forbidden background component: Contents/XPCServices" \
   "$temporary_directory/background.out"
 
+minimum_directory="$temporary_directory/minimum"
+/bin/mkdir -p "$minimum_directory"
+/bin/cp -R "$app_path" "$minimum_directory/Typover.app"
+/usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 26.0" \
+  "$minimum_directory/Typover.app/Contents/Info.plist"
+minimum_archive="$temporary_directory/minimum.zip"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+  "$minimum_directory/Typover.app" "$minimum_archive"
+if "$script_directory/verify-beta-app.sh" \
+  "$minimum_directory/Typover.app" "$minimum_archive" \
+    >"$temporary_directory/minimum.out" 2>&1
+then
+  echo "Verifier incorrectly accepted an unsupported minimum system version." >&2
+  exit 1
+fi
+/usr/bin/grep -Fq \
+  "The beta app must declare macOS 27.0 as its minimum system version." \
+  "$temporary_directory/minimum.out"
+
 for invalid_version in ../outside 0 beta; do
   if "$script_directory/build-beta-app.sh" "$invalid_version" \
     >"$temporary_directory/version.out" 2>&1

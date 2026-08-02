@@ -31,6 +31,7 @@ short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' 
 build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")"
 source_revision="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceRevision' "$info_plist")"
 source_dirty="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceDirty' "$info_plist")"
+minimum_system_version="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info_plist")"
 
 if [[ "$bundle_identifier" != "com.malpern.typover" ]]; then
   echo "Unexpected bundle identifier: $bundle_identifier" >&2
@@ -46,6 +47,10 @@ if [[ ! "$source_revision" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 if [[ "$source_dirty" != "true" && "$source_dirty" != "false" ]]; then
   echo "The beta app is missing its source cleanliness marker." >&2
+  exit 1
+fi
+if [[ "$minimum_system_version" != "27.0" ]]; then
+  echo "The beta app must declare macOS 27.0 as its minimum system version." >&2
   exit 1
 fi
 if [[ ! -x "$executable" ]]; then
@@ -76,6 +81,18 @@ for forbidden_key in LSBackgroundOnly LSUIElement SMPrivilegedExecutables; do
 done
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+
+binary_minimum_system_version="$(
+  /usr/bin/otool -l "$executable" \
+    | /usr/bin/awk '
+        $1 == "cmd" && $2 == "LC_BUILD_VERSION" { build_version = 1; next }
+        build_version && $1 == "minos" { print $2; exit }
+      '
+)"
+if [[ "$binary_minimum_system_version" != "$minimum_system_version" ]]; then
+  echo "The beta bundle and executable minimum system versions do not match." >&2
+  exit 1
+fi
 
 if /usr/bin/otool -L "$executable" \
   | /usr/bin/tail -n +2 \
