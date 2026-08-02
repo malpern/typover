@@ -63,7 +63,7 @@ also passes in Bear.
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
 | Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Passed 2026-08-01 by switching between two disposable notes during the idle window | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
-| Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
+| Marked-text composition | Composition-changing transitions are rejected | Partial 2026-08-01: a physical Option-E dead-key composition preserved exact `tehé ` with no correction; a full IME marked-range pass remains | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Passed 2026-08-01 with physical Space, Command-Z, and Shift-Command-Z | Cancel the queued correction; do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
 | Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
@@ -145,6 +145,14 @@ alternative. A second physical `teh ` then became `ten ` with all ten fixture
 reports delivered and 22 microseconds maximum lateness, proving the remembered
 preference was applied. The synthetic preference was removed afterward while
 retaining the pre-existing statistics history.
+
+The installed composition control physically typed `teh`, held Option while
+pressing E, released the dead key, pressed E to commit `é`, and then pressed
+Space. Bear retained exact `tehé `, Typover logged the final Space as a
+completion boundary but made no correction, and all 13 fixture reports arrived
+with no late reports and 29 microseconds maximum deviation. This verifies a
+real macOS dead-key composition path. It is not credited as the full marked-text
+row until a multi-stage IME exposes and commits an active marked range in Bear.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

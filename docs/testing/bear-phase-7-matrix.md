@@ -1,9 +1,9 @@
 # Bear Phase 7 robustness matrix
 
-- Status: In progress
-- Last updated: 2026-07-27
-- Fixture: `Typover Bear Phase 2 — 2026-07-25`
-- Current environment: Bear 2.8.1 (14428), macOS 27.0
+- Status: Long-note, scrolling, attachment-adjacent, and Dark appearance interaction passed; spoken VoiceOver navigation pending
+- Last updated: 2026-08-01
+- Fixtures: dedicated Phase 2 note plus uniquely identified disposable notes
+- Current environment: Bear 2.9.1 (14638), macOS 27.0
 
 This ledger separates deterministic safety coverage from evidence collected in
 the real, permissioned Typover and Bear apps. A deterministic pass proves the
@@ -27,7 +27,7 @@ Accessibility behavior.
 |---|---|---|---|
 | Stable fixture selection | 5 launcher tests pass | Passed again on 2026-07-27: one exact title opened by stable note ID with `--edit` | One exact title opens by note ID; every ambiguous or missing state stops |
 | Short note baseline | Exact-range, geometry, overlay, menu tests pass | Passed on 2026-07-26 | Correct only `teh`; aligned squiggle; Revert and alternatives work |
-| Long note | Bounded-read and earlier-position tests pass | Geometry matrix passed on 2026-07-25; interaction pending | No whole-note read or write; annotation remains aligned |
+| Long note | Bounded-read and earlier-position tests pass | Passed 2026-08-01 with a physical correction at the midpoint of a 23,431-character disposable note | No whole-note read or write; annotation remains aligned |
 | Repeated typo | Ambiguous-anchor tests pass | Passed on 2026-07-26 | Act only on the uniquely anchored occurrence or refuse |
 | Rapid continued typing | Rapid insertion, alternative, and Revert tests pass | Passed on 2026-07-26, including live Revert with an adjacent synthetic tail | Preserve newly typed text and keep a unique correction anchored |
 | Edit before correction | Re-anchoring tests pass | Passed on 2026-07-26 | Shift to the unique anchor without changing intervening text |
@@ -40,10 +40,10 @@ Accessibility behavior.
 | Typover relaunch | Correction state is intentionally session-scoped | Passed on 2026-07-26 | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
 | Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed; correction also passed with VoiceOver enabled; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
-| Dark appearance | Native color behavior is deterministic | Functional correction and relaunch passed on 2026-07-26; final visual/menu contrast review pending | Menu remains native; squiggle remains subtle and legible |
-| Scroll during refresh | Offscreen and partial-visibility tests pass | Geometry matrix passed; in-flight interaction pending | Hide before movement and redraw only after verified geometry |
+| Dark appearance | Native color behavior is deterministic | Passed 2026-08-01 with a live dark-editor squiggle and native menu visual review | Menu remains native; squiggle remains subtle and legible |
+| Scroll during refresh | Offscreen and partial-visibility tests pass | Passed 2026-08-01 in the 23,431-character note; the overlay hid offscreen and returned at the same anchored range | Hide before movement and redraw only after verified geometry |
 | Markdown constructs | Wrapped and formatted geometry tests pass | Heading, list, link, code, and wrap geometry passed | Accessibility coordinates remain authoritative |
-| Attachment-adjacent text | Exact-range policy passes | Geometry passed; interaction pending | Never touch attachment data or replace the whole note |
+| Attachment-adjacent text | Exact-range policy passes | Passed 2026-08-01 with physical typing after a real image attachment | Never touch attachment data or replace the whole note |
 | Previous supported Bear release | Not automatable on current install | Pending availability | Same safety policy; capability failure disables integration cleanly |
 
 ## Live pass measurements
@@ -59,6 +59,40 @@ For each live row, record:
 
 No row is complete if the final text, selection, or annotation position was not
 visually or programmatically verified after the interaction.
+
+## Long-note, scrolling, attachment, and Dark pass: 2026-08-01
+
+A disposable 23,431-character note contained 300 synthetic paragraphs and a
+unique midpoint marker at paragraph 150. Bear placed a collapsed caret at live
+editor location 11,728, with paragraph 151 present in the bounded trailing
+context. The ESP32 physically inserted ` teh ` plus Return at that earlier
+location. Typover changed only the three-letter typo, leaving exact text
+`MIDPOINT-CURSOR the`, a live document length increase of only the six typed
+characters, and the caret at 11,734. Bear CLI found no remaining `teh` in the
+note, and Typover logged one verified automatic correction.
+
+While that midpoint correction remained tracked, five native Accessibility
+scroll actions moved Bear from scroll position 0.495 to 0.544. Typover logged
+the correction hidden with `reason=offscreen`. Five reverse scroll actions
+returned to 0.495; Typover logged the same correction ID visible again at
+range 11,729:3, and a full-resolution capture showed the gray squiggle aligned
+under the original word. The surrounding paragraphs and caret remained intact.
+
+A second disposable note contained a real `TypoverAppIcon.png` attachment,
+represented by Bear as one live attachment character, followed by a unique text
+marker. Physical `teh ` plus Return immediately after that marker became
+`the `. All ten HID reports arrived with no late reports and 30 microseconds
+maximum deviation. The live editor retained its attachment character, Bear CLI
+still listed the exact attachment filename, and its Markdown body still
+contained the attachment link. Typover logged one verified automatic
+correction rather than a whole-note replacement.
+
+Bear was already using Dark appearance for both checks. A full-resolution
+visual pass confirmed that the light-gray squiggle remains legible but quieter
+than the text. Invoking the overlay's standard Accessibility press displayed
+the native dark correction menu with a clear selected row, readable alternatives,
+and a visible separator while Bear remained frontmost. Both disposable notes
+were then soft-deleted to Bear's Trash.
 
 ## Fixture and observer recovery pass: 2026-07-27
 

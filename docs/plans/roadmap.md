@@ -122,6 +122,15 @@ choice. The next physical `teh ` became `ten `, proving that the remembered
 preference was used. The deliberately bad test preference was then removed
 without clearing the existing statistics history.
 
+The remaining Phase 7 interaction gaps narrowed as well. A physical correction
+at paragraph 150 of a 23,431-character disposable note changed only the bounded
+midpoint word. Scrolling it offscreen hid the overlay and scrolling back made
+the same correction ID and range visible again. A separate physical correction
+after a real Bear image attachment retained both the live attachment character
+and Bear's attachment record. A full-resolution Dark appearance pass confirmed
+the gray squiggle and native menu remain legible while Bear stays frontmost.
+Both synthetic notes were soft-deleted after verification.
+
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
@@ -479,12 +488,11 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, finish the remaining Phase 8 installed behaviors—marked-text composition
-and the post-write-inconclusive circuit-breaker—then
-record correction-to-visible-squiggle and menu latency. Run the remaining
-long-note, scrolling, attachment-adjacent, Dark appearance, and spoken
-VoiceOver rows. Diagnose the Settings accessibility-tree transport failure
-before crediting a visual settings pass. Add direct keyboard-to-Bear arrival
-timing rather than inferring it from the ESP32 schedule, repeat the controlled
-load matrix after fresh app launches, and extend the three-cycle release soak
-to a clean second-machine beta session.
+Next, finish the full multi-stage IME marked-text row and the
+post-write-inconclusive circuit-breaker, then record
+correction-to-visible-squiggle and menu latency. Complete spoken VoiceOver
+navigation. Diagnose the Settings accessibility-tree transport failure before
+crediting a visual settings pass. Add direct keyboard-to-Bear arrival timing
+rather than inferring it from the ESP32 schedule, repeat the controlled load
+matrix after fresh app launches, and extend the three-cycle release soak to a
+clean second-machine beta session.
