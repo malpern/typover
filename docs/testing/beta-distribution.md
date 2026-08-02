@@ -1,8 +1,8 @@
 # Beta distribution
 
-- Status: Developer ID build and clean-bundle onboarding check pass;
+- Status: Clean-revision Developer ID build and clean-bundle onboarding pass;
   clean-machine permission gate pending
-- Updated: 2026-08-01
+- Updated: 2026-08-02
 
 Typover's beta artifact is a release-built `.app` signed with the Developer ID
 Application identity. Notarization uses the existing App Store Connect API key;
@@ -26,8 +26,8 @@ fail before submission unless the worktree is clean.
 The local, read-only package verifier checks the expected bundle identity,
 version fields, executable, strict signature, system-only dynamic dependencies,
 source revision and cleanliness marker, and archive metadata. It also expands
-the zip into a temporary directory,
-rejects unsafe or unexpected archive paths, proves its bundle is byte-for-byte
+the zip into a temporary directory, rejects unsafe or unexpected archive paths,
+proves its bundle is byte-for-byte
 identical to the signed build output, and verifies the extracted signature. The
 build script runs this verifier automatically, so a zip that does not contain
 the exact reviewed app cannot be reported as a successful beta build. The
@@ -54,6 +54,13 @@ preferences domain: the onboarding sheet appeared, both permissions showed
 first-launch presentation without changing the installed app's existing TCC
 grants. It is not a substitute for the clean-machine permission and Gatekeeper
 gate below.
+
+On 2026-08-02, a clean-revision build from
+`635f03421ebce3c0081c539fcbc0264cf4bb38aa` recorded that exact revision with
+`dirty=false`. The build-integrated positive verifier and adversarial extra-
+path, mismatched-bundle, background-component, version, and build-number
+rejection tests all passed. This proves local artifact provenance and archive
+integrity; it does not prove notarization or clean-machine behavior.
 
 ## Notarized candidate
 

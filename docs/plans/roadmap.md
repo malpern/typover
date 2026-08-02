@@ -263,6 +263,8 @@ ordinary app or Accessibility lifecycle changes.
   signed build output, and verifies the extracted signature; adversarial extra-
   path and mismatched-bundle tests pass. Building and validating the notarized
   candidate and executing the clean-machine permission checklist remain.
+  A 2026-08-02 clean-revision local build recorded its exact Git SHA with
+  `dirty=false`; the integrated verifier and negative distribution tests pass.
 
 ### Exit criteria
 
