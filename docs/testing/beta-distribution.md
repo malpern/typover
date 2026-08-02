@@ -15,6 +15,7 @@ Scripts/build-beta-app.sh 0.1
 ```
 
 This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
+expected Developer ID team, hardened runtime, and secure signing timestamp,
 strips local extended attributes, excludes AppleDouble metadata from the zip,
 and does not contact Apple. Versions must contain two or three numeric
 components; build numbers must contain 1-18 digits. Invalid values are rejected
@@ -70,9 +71,10 @@ gate below.
 On 2026-08-02, a clean-revision build from
 `635f03421ebce3c0081c539fcbc0264cf4bb38aa` recorded that exact revision with
 `dirty=false`. The build-integrated positive verifier and adversarial extra-
-path, mismatched-bundle, background-component, version, and build-number
-rejection tests all passed. This proves local artifact provenance and archive
-integrity; it does not prove notarization or clean-machine behavior.
+path, mismatched-bundle, background-component, permission-purpose, ad hoc
+signature, missing-hardened-runtime, version, and build-number rejection tests
+all passed. This proves local artifact provenance and archive integrity; it
+does not prove notarization or clean-machine behavior.
 
 ## Notarized candidate
 

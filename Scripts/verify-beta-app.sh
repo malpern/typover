@@ -97,6 +97,27 @@ for forbidden_key in LSBackgroundOnly LSUIElement SMPrivilegedExecutables; do
 done
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+signature_details="$(/usr/bin/codesign -dvvv "$app_path" 2>&1)"
+if ! printf '%s\n' "$signature_details" \
+  | /usr/bin/grep -Eq '^CodeDirectory .*runtime'
+then
+  echo "The beta app is not signed with the hardened runtime." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$signature_details" \
+  | /usr/bin/grep -Fxq 'TeamIdentifier=X2RKZ5TG99' || \
+  ! printf '%s\n' "$signature_details" \
+    | /usr/bin/grep -Eq '^Authority=Developer ID Application:'
+then
+  echo "The beta app is not signed by the expected Developer ID team." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$signature_details" \
+  | /usr/bin/grep -Eq '^Timestamp=.'
+then
+  echo "The beta app signature is missing its secure timestamp." >&2
+  exit 1
+fi
 
 binary_minimum_system_version="$(
   /usr/bin/otool -l "$executable" \

@@ -128,6 +128,43 @@ fi
   "The beta app is missing its Input Monitoring purpose description." \
   "$blank_purpose_directory/output"
 
+unsigned_runtime_directory="$temporary_directory/adhoc-without-runtime"
+/bin/mkdir -p "$unsigned_runtime_directory"
+/bin/cp -R "$app_path" "$unsigned_runtime_directory/Typover.app"
+/usr/bin/codesign --force --sign - "$unsigned_runtime_directory/Typover.app"
+unsigned_runtime_archive="$unsigned_runtime_directory/Typover.zip"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+  "$unsigned_runtime_directory/Typover.app" "$unsigned_runtime_archive"
+if "$script_directory/verify-beta-app.sh" \
+  "$unsigned_runtime_directory/Typover.app" "$unsigned_runtime_archive" \
+    >"$unsigned_runtime_directory/output" 2>&1
+then
+  echo "Verifier incorrectly accepted a signature without hardened runtime." >&2
+  exit 1
+fi
+/usr/bin/grep -Fq \
+  "The beta app is not signed with the hardened runtime." \
+  "$unsigned_runtime_directory/output"
+
+adhoc_directory="$temporary_directory/adhoc-runtime"
+/bin/mkdir -p "$adhoc_directory"
+/bin/cp -R "$app_path" "$adhoc_directory/Typover.app"
+/usr/bin/codesign --force --options runtime --sign - \
+  "$adhoc_directory/Typover.app"
+adhoc_archive="$adhoc_directory/Typover.zip"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+  "$adhoc_directory/Typover.app" "$adhoc_archive"
+if "$script_directory/verify-beta-app.sh" \
+  "$adhoc_directory/Typover.app" "$adhoc_archive" \
+    >"$adhoc_directory/output" 2>&1
+then
+  echo "Verifier incorrectly accepted an ad hoc beta signature." >&2
+  exit 1
+fi
+/usr/bin/grep -Fq \
+  "The beta app is not signed by the expected Developer ID team." \
+  "$adhoc_directory/output"
+
 for invalid_version in ../outside 0 beta; do
   if "$script_directory/build-beta-app.sh" "$invalid_version" \
     >"$temporary_directory/version.out" 2>&1

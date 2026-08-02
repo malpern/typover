@@ -264,8 +264,9 @@ ordinary app or Accessibility lifecycle changes.
   permission test. The Developer ID/notarization script and clean-machine
   checklist are implemented in
   [Beta distribution](../testing/beta-distribution.md). The local Developer ID
-  archive now passes strict signature, bundle metadata, system-dependency, and
-  clean-zip verification. Every build now extracts the archive, rejects unsafe
+  archive now passes strict signature, expected-team, hardened-runtime, secure
+  timestamp, bundle metadata, system-dependency, and clean-zip verification.
+  Every build now extracts the archive, rejects unsafe
   or unexpected paths, compares the distributed bundle byte-for-byte with the
   signed build output, and verifies the extracted signature; adversarial extra-
   path and mismatched-bundle tests pass. The bundle and executable now both
