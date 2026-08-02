@@ -59,7 +59,7 @@ also passes in Bear.
 | Active selection | Passed, including fresh-baseline resume | Passed 2026-08-01 with a selected-range boundary control | Observation pauses; a boundary that replaces a selection cannot authorize an older word; normal typing may resume from a fresh collapsed-caret baseline |
 | Bounded context changes | Passed, including deferred append-only authorization | Passed 2026-08-01 with physical Space, Left, and adjacent insertion | Refuse without writing; preserve every physical edit |
 | Change Back | Passed with learning, collection-wide sibling re-anchoring, direct Accessibility actions, and an exact AppKit global shortcut that targets only the newest correction | AppKit global shortcut and an early correction's direct Accessibility action both passed independently; the direct action retained every unaffected sibling | Restore only the word and suppress the same learned correction without activating Typover |
-| Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
+| Choose an alternative | Overlay callback passed | Passed 2026-08-01 through the installed squiggle's public Accessibility custom action, including a physical learned-preference follow-up | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
 | Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Passed 2026-08-01 by switching between two disposable notes during the idle window | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
@@ -133,6 +133,18 @@ before deployment. Three consecutive 24-word physical cycles then corrected
 and third retired states both settled at 191,456 KiB and 0.0% CPU, below the
 provisional 200 MiB release-config budget and without continuing per-cycle
 growth.
+
+The installed alternative control started from a physical one-word `teh `
+correction with exact Bear and Typover log evidence. An external Accessibility
+client found the primary overlay button by its
+`typover.bear.correction-options` identifier and observed the public actions
+`Revert to “teh”`, `ten`, `yeh`, `tea`, and `feh`. Performing `ten` returned
+success while Bear stayed frontmost, changed only the anchored word, logged
+`chooseAlternative`, and refreshed the same overlay with `the` available as an
+alternative. A second physical `teh ` then became `ten ` with all ten fixture
+reports delivered and 22 microseconds maximum lateness, proving the remembered
+preference was applied. The synthetic preference was removed afterward while
+retaining the pre-existing statistics history.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

@@ -113,6 +113,15 @@ an early direct Accessibility action changed only its word and retained all 19
 siblings, and a later sibling's pointer menu opened without moving focus or
 changing text.
 
+The installed alternative path now passes independently as well. An external
+Accessibility client found the primary squiggle's public custom actions while
+Bear remained frontmost and chose `ten` for a synthetic `teh -> the`
+correction. Bear changed only that anchored word, Typover logged the verified
+alternative interaction, and the refreshed squiggle offered `the` as a sibling
+choice. The next physical `teh ` became `ten `, proving that the remembered
+preference was used. The deliberately bad test preference was then removed
+without clearing the existing statistics history.
+
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
@@ -470,8 +479,8 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, finish the remaining Phase 8 installed behaviors—alternatives,
-marked-text composition, and the post-write-inconclusive circuit-breaker—then
+Next, finish the remaining Phase 8 installed behaviors—marked-text composition
+and the post-write-inconclusive circuit-breaker—then
 record correction-to-visible-squiggle and menu latency. Run the remaining
 long-note, scrolling, attachment-adjacent, Dark appearance, and spoken
 VoiceOver rows. Diagnose the Settings accessibility-tree transport failure
