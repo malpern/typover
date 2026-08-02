@@ -1,9 +1,11 @@
 import AppKit
+import ApplicationServices
 import Darwin
 import Foundation
 import QuartzCore
 import TypoverAccessibility
 import TypoverHIDTesting
+import TypoverOverlay
 
 private enum HarnessError: Error, CustomStringConvertible {
   case usage(String)
@@ -64,6 +66,8 @@ private struct TypoverTelemetrySummary: Codable {
   let baselineUnavailable: Int
   let learnedSuppression: Int
   let replacementRefused: Int
+  let valueBeforeBoundaryCallback: Int
+  let boundaryToValueMilliseconds: [Double]
   let correctionLatencyMilliseconds: [Double]
 }
 
@@ -114,6 +118,7 @@ private struct CaseArtifact: Codable {
   let fixtureStatus: FixtureStatus?
   let fixtureTraceJSON: String?
   let telemetry: TypoverTelemetrySummary
+  let overlayRetention: BearHIDOverlayRetentionEvidence
   let typoverLog: [String]
   let readinessSamples: [HostReadinessSample]
   let loadSamples: [HostLoadSample]
@@ -240,6 +245,52 @@ private struct CommandRunner {
         as: UTF8.self
       )
     )
+  }
+}
+
+private enum TypoverCorrectionOverlayCounter {
+  static func visibleCount() -> Int? {
+    guard AXIsProcessTrusted(),
+      let application = NSRunningApplication.runningApplications(
+        withBundleIdentifier: "com.malpern.typover"
+      ).first
+    else {
+      return nil
+    }
+    let applicationElement = AXUIElementCreateApplication(
+      application.processIdentifier
+    )
+    AXUIElementSetMessagingTimeout(applicationElement, 2)
+    var value: CFTypeRef?
+    guard
+      AXUIElementCopyAttributeValue(
+        applicationElement,
+        kAXWindowsAttribute as CFString,
+        &value
+      ) == .success,
+      let values = value as? [Any]
+    else {
+      return nil
+    }
+    return values.reduce(into: 0) { count, candidate in
+      guard CFGetTypeID(candidate as CFTypeRef) == AXUIElementGetTypeID()
+      else {
+        return
+      }
+      let window = unsafeDowncast(candidate as AnyObject, to: AXUIElement.self)
+      var identifierValue: CFTypeRef?
+      guard
+        AXUIElementCopyAttributeValue(
+          window,
+          kAXIdentifierAttribute as CFString,
+          &identifierValue
+        ) == .success,
+        identifierValue as? String == "typover.bear.correction-overlay"
+      else {
+        return
+      }
+      count += 1
+    }
   }
 }
 
@@ -1111,7 +1162,7 @@ private enum TypoverBearHIDHarness {
     }
 
     let summary = MatrixArtifact(
-      schemaVersion: 4,
+      schemaVersion: 5,
       runID: matrixRunID,
       createdAt: Date(),
       host: fixture.host,
@@ -1154,6 +1205,8 @@ private enum TypoverBearHIDHarness {
         "Bear must be frontmost with a collapsed caret at the end of the disposable test note."
       )
     }
+    let baselineVisibleCorrectionCount =
+      TypoverCorrectionOverlayCounter.visibleCount()
 
     let shortMatrixID =
       matrixRunID
@@ -1347,6 +1400,14 @@ private enum TypoverBearHIDHarness {
     )
     let logs = typoverLog(from: startedAt, to: finishedAt)
     let telemetry = summarize(logs: logs)
+    let overlayRetention = BearHIDOverlayRetentionEvidence(
+      baselineVisibleCorrections: baselineVisibleCorrectionCount,
+      finalVisibleCorrections: TypoverCorrectionOverlayCounter.visibleCount(),
+      correctedWords: analysis.correctedWords,
+      maximumTrackedCorrections:
+        BearAnnotationOverlayCollectionController
+          .defaultMaximumTrackedCorrections
+    )
     let loadSamples = loadSampler.stop()
     samplerStopped = true
     let loadEvidenceComplete = !requiresLoadEvidence
@@ -1423,6 +1484,7 @@ private enum TypoverBearHIDHarness {
       fixtureStatus: finalStatus,
       fixtureTraceJSON: trace,
       telemetry: telemetry,
+      overlayRetention: overlayRetention,
       typoverLog: logs,
       readinessSamples: readiness,
       loadSamples: loadSamples,
@@ -1625,8 +1687,17 @@ private enum TypoverBearHIDHarness {
       learnedSuppression: count("outcome=learnedSuppression"),
       replacementRefused: count("outcome=replacementRefused")
         + count("outcome=deferredReplacementRefused"),
-      correctionLatencyMilliseconds: logs.compactMap {
-        BearHIDTelemetryParsing.correctionLatencyMilliseconds(from: $0)
+      valueBeforeBoundaryCallback: count(
+        "Bear value change preceded completion-boundary callback"
+      ),
+      boundaryToValueMilliseconds: logs.compactMap {
+        BearHIDTelemetryParsing.boundaryToValueMilliseconds(from: $0)
+      },
+      correctionLatencyMilliseconds: logs.compactMap { line in
+        guard line.contains("Automatic correction applied") else {
+          return nil
+        }
+        return BearHIDTelemetryParsing.correctionLatencyMilliseconds(from: line)
       }
     )
   }

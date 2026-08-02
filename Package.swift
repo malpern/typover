@@ -92,7 +92,11 @@ let package = Package(
     ),
     .executableTarget(
       name: "TypoverBearHIDHarness",
-      dependencies: ["TypoverAccessibility", "TypoverHIDTesting"]
+      dependencies: [
+        "TypoverAccessibility",
+        "TypoverHIDTesting",
+        "TypoverOverlay",
+      ]
     ),
     .testTarget(
       name: "TypoverCoreTests",

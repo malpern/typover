@@ -572,6 +572,14 @@ final class BearAutomaticCorrectionCoordinator {
           self.pendingInputIntent = intent
           self.diagnostics.recordBoundaryInput()
           self.pendingBoundaryObservedAt = observedAt
+          if self.pendingValueChange {
+            // Bear can publish AXValueChanged before AppKit delivers the same
+            // physical key to the global monitor. That ordering is safe, but
+            // it cannot produce a non-negative host-side arrival sample.
+            self.logger.notice(
+              "Bear value change preceded completion-boundary callback"
+            )
+          }
           // AX writes are deliberately idle-first. Bear's editor transaction is
           // not atomic across select, replace, and caret restoration, so writing
           // while the next physical key may arrive risks joining or displacing
@@ -649,6 +657,12 @@ final class BearAutomaticCorrectionCoordinator {
     case .valueChanged:
       logger.debug("Bear value change observed")
       tracePrivate("accessibility event=valueChanged")
+      if !pendingValueChange, let boundaryObservedAt = pendingBoundaryObservedAt {
+        let arrivalElapsed = boundaryObservedAt.duration(to: clock.now)
+        logger.notice(
+          "Bear completion boundary reached AX value change arrivalMs=\(Optional(arrivalElapsed).traceMilliseconds, privacy: .public)"
+        )
+      }
       pendingValueChange = true
       scheduleSettledRead()
     case .selectionChanged:

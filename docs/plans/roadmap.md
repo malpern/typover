@@ -218,8 +218,15 @@ Back action, and alternatives.
 - [ ] Extend severe-load evidence with repeat runs after fresh app/Bear launches,
   direct keyboard-to-Bear arrival timing, overlay-retention checks during the
   load, and a documented steady-state memory budget. The current ESP32 trace
-  proves scheduled reports and final Bear text, but it does not timestamp each
-  character's arrival inside Bear.
+  proves scheduled reports and final Bear text. Schema 5 now also records the
+  host-observable interval from Typover's physical completion-boundary callback
+  to Bear's first paired `AXValueChanged` callback, and separately counts the
+  reverse callback ordering that cannot produce a valid sample. A fresh
+  installed quiet/load run still needs to populate those fields. Schema 5 also
+  records before/after visible correction-window counts while the chosen load
+  remains active and marks exact retention only when Typover began with no old
+  correction windows. Fresh one-case runs must populate that evidence.
+  Per-character USB-to-screen-paint timing remains a separate deeper metric.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
   on stale synthesized SwiftUI restoration identifiers. An AppKit reopen

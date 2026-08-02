@@ -156,9 +156,15 @@ row until a multi-stage IME exposes and commits an active marked range in Bear.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree
-terminates the Computer Use transport and the window increases the observed
-debug-process RSS. No settings visual pass is credited until that behavior is
-diagnosed independently.
+terminates the Computer Use transport. The resulting diagnostic report names
+`SkyComputerUseService`, not Typover: it ends with `EXC_BREAKPOINT`/`SIGTRAP`
+while its `AccessibilitySupport` visible-child traversal is building a UI tree.
+Typover remained alive after the helper exited. This narrows the observed crash
+to the automation helper but does not prove the Settings tree is healthy for a
+screen reader, so no settings accessibility or visual pass is credited until
+the window is inspected independently on an unlocked desktop. The later
+zero-window observation occurred after macOS had locked the session and is not
+treated as product evidence.
 
 ## Bear 2.9.1 compatibility pass: 2026-07-29
 

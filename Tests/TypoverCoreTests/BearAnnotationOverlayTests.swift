@@ -967,19 +967,27 @@ struct BearAnnotationOverlayTests {
   @MainActor
   @Test("The correction collection pauses fallback work while Bear is inactive")
   func collectionPausesInactiveFallbackRefresh() async throws {
+    let frontmostState = BearFrontmostState()
     var presenters: [SpyBearAnnotationPresenter] = []
     let collection = BearAnnotationOverlayCollectionController(
       maximumTrackedCorrections: 4,
-      fallbackRefreshInterval: .milliseconds(10)
-    ) {
-      let presenter = SpyBearAnnotationPresenter()
-      presenters.append(presenter)
-      return testController(
-        presenter: presenter,
-        service: StubBearCorrectionService(),
-        handlesKeyboardShortcut: false
-      )
-    }
+      fallbackRefreshInterval: .milliseconds(10),
+      shortcutRegistrar: StubBearAnnotationShortcutRegistrar(),
+      frontmostBundleIdentifier: {
+        frontmostState.bearIsFrontmost
+          ? BearAccessibilityProbe.bearBundleIdentifier
+          : "com.example.OtherApp"
+      },
+      controllerFactory: {
+        let presenter = SpyBearAnnotationPresenter()
+        presenters.append(presenter)
+        return testController(
+          presenter: presenter,
+          service: StubBearCorrectionService(),
+          handlesKeyboardShortcut: false
+        )
+      }
+    )
     for index in 0..<3 {
       collection.trackWithResolution(
         anchoredOverlayApplication(location: index * 4)
@@ -991,6 +999,7 @@ struct BearAnnotationOverlayTests {
       }
     )
 
+    frontmostState.bearIsFrontmost = false
     collection.handleWorkspaceApplicationEvent(
       name: NSWorkspace.didActivateApplicationNotification,
       bundleIdentifier: "com.example.OtherApp"
@@ -999,6 +1008,7 @@ struct BearAnnotationOverlayTests {
     try await Task.sleep(for: .milliseconds(80))
     #expect(presenters.map(\.hideCount) == inactiveHideCounts)
 
+    frontmostState.bearIsFrontmost = true
     collection.handleWorkspaceApplicationEvent(
       name: NSWorkspace.didActivateApplicationNotification,
       bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier

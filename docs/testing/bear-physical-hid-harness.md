@@ -137,6 +137,22 @@ unified log contains a matching `Automatic correction applied` event. This
 prevents Bear's own autocorrection or another text service from being credited
 to Typover.
 
+Schema 5 adds a host-side input-arrival measurement. Typover timestamps the
+global physical completion-boundary callback before its MainActor hop, then
+records the first Bear `AXValueChanged` callback paired with that boundary.
+Each case stores those content-free `boundaryToValueMilliseconds` samples and
+counts `valueBeforeBoundaryCallback` orderings that cannot yield a valid
+non-negative sample. This measures the observable path from Typover's input
+monitor to Bear's Accessibility notification; it does not claim to measure
+ESP32 USB submission-to-screen-paint latency.
+
+The same schema records the visible Typover correction-window count before and
+after each case while the selected load remains active. A final count is exact
+retention evidence only when the baseline count was zero; otherwise it is kept
+as diagnostic context because old and new correction windows cannot be
+distinguished by count alone. For release evidence, relaunch Typover and run
+one timing case so `fullyRetainedFromEmptyBaseline` can be `true`.
+
 The default evidence directory is
 `~/.local/state/typover/bear-hid/<run-id>/`. Each JSON file is mode `0600` and
 contains the synthetic inserted range, fixture status and trace, quiet-machine

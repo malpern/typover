@@ -63,6 +63,42 @@ struct BearHIDTestingTests {
     )
   }
 
+  @Test("Overlay retention is exact only from an empty baseline")
+  func overlayRetentionEvidence() {
+    let exact = BearHIDOverlayRetentionEvidence(
+      baselineVisibleCorrections: 0,
+      finalVisibleCorrections: 20,
+      correctedWords: 20,
+      maximumTrackedCorrections: 24
+    )
+    #expect(exact.expectedVisibleCorrectionsFromEmptyBaseline == 20)
+    #expect(exact.fullyRetainedFromEmptyBaseline == true)
+
+    let capped = BearHIDOverlayRetentionEvidence(
+      baselineVisibleCorrections: 0,
+      finalVisibleCorrections: 24,
+      correctedWords: 30,
+      maximumTrackedCorrections: 24
+    )
+    #expect(capped.fullyRetainedFromEmptyBaseline == true)
+
+    let priorCorrections = BearHIDOverlayRetentionEvidence(
+      baselineVisibleCorrections: 4,
+      finalVisibleCorrections: 24,
+      correctedWords: 20,
+      maximumTrackedCorrections: 24
+    )
+    #expect(priorCorrections.fullyRetainedFromEmptyBaseline == nil)
+
+    let missing = BearHIDOverlayRetentionEvidence(
+      baselineVisibleCorrections: 0,
+      finalVisibleCorrections: 19,
+      correctedWords: 20,
+      maximumTrackedCorrections: 24
+    )
+    #expect(missing.fullyRetainedFromEmptyBaseline == false)
+  }
+
   @Test("Correction latency accepts historical grouped and stable numeric logs")
   func correctionLatencyParsing() {
     #expect(
@@ -83,6 +119,16 @@ struct BearHIDTestingTests {
     #expect(
       BearHIDTelemetryParsing.correctionLatencyMilliseconds(
         from: "Automatic correction applied latencyMs=4,77.841"
+      ) == nil
+    )
+    #expect(
+      BearHIDTelemetryParsing.boundaryToValueMilliseconds(
+        from: "Bear completion boundary reached AX value change arrivalMs=18.625"
+      ) == 18.625
+    )
+    #expect(
+      BearHIDTelemetryParsing.boundaryToValueMilliseconds(
+        from: "Automatic correction applied latencyMs=431.781"
       ) == nil
     )
   }
