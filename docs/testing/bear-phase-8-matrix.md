@@ -1,15 +1,16 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Bear 2.9.1 rapid correction, 20-overlay retention, and repeated-correction interaction passed
+- Status: Bear 2.9.1 rapid correction, 24-overlay memory, lifecycle control, and repeated-correction interaction passed
 - Updated: 2026-08-01
 - Default: Off
 - Engine: Apple Spelling, on device
 
 The redesigned focused automatic-correction gate passes 31 tests. The focused
-overlay gate now passes 31 tests, including idle-first catch-up, shared
+overlay gate now includes inactive-fallback suspension and a defensive
+frontmost-app check in addition to idle-first catch-up, shared
 lifecycle, post-write reconciliation, circuit-breaker regressions, one-owner
 global-hotkey arbitration, direct newest-correction Change Back, and per-item
-Accessibility actions. The current broad gate passes 276 tests in 27 suites,
+Accessibility actions. The current broad gate passes 287 tests in 29 suites,
 including the hardened physical-harness wake, load-sampling, and punctuation
 contracts plus dormant bounded-sentence capture and stale-result validation.
 Deployment and the
@@ -52,21 +53,50 @@ also passes in Bear.
 | Scenario | Deterministic status | Installed Bear status | Expected result |
 |---|---|---|---|
 | Type `teh` and Space | Passed | Passed 2026-07-26 | Only `teh` becomes `the`; caret stays after the Space; gray squiggle appears |
-| Type `teh` and punctuation | Passed for period, question mark, and newline with exact key-to-transition matching | Pending | Exact word changes; punctuation and caret remain untouched |
-| Paste `teh ` | Passed for bulk/coalesced change | Pending | No correction and no squiggle |
-| Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Pending | No correction |
+| Type `teh` and punctuation | Passed for period, question mark, and newline with exact key-to-transition matching | Passed 5/5 for `.`, `?`, `!`, `;`, and `:` on 2026-08-01 | Exact word changes; punctuation and caret remain untouched |
+| Paste `teh ` | Passed for bulk/coalesced change | Passed 2026-08-01; Bear's paste normalization left the exact word unchanged | No correction and no squiggle |
+| Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Passed 2026-08-01; a separately pasted boundary did not authorize the earlier word | No correction |
 | Active selection | Passed, including fresh-baseline resume | Pending | Observation pauses; no write |
 | Bounded context changes | Passed | Pending | Refuse without writing |
 | Change Back | Passed with learning, collection-wide sibling re-anchoring, direct Accessibility actions, and an exact AppKit global shortcut that targets only the newest correction | AppKit global shortcut and an early correction's direct Accessibility action both passed independently; the direct action retained every unaffected sibling | Restore only the word and suppress the same learned correction without activating Typover |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
 | Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Pending | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
-| Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Pending | Stop observation and hide the active Typover annotation |
+| Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
 | Marked-text composition | Composition-changing transitions are rejected | Pending | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Pending | Do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
 | Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
+| Close and reopen Typover's main window | Passed with an AppKit reopen delegate targeting the stable `main` scene | Passed 2026-08-01 while the existing process remained alive | Reactivating Typover restores its main window without creating a duplicate process |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
+
+## Installed refusal and lifecycle controls: 2026-08-01
+
+The physical punctuation artifact ending `01-48-30Z` passed all five
+boundaries with exact text and no late fixture reports. In a separate installed
+paste check, Bear normalized a trailing-space paste to `teh`; pasting the
+boundary plus a sentinel separately produced final text ending in `teh x`.
+Typover did not correct either bulk/coalesced change. This is credited as a
+paste refusal, not as physical-keyboard evidence.
+
+Matched physical one-word controls then exercised the persisted automatic
+correction setting across fresh Typover launches. With the setting disabled,
+the artifact ending `02-12-50Z` preserved `teh`, recorded zero applications,
+and classified the result as a safe miss. With the setting enabled, the
+artifact ending `02-14-04Z` produced `the`, recorded one application at 444 ms,
+and passed. Both retained valid Bear focus, complete load evidence, and zero
+late reports.
+
+Closing Typover's main window while leaving its process alive initially
+reproduced a windowless-reactivation defect. The AppKit reopen bridge described
+in [Typover could remain running without a reopenable window](../bugs/2026-08-01-windowless-app-reopen.md)
+is deployed; the same close/reactivate sequence now restores the main window.
+
+Opening Settings remains an automation coverage gap. The installed window
+appears and Typover remains running, but requesting its full accessibility tree
+terminates the Computer Use transport and the window increases the observed
+debug-process RSS. No settings visual pass is credited until that behavior is
+diagnosed independently.
 
 ## Bear 2.9.1 compatibility pass: 2026-07-29
 

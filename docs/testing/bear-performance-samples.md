@@ -77,6 +77,37 @@ setting a memory budget.
 The schema-4 artifact is the local run ending `01-49-31Z`. This is a measured
 envelope on one Apple M5 system, not a compatibility or worst-case guarantee.
 
+## Twenty-four-annotation memory and inactive energy — 2026-08-01
+
+The installed app passed two additional 24/24 physical correction cycles at
+160 milliseconds per key. Both retained exact Bear text, valid focus, complete
+resource evidence, and zero late fixture reports. Their local artifacts end in
+`02-29-46Z` and `02-33-59Z`.
+
+Using `ps` consistently around the second cycle produced these resident-memory
+points:
+
+| Point | Typover RSS |
+| --- | ---: |
+| Fresh process, stable across five samples | 156,576–156,816 KiB |
+| First retired 24-annotation cycle | 191,456 KiB |
+| Second retired 24-annotation cycle | 193,680 KiB |
+
+The second retired cycle added about 2.2 MiB rather than repeating the first
+roughly 34 MiB warm-up increase. Two cycles do not prove the absence of every
+leak, but they do not show linear per-session growth. For the current Apple
+Development debug build, use **200 MiB RSS after two 24-annotation cycles** as
+a provisional local budget. A release build and longer soak must set the
+shipping budget.
+
+App switching and editor-focus retirement were driven by physical ESP32
+shortcuts because background UI automation does not prove frontmost ownership.
+After a real Command-Tab from an 8-overlay session, all ten one-second samples
+reported 0.0% Typover CPU and unchanged accumulated CPU time. After a real
+Command-F retired a 24-overlay Bear session, the next ten samples also reported
+0.0% CPU. This verifies the inactive-fallback energy fix; it does not claim
+that hidden annotations release all allocator pages immediately.
+
 ## Remaining samples
 
 Typover now records both timing paths in memory for the current session:
@@ -92,4 +123,5 @@ Some installed samples remain pending.
   load matrix;
 - note switching, scrolling, and recovery after Bear or Typover relaunch;
 - idle and active samples on a quiet machine; and
-- memory after the 24-annotation session bound is reached.
+- a release-build memory budget and a longer repeated-session soak beyond the
+  passing two-cycle debug sample.

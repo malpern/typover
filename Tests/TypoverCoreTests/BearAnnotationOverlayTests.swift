@@ -965,6 +965,106 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("The correction collection pauses fallback work while Bear is inactive")
+  func collectionPausesInactiveFallbackRefresh() async throws {
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4,
+      fallbackRefreshInterval: .milliseconds(10)
+    ) {
+      let presenter = SpyBearAnnotationPresenter()
+      presenters.append(presenter)
+      return testController(
+        presenter: presenter,
+        service: StubBearCorrectionService(),
+        handlesKeyboardShortcut: false
+      )
+    }
+    for index in 0..<3 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3 && presenters.allSatisfy { $0.showCount >= 2 }
+      }
+    )
+
+    collection.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: "com.example.OtherApp"
+    )
+    let inactiveHideCounts = presenters.map(\.hideCount)
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(presenters.map(\.hideCount) == inactiveHideCounts)
+
+    collection.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenters.allSatisfy(\.isVisible)
+          && presenters.map(\.showCount).allSatisfy { $0 >= 3 }
+      }
+    )
+    collection.stop()
+  }
+
+  @MainActor
+  @Test("Shared fallback checks the frontmost app before overlay fan-out")
+  func collectionFallbackRechecksFrontmostApp() async throws {
+    let frontmostState = BearFrontmostState()
+    var presenters: [SpyBearAnnotationPresenter] = []
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 4,
+      fallbackRefreshInterval: .milliseconds(10),
+      shortcutRegistrar: StubBearAnnotationShortcutRegistrar(),
+      frontmostBundleIdentifier: {
+        frontmostState.bearIsFrontmost
+          ? BearAccessibilityProbe.bearBundleIdentifier
+          : "com.example.OtherApp"
+      },
+      controllerFactory: {
+        let presenter = SpyBearAnnotationPresenter()
+        presenters.append(presenter)
+        return testController(
+          presenter: presenter,
+          service: StubBearCorrectionService(),
+          handlesKeyboardShortcut: false
+        )
+      }
+    )
+    for index in 0..<3 {
+      collection.trackWithResolution(
+        anchoredOverlayApplication(location: index * 4)
+      )
+    }
+    #expect(
+      await waitForBearOverlay {
+        presenters.count == 3 && presenters.allSatisfy { $0.showCount >= 2 }
+      }
+    )
+
+    frontmostState.bearIsFrontmost = false
+    try await Task.sleep(for: .milliseconds(30))
+    let inactiveShowCounts = presenters.map(\.showCount)
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(presenters.map(\.showCount) == inactiveShowCounts)
+
+    frontmostState.bearIsFrontmost = true
+    #expect(
+      await waitForBearOverlay {
+        zip(presenters, inactiveShowCounts).allSatisfy {
+          $0.showCount > $1
+        }
+      }
+    )
+    collection.stop()
+  }
+
+  @MainActor
   @Test("Choosing an alternative refreshes the menu around its new record")
   func alternativeRefreshesTracking() async {
     let presenter = SpyBearAnnotationPresenter()
@@ -1762,6 +1862,7 @@ private func overlayInteraction(
 private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
   private(set) var isVisible = false
   private(set) var showCount = 0
+  private(set) var hideCount = 0
   private(set) var interaction: BearAnnotationInteraction?
   private(set) var placements: [AccessibilityBounds] = []
 
@@ -1778,8 +1879,14 @@ private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
   func showMenu() {}
 
   func hide() {
+    hideCount += 1
     isVisible = false
   }
+}
+
+@MainActor
+private final class BearFrontmostState {
+  var bearIsFrontmost = true
 }
 
 @MainActor

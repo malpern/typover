@@ -24,6 +24,7 @@ public final class BearAnnotationOverlayCollectionController {
   private let verifiedEditBatchDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let shortcutRegistrar: any BearAnnotationShortcutRegistering
+  private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private var entries: [Entry] = []
   private var shortcutToken: UUID?
   private var fallbackTask: Task<Void, Never>?
@@ -79,6 +80,9 @@ public final class BearAnnotationOverlayCollectionController {
     workspaceNotificationCenter: NotificationCenter =
       NSWorkspace.shared.notificationCenter,
     shortcutRegistrar: any BearAnnotationShortcutRegistering,
+    frontmostBundleIdentifier: @escaping @MainActor @Sendable () -> String? = {
+      NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    },
     controllerFactory:
       @escaping @MainActor () -> BearAnnotationOverlayController
   ) {
@@ -90,6 +94,7 @@ public final class BearAnnotationOverlayCollectionController {
     self.verifiedEditBatchDelay = verifiedEditBatchDelay
     self.workspaceNotificationCenter = workspaceNotificationCenter
     self.shortcutRegistrar = shortcutRegistrar
+    self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.controllerFactory = controllerFactory
   }
 
@@ -367,6 +372,12 @@ public final class BearAnnotationOverlayCollectionController {
         guard let self else {
           return
         }
+        guard
+          self.frontmostBundleIdentifier()
+            == BearAccessibilityProbe.bearBundleIdentifier
+        else {
+          continue
+        }
         for entry in self.entries {
           entry.controller.refreshFromSharedFallback()
         }
@@ -375,12 +386,16 @@ public final class BearAnnotationOverlayCollectionController {
   }
 
   private func stopSharedLifecycle() {
-    fallbackTask?.cancel()
-    fallbackTask = nil
+    pauseFallbackRefresh()
     for observer in workspaceObservers {
       workspaceNotificationCenter.removeObserver(observer)
     }
     workspaceObservers = []
+  }
+
+  private func pauseFallbackRefresh() {
+    fallbackTask?.cancel()
+    fallbackTask = nil
   }
 
   private func installWorkspaceObservers() {
@@ -412,7 +427,7 @@ public final class BearAnnotationOverlayCollectionController {
     }
   }
 
-  private func handleWorkspaceApplicationEvent(
+  func handleWorkspaceApplicationEvent(
     name: Notification.Name,
     bundleIdentifier: String?
   ) {
@@ -427,6 +442,17 @@ public final class BearAnnotationOverlayCollectionController {
         name: name,
         bundleIdentifier: bundleIdentifier
       )
+    }
+    if name == NSWorkspace.didActivateApplicationNotification {
+      if bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier {
+        startSharedLifecycleIfNeeded()
+      } else {
+        pauseFallbackRefresh()
+      }
+    } else if name == NSWorkspace.didHideApplicationNotification,
+      bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
+    {
+      pauseFallbackRefresh()
     }
   }
 }

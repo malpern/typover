@@ -4,6 +4,8 @@ import TypoverCore
 
 @main
 struct TypoverApp: App {
+  @NSApplicationDelegateAdaptor(TypoverApplicationDelegate.self)
+  private var applicationDelegate
   @AppStorage("typover-onboarding-pending")
   private var isShowingOnboarding = true
   @State private var behaviorSettings: CorrectionBehaviorSettings
@@ -69,6 +71,48 @@ struct TypoverApp: App {
           bearAutomaticCorrectionCoordinator
       )
     }
+  }
+}
+
+@MainActor
+final class TypoverApplicationDelegate: NSObject, NSApplicationDelegate {
+  static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("main")
+
+  func applicationShouldHandleReopen(
+    _ sender: NSApplication,
+    hasVisibleWindows flag: Bool
+  ) -> Bool {
+    if !flag {
+      restoreMainWindow(in: sender.windows.map { $0 })
+    }
+    return true
+  }
+
+  @discardableResult
+  func restoreMainWindow(
+    in windows: [any TypoverWindowPresenting]
+  ) -> Bool {
+    guard
+      let mainWindow = windows.first(where: {
+        $0.identifier == Self.mainWindowIdentifier
+      })
+    else {
+      return false
+    }
+    mainWindow.presentForApplicationReopen()
+    return true
+  }
+}
+
+@MainActor
+protocol TypoverWindowPresenting: AnyObject {
+  var identifier: NSUserInterfaceItemIdentifier? { get }
+  func presentForApplicationReopen()
+}
+
+extension NSWindow: TypoverWindowPresenting {
+  func presentForApplicationReopen() {
+    makeKeyAndOrderFront(nil)
   }
 }
 

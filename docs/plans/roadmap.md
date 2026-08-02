@@ -77,6 +77,14 @@ milliseconds, with machine CPU idle reaching 9.6% and all rows converging
 within 1.59–3.79 seconds. The physical punctuation row passes 5/5 across `.`,
 `?`, `!`, `;`, and `:` boundaries.
 
+Installed lifecycle controls now cover paste and boundary-only paste refusal,
+matched disabled/enabled physical controls, closing and reopening Typover's
+main window in the same process, and two 24-annotation memory cycles. A real
+ESP32 Command-Tab and Command-F establish the inactive and retired energy
+boundaries: Typover remains at 0.0% CPU after either transition. The current
+debug build plateaus below a provisional 200 MiB RSS budget after two complete
+24-annotation cycles; a release build and longer soak remain required.
+
 An earlier quiet-machine rapid-typing pass corrected every completed typo,
 including 21 consecutive `teh ` insertions. All 21 corrections retained
 their overlays. Changing back the fifth word then exposed a collection-level
@@ -129,8 +137,10 @@ Back action, and alternatives.
   logging writing. Session-only applied, safe-skip, refusal, and
   correction-to-annotation and menu-to-verified-change measurements are
   implemented. Installed load timing, active memory, process power, and
-  post-burst recovery samples are recorded; visible-squiggle timing, menu
-  interaction timing, steady-state overlay memory, and relaunch recovery remain.
+  post-burst recovery samples are recorded. Fresh-process relaunch and a
+  two-cycle 24-annotation memory/retirement sample now pass with a provisional
+  200 MiB debug budget. Visible-squiggle timing, menu interaction timing, a
+  release-build memory budget, and a longer soak remain.
   The evidence log is
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
@@ -176,10 +186,10 @@ Back action, and alternatives.
   character's arrival inside Bear.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
-  on stale synthesized SwiftUI restoration identifiers. A clean-bundle
-  onboarding pass succeeded; the final singleton-window visual check remains
-  pending on the unlocked desktop.
-  Fresh unlocked installed passes remain. A reported rainbow wait cursor while opening an early
+  on stale synthesized SwiftUI restoration identifiers. An AppKit reopen
+  delegate now restores that exact scene when the already-running app has no
+  visible windows; the installed close/reactivate check passes.
+  A reported rainbow wait cursor while opening an early
   squiggle exposed collection-scaled main-thread churn: every overlay fallback
   refresh synchronously queried LaunchServices and reissued unchanged
   WindowServer operations. Frontmost state is now event-cached and panel
@@ -442,11 +452,11 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, finish the remaining Phase 8 installed behaviors—selection and paste
-refusals, note/window switching, disable/re-enable, composition, Undo/Redo, and
-relaunch recovery—then record correction-to-visible-squiggle and menu latency.
-Repeat the 24-annotation steady-state memory sample after retirement; the first
-combined-load matrix reached 152,208 KiB RSS in the debug build and needs a
-fresh-launch comparison before a budget is set. Repeat the combined physical
-matrix after fresh Typover and Bear launches and add direct keyboard-to-Bear
-arrival timing rather than inferring it from the ESP32 schedule.
+Next, finish the remaining Phase 8 installed behaviors—active-selection and
+bounded-context refusal, note/window switching, alternatives, composition, and
+Undo/Redo—then record correction-to-visible-squiggle and menu latency. Diagnose
+the Settings accessibility-tree transport failure before crediting a visual
+settings pass. Repeat the combined physical matrix after fresh Typover and Bear
+launches, extend the two-cycle 24-annotation memory result into a release-build
+soak, and add direct keyboard-to-Bear arrival timing rather than inferring it
+from the ESP32 schedule.
