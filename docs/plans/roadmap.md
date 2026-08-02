@@ -279,6 +279,11 @@ is offered as a public beta.
 
 - Test update and uninstall behavior on a clean Mac.
 - Define versioning, release notes, rollback, and the beta support channel.
+  The local [beta release-operations contract](../testing/beta-release-operations.md)
+  now defines numeric versions/builds, exact source provenance, manual update,
+  rollback, uninstall footprint, and a release-note template. Installed
+  lifecycle evidence remains pending. The repository is private, so a support
+  email or public issue tracker still requires an owner decision.
 - Select and document the license.
 - Produce the intended public distribution artifact and verify its signing,
   notarization, installation, update, and removal behavior.

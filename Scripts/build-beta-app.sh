@@ -10,7 +10,7 @@ configuration="release"
 output_directory="$repository_root/.build/beta"
 app_path="$output_directory/Typover.app"
 archive_path="$output_directory/Typover-$version.zip"
-build_number="${TYPOVER_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M)}"
+build_number="${TYPOVER_BUILD_NUMBER:-$(date -u +%Y%m%d%H%M%S)}"
 
 if [[ "$notarize" != "" && "$notarize" != "--notarize" ]]; then
   echo "Usage: Scripts/build-beta-app.sh [version] [--notarize]" >&2
@@ -22,6 +22,16 @@ if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
 fi
 if [[ ! "$build_number" =~ ^[0-9]{1,18}$ ]]; then
   echo "TYPOVER_BUILD_NUMBER must contain 1-18 digits." >&2
+  exit 2
+fi
+
+source_revision="$(git -C "$repository_root" rev-parse --verify HEAD)"
+source_dirty=false
+if [[ -n "$(git -C "$repository_root" status --porcelain --untracked-files=normal)" ]]; then
+  source_dirty=true
+fi
+if [[ "$notarize" == "--notarize" && "$source_dirty" == "true" ]]; then
+  echo "Notarized candidates require a clean Git worktree." >&2
   exit 2
 fi
 
@@ -50,6 +60,12 @@ fi
   "$app_path/Contents/Info.plist"
 /usr/libexec/PlistBuddy \
   -c "Set :CFBundleVersion $build_number" \
+  "$app_path/Contents/Info.plist"
+/usr/libexec/PlistBuddy \
+  -c "Add :TypoverSourceRevision string $source_revision" \
+  "$app_path/Contents/Info.plist"
+/usr/libexec/PlistBuddy \
+  -c "Add :TypoverSourceDirty bool $source_dirty" \
   "$app_path/Contents/Info.plist"
 /bin/cp "$binary_directory/Typover" "$app_path/Contents/MacOS/Typover"
 /bin/cp "$repository_root/Sources/TypoverApp/Resources/TypoverAppIcon.icns" \

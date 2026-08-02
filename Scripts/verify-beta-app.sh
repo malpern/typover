@@ -29,6 +29,8 @@ executable="$app_path/Contents/MacOS/Typover"
 bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")"
 short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")"
 build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")"
+source_revision="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceRevision' "$info_plist")"
+source_dirty="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceDirty' "$info_plist")"
 
 if [[ "$bundle_identifier" != "com.malpern.typover" ]]; then
   echo "Unexpected bundle identifier: $bundle_identifier" >&2
@@ -36,6 +38,14 @@ if [[ "$bundle_identifier" != "com.malpern.typover" ]]; then
 fi
 if [[ -z "$short_version" || -z "$build_number" ]]; then
   echo "The beta app is missing its version or build number." >&2
+  exit 1
+fi
+if [[ ! "$source_revision" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "The beta app is missing a valid source revision." >&2
+  exit 1
+fi
+if [[ "$source_dirty" != "true" && "$source_dirty" != "false" ]]; then
+  echo "The beta app is missing its source cleanliness marker." >&2
   exit 1
 fi
 if [[ ! -x "$executable" ]]; then
@@ -114,9 +124,13 @@ archived_info_plist="$archived_app/Contents/Info.plist"
 archived_bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$archived_info_plist")"
 archived_short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$archived_info_plist")"
 archived_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$archived_info_plist")"
+archived_source_revision="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceRevision' "$archived_info_plist")"
+archived_source_dirty="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceDirty' "$archived_info_plist")"
 if [[ "$archived_bundle_identifier" != "$bundle_identifier" || \
       "$archived_short_version" != "$short_version" || \
-      "$archived_build_number" != "$build_number" ]]; then
+      "$archived_build_number" != "$build_number" || \
+      "$archived_source_revision" != "$source_revision" || \
+      "$archived_source_dirty" != "$source_dirty" ]]; then
   echo "The expanded beta metadata does not match the verified app." >&2
   exit 1
 fi
@@ -129,4 +143,5 @@ if [[ "$gatekeeper" == "--gatekeeper" ]]; then
 fi
 
 echo "Verified Typover $short_version ($build_number)"
+echo "Source $source_revision dirty=$source_dirty"
 echo "$archive_path"

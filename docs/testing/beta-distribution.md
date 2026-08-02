@@ -18,11 +18,15 @@ This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
 strips local extended attributes, excludes AppleDouble metadata from the zip,
 and does not contact Apple. Versions must contain two or three numeric
 components; build numbers must contain 1-18 digits. Invalid values are rejected
-before a build or output-path mutation occurs.
+before a build or output-path mutation occurs. Every bundle records its exact
+40-character Git revision and whether the local tree contained changes. Local
+signed artifacts may be dirty for development testing; notarized candidates
+fail before submission unless the worktree is clean.
 
 The local, read-only package verifier checks the expected bundle identity,
 version fields, executable, strict signature, system-only dynamic dependencies,
-and archive metadata. It also expands the zip into a temporary directory,
+source revision and cleanliness marker, and archive metadata. It also expands
+the zip into a temporary directory,
 rejects unsafe or unexpected archive paths, proves its bundle is byte-for-byte
 identical to the signed build output, and verifies the extracted signature. The
 build script runs this verifier automatically, so a zip that does not contain
