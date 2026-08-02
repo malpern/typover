@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import TypoverApp
@@ -57,5 +59,64 @@ struct TypoverBuildIdentityTests {
     #expect(identity.sourceRevision == "abcdef")
     #expect(identity.shortSourceRevision == "abcdef")
     #expect(identity.sourceIsDirty == true)
+  }
+
+  @MainActor
+  @Test("About renders a compact release identity")
+  func rendersAboutIdentity() throws {
+    let identity = TypoverBuildIdentity(
+      infoDictionary: [
+        "CFBundleShortVersionString": "0.1",
+        "CFBundleVersion": "20260802005424",
+        "TypoverSourceRevision": "dfc456f9d7aa872e055ea1deee2dfeb9935d2885",
+        "TypoverSourceDirty": false,
+      ]
+    )
+    let hostingController = NSHostingController(
+      rootView: AboutView(buildIdentity: identity)
+        .background(Color(nsColor: .windowBackgroundColor))
+    )
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 390, height: 520),
+      styleMask: [.borderless],
+      backing: .buffered,
+      defer: false
+    )
+    window.contentViewController = hostingController
+    hostingController.view.frame = NSRect(
+      origin: .zero,
+      size: NSSize(width: 390, height: 520)
+    )
+    hostingController.view.layoutSubtreeIfNeeded()
+    hostingController.view.displayIfNeeded()
+
+    let image = try render(hostingController.view)
+    #expect(image.size == NSSize(width: 390, height: 520))
+
+    if let snapshotPath = ProcessInfo.processInfo.environment[
+      "TYPOVER_ABOUT_SNAPSHOT_PATH"
+    ] {
+      try writePNG(image, to: URL(fileURLWithPath: snapshotPath))
+    }
+  }
+
+  @MainActor
+  private func render(_ view: NSView) throws -> NSImage {
+    let bitmap = try #require(
+      view.bitmapImageRepForCachingDisplay(in: view.bounds)
+    )
+    view.cacheDisplay(in: view.bounds, to: bitmap)
+    let image = NSImage(size: view.bounds.size)
+    image.addRepresentation(bitmap)
+    return image
+  }
+
+  private func writePNG(_ image: NSImage, to url: URL) throws {
+    let tiffData = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiffData))
+    let pngData = try #require(
+      bitmap.representation(using: .png, properties: [:])
+    )
+    try pngData.write(to: url, options: .atomic)
   }
 }
