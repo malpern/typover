@@ -166,6 +166,16 @@ the window is inspected independently on an unlocked desktop. The later
 zero-window observation occurred after macOS had locked the session and is not
 treated as product evidence.
 
+The development build now has a one-shot, debug-only installed-test seam for
+the post-write-inconclusive row. Launching it with
+`TYPOVER_DEBUG_BEAR_FAULT=post-write-unreconciled` lets the real guarded Bear
+write complete, then replaces only that first successful result with a
+content-free unreconciled report. The coordinator must pause its mutation
+circuit, expose `pausedAfterIndeterminateWrite`, leave the changed text intact,
+and create no squiggle. Release builds compile this seam out. The installed row
+remains pending until the physical run verifies the text, status, absence of an
+annotation, fault log, and recovery after a normal relaunch.
+
 ## Bear 2.9.1 compatibility pass: 2026-07-29
 
 Bear updated locally from 2.8.1 (14428) to 2.9.1 (14638). Typover's exact

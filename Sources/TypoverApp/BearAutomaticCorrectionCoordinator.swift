@@ -31,6 +31,78 @@ protocol BearCorrectionApplying: Sendable {
 
 extension BearCorrectionAdapter: BearCorrectionApplying {}
 
+#if DEBUG
+  enum BearAutomaticCorrectionDebugFaults {
+    static let environmentKey = "TYPOVER_DEBUG_BEAR_FAULT"
+    static let unreconciledPostWriteValue = "post-write-unreconciled"
+
+    static func correctionApplicator(
+      base: any BearCorrectionApplying,
+      environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> any BearCorrectionApplying {
+      guard environment[environmentKey] == unreconciledPostWriteValue else {
+        return base
+      }
+      return DebugUnreconciledPostWriteApplicator(base: base)
+    }
+  }
+
+  private final class DebugUnreconciledPostWriteApplicator:
+    BearCorrectionApplying, @unchecked Sendable
+  {
+    private let base: any BearCorrectionApplying
+    private let lock = NSLock()
+    private var isArmed = true
+    private let logger = Logger(
+      subsystem: "com.malpern.typover",
+      category: "BearAutomaticCorrection"
+    )
+
+    init(base: any BearCorrectionApplying) {
+      self.base = base
+    }
+
+    func apply(
+      original: String,
+      replacement: String,
+      at targetRange: AccessibilityTextRange
+    ) -> BearCorrectionApplication {
+      let application = base.apply(
+        original: original,
+        replacement: replacement,
+        at: targetRange
+      )
+      guard application.report.writeOccurred,
+        lock.withLock({
+          guard isArmed else { return false }
+          isArmed = false
+          return true
+        })
+      else {
+        return application
+      }
+      logger.fault(
+        "Debug fault injected an unreconciled post-write result"
+      )
+      return BearCorrectionApplication(
+        report: BearExactRangeReplacementReport(
+          status: .verificationFailed,
+          writeOccurred: true,
+          targetRange: application.report.targetRange,
+          replacementRange: application.report.replacementRange,
+          selectionBefore: application.report.selectionBefore,
+          selectionAfter: application.report.selectionAfter,
+          surroundingContextVerified: false,
+          caretRestored: application.report.caretRestored
+        ),
+        correction: application.correction,
+        correctionRecord: nil,
+        correctionAnchor: nil
+      )
+    }
+  }
+#endif
+
 @MainActor
 protocol BearAnnotationTracking: AnyObject {
   func handleInvalidation(_ event: BearAccessibilityInvalidationEvent)
@@ -438,11 +510,19 @@ final class BearAutomaticCorrectionCoordinator {
     learningStore: CorrectionLearningStore,
     correctionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
   ) {
+    #if DEBUG
+      let correctionApplicator =
+        BearAutomaticCorrectionDebugFaults.correctionApplicator(
+          base: correctionAdapter
+        )
+    #else
+      let correctionApplicator: any BearCorrectionApplying = correctionAdapter
+    #endif
     self.init(
       contextReader: BearTypingContextReader(),
       invalidationMonitor: BearAccessibilityInvalidationMonitor(),
       correctionEngine: AppleSpellCheckerEngine(),
-      correctionApplicator: correctionAdapter,
+      correctionApplicator: correctionApplicator,
       annotationTracker: BearAnnotationOverlayCollectionController(
         adapter: correctionAdapter
       ),
