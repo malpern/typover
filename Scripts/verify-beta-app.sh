@@ -32,6 +32,14 @@ build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist
 source_revision="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceRevision' "$info_plist")"
 source_dirty="$(/usr/libexec/PlistBuddy -c 'Print :TypoverSourceDirty' "$info_plist")"
 minimum_system_version="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info_plist")"
+accessibility_purpose="$({
+  /usr/libexec/PlistBuddy -c 'Print :NSAccessibilityUsageDescription' \
+    "$info_plist" 2>/dev/null || true
+})"
+input_monitoring_purpose="$({
+  /usr/libexec/PlistBuddy -c 'Print :NSInputMonitoringUsageDescription' \
+    "$info_plist" 2>/dev/null || true
+})"
 
 if [[ "$bundle_identifier" != "com.malpern.typover" ]]; then
   echo "Unexpected bundle identifier: $bundle_identifier" >&2
@@ -51,6 +59,14 @@ if [[ "$source_dirty" != "true" && "$source_dirty" != "false" ]]; then
 fi
 if [[ "$minimum_system_version" != "27.0" ]]; then
   echo "The beta app must declare macOS 27.0 as its minimum system version." >&2
+  exit 1
+fi
+if [[ ! "$accessibility_purpose" =~ [^[:space:]] ]]; then
+  echo "The beta app is missing its Accessibility purpose description." >&2
+  exit 1
+fi
+if [[ ! "$input_monitoring_purpose" =~ [^[:space:]] ]]; then
+  echo "The beta app is missing its Input Monitoring purpose description." >&2
   exit 1
 fi
 if [[ ! -x "$executable" ]]; then

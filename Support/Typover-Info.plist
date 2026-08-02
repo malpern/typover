@@ -20,7 +20,11 @@
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
   <string>27.0</string>
+  <key>NSAccessibilityUsageDescription</key>
+  <string>Typover uses Accessibility to read and update exact text ranges in supported writing apps and to place reversible correction controls.</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSInputMonitoringUsageDescription</key>
+  <string>Typover uses Input Monitoring to detect word-completion keystrokes so it can safely time corrections; it does not use this permission to record your writing.</string>
 </dict>
 </plist>

@@ -33,7 +33,14 @@ build script runs this verifier automatically, so a zip that does not contain
 the exact reviewed app cannot be reported as a successful beta build. The
 verifier also rejects embedded launch agents, daemons, privileged helpers, XPC
 services, login items, and background-only bundle declarations, matching the
-initial beta's manually launched architecture:
+initial beta's manually launched architecture.
+
+The signed bundle carries explicit purpose descriptions for Accessibility and
+Input Monitoring. Accessibility is used to read and update exact ranges in a
+supported editor and place reversible controls. Input Monitoring is used to
+detect word-completion keystrokes and safely time corrections, not to record
+the user's writing. The verifier rejects an artifact missing either purpose
+description.
 
 The bundle declares macOS 27.0 as its minimum system version. Verification
 also reads the executable's `LC_BUILD_VERSION` command and requires its `minos`

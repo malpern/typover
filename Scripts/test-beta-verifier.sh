@@ -82,6 +82,52 @@ fi
   "The beta app must declare macOS 27.0 as its minimum system version." \
   "$temporary_directory/minimum.out"
 
+for permission_key in \
+  NSAccessibilityUsageDescription \
+  NSInputMonitoringUsageDescription
+do
+  permission_directory="$temporary_directory/permission-$permission_key"
+  /bin/mkdir -p "$permission_directory"
+  /bin/cp -R "$app_path" "$permission_directory/Typover.app"
+  /usr/libexec/PlistBuddy -c "Delete :$permission_key" \
+    "$permission_directory/Typover.app/Contents/Info.plist"
+  permission_archive="$permission_directory/Typover.zip"
+  /usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+    "$permission_directory/Typover.app" "$permission_archive"
+  if "$script_directory/verify-beta-app.sh" \
+    "$permission_directory/Typover.app" "$permission_archive" \
+      >"$permission_directory/output" 2>&1
+  then
+    echo "Verifier incorrectly accepted a missing permission purpose: $permission_key" >&2
+    exit 1
+  fi
+done
+/usr/bin/grep -Fq \
+  "The beta app is missing its Accessibility purpose description." \
+  "$temporary_directory/permission-NSAccessibilityUsageDescription/output"
+/usr/bin/grep -Fq \
+  "The beta app is missing its Input Monitoring purpose description." \
+  "$temporary_directory/permission-NSInputMonitoringUsageDescription/output"
+
+blank_purpose_directory="$temporary_directory/blank-permission-purpose"
+/bin/mkdir -p "$blank_purpose_directory"
+/bin/cp -R "$app_path" "$blank_purpose_directory/Typover.app"
+/usr/bin/plutil -replace NSInputMonitoringUsageDescription -string "   " \
+  "$blank_purpose_directory/Typover.app/Contents/Info.plist"
+blank_purpose_archive="$blank_purpose_directory/Typover.zip"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+  "$blank_purpose_directory/Typover.app" "$blank_purpose_archive"
+if "$script_directory/verify-beta-app.sh" \
+  "$blank_purpose_directory/Typover.app" "$blank_purpose_archive" \
+    >"$blank_purpose_directory/output" 2>&1
+then
+  echo "Verifier incorrectly accepted a blank permission purpose." >&2
+  exit 1
+fi
+/usr/bin/grep -Fq \
+  "The beta app is missing its Input Monitoring purpose description." \
+  "$blank_purpose_directory/output"
+
 for invalid_version in ../outside 0 beta; do
   if "$script_directory/build-beta-app.sh" "$invalid_version" \
     >"$temporary_directory/version.out" 2>&1

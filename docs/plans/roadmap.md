@@ -257,6 +257,9 @@ ordinary app or Accessibility lifecycle changes.
   version, build number, short source revision, and a visible **Modified**
   marker for dirty development builds while retaining exact provenance in the
   bundle metadata.
+- [x] Declare reviewable Accessibility and Input Monitoring purpose text in the
+  signed bundle, and reject beta artifacts that omit either privacy
+  description.
 - [ ] Produce a signed beta build and a repeatable clean-machine install and
   permission test. The Developer ID/notarization script and clean-machine
   checklist are implemented in
