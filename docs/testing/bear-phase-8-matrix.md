@@ -1,6 +1,6 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Bear 2.9.1 rapid correction, 24-overlay memory, lifecycle control, and repeated-correction interaction passed
+- Status: Bear 2.9.1 rapid correction, release-config soak, lifecycle control, and repeated-correction interaction passed
 - Updated: 2026-08-01
 - Default: Off
 - Engine: Apple Spelling, on device
@@ -123,6 +123,16 @@ note before the idle write. The first note retained `teh `, the second retained
 `SAFE TARGET`, and Typover logged focused-editor changes without a correction.
 Both fixture reports arrived with no late reports. The second note was then
 soft-deleted and Bear was returned to the primary fixture.
+
+The clean release-config development build recorded its source revision and
+clean-worktree state in the installed bundle and passed provenance verification
+before deployment. Three consecutive 24-word physical cycles then corrected
+72/72 words with exact Bear text and zero late reports. Their artifacts end in
+`03-18-05Z`, `03-20-08Z`, and `03-23-33Z`; maximum fixture lateness was 46,
+146, and 42 microseconds. Physical Command-F retired every cycle. The second
+and third retired states both settled at 191,456 KiB and 0.0% CPU, below the
+provisional 200 MiB release-config budget and without continuing per-cycle
+growth.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

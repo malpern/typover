@@ -108,6 +108,33 @@ Command-F retired a 24-overlay Bear session, the next ten samples also reported
 0.0% CPU. This verifies the inactive-fallback energy fix; it does not claim
 that hidden annotations release all allocator pages immediately.
 
+## Clean release-config three-cycle soak — 2026-08-01
+
+A clean release-config development bundle passed provenance verification before
+installation: its recorded source revision and clean-worktree state matched the
+checkout, and the packaged signed executable matched the installed executable.
+The fresh process then passed three consecutive 24/24 physical cycles at 160
+milliseconds per key. The local artifacts end in `03-18-05Z`, `03-20-08Z`, and
+`03-23-33Z`. All 72 corrections retained exact Bear text and matching Typover
+log evidence; all 582 HID reports arrived, none were late, and the largest
+fixture deviation was 146 microseconds.
+
+| Point | Typover RSS | Typover CPU |
+| --- | ---: | ---: |
+| Fresh release-config process, five samples | 157,376–157,552 KiB | 0.0% |
+| First retired 24-annotation cycle, ten samples | 191,232–191,296 KiB | 0.0%, except one 1.4% sample |
+| Second active cycle, five samples | 192,208 KiB | 0.0–0.2% |
+| Second retired cycle, ten samples | 191,456 KiB | 0.0% |
+| Third active cycle, five samples | 192,400–192,448 KiB | 0.0–5.6% |
+| Third retired cycle, ten samples | 191,456–191,488 KiB, then stable at 191,456 KiB | 0.0% |
+
+The initial release-process warm-up retained allocator pages, but cycles two
+and three returned to the same 191,456 KiB plateau. This does not prove the
+absence of every long-duration leak or replace a clean-machine beta soak. It
+does provide a reproducible local release-config budget of **200 MiB RSS after
+three retired 24-annotation cycles**, with no observed linear per-session
+growth and no inactive CPU cost.
+
 ## Remaining samples
 
 Typover now records both timing paths in memory for the current session:
@@ -123,5 +150,5 @@ Some installed samples remain pending.
   load matrix;
 - note switching, scrolling, and recovery after Bear or Typover relaunch;
 - idle and active samples on a quiet machine; and
-- a release-build memory budget and a longer repeated-session soak beyond the
-  passing two-cycle debug sample.
+- an extended second-machine beta soak beyond the passing three-cycle local
+  release-config sample.

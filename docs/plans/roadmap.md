@@ -81,11 +81,15 @@ Installed lifecycle controls now cover paste and boundary-only paste refusal,
 matched disabled/enabled physical controls, closing and reopening Typover's
 main window in the same process, active-selection boundary refusal, bounded
 caret/context drift, physical Undo/Redo cancellation, note switching during a
-queued correction, and two 24-annotation memory cycles. A real
+queued correction, and repeated 24-annotation memory cycles. A real
 ESP32 Command-Tab and Command-F establish the inactive and retired energy
 boundaries: Typover remains at 0.0% CPU after either transition. The current
 debug build plateaus below a provisional 200 MiB RSS budget after two complete
-24-annotation cycles; a release build and longer soak remain required.
+24-annotation cycles. A clean release-config development build now passes
+three more 24/24 physical cycles and settles at 191,456 KiB after both the
+second and third retirement, with 0.0% CPU across every retired sample. This
+sets the same provisional 200 MiB local budget for the release configuration
+without evidence of linear per-session growth.
 
 An installed Space, Left, and adjacent-`x` control found that a deferred
 correction retained only its exact range and could therefore write after its
@@ -150,8 +154,11 @@ Back action, and alternatives.
   implemented. Installed load timing, active memory, process power, and
   post-burst recovery samples are recorded. Fresh-process relaunch and a
   two-cycle 24-annotation memory/retirement sample now pass with a provisional
-  200 MiB debug budget. Visible-squiggle timing, menu interaction timing, a
-  release-build memory budget, and a longer soak remain.
+  200 MiB debug budget. A clean release-config build also passes three physical
+  24-annotation cycles and returns to the same 191,456 KiB plateau after cycles
+  two and three, establishing a provisional 200 MiB release-config budget.
+  Visible-squiggle timing, menu interaction timing, and a longer beta soak on a
+  second clean machine remain.
   The evidence log is
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
@@ -463,11 +470,12 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, finish the remaining Phase 8 installed behaviors—active-selection and
-bounded-context refusal, note/window switching, alternatives, composition, and
-Undo/Redo—then record correction-to-visible-squiggle and menu latency. Diagnose
-the Settings accessibility-tree transport failure before crediting a visual
-settings pass. Repeat the combined physical matrix after fresh Typover and Bear
-launches, extend the two-cycle 24-annotation memory result into a release-build
-soak, and add direct keyboard-to-Bear arrival timing rather than inferring it
-from the ESP32 schedule.
+Next, finish the remaining Phase 8 installed behaviors—alternatives,
+marked-text composition, and the post-write-inconclusive circuit-breaker—then
+record correction-to-visible-squiggle and menu latency. Run the remaining
+long-note, scrolling, attachment-adjacent, Dark appearance, and spoken
+VoiceOver rows. Diagnose the Settings accessibility-tree transport failure
+before crediting a visual settings pass. Add direct keyboard-to-Bear arrival
+timing rather than inferring it from the ESP32 schedule, repeat the controlled
+load matrix after fresh app launches, and extend the three-cycle release soak
+to a clean second-machine beta session.
