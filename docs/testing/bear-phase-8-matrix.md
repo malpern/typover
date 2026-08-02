@@ -5,12 +5,12 @@
 - Default: Off
 - Engine: Apple Spelling, on device
 
-The redesigned focused automatic-correction gate passes 31 tests. The focused
+The redesigned focused automatic-correction gate passes 34 tests. The focused
 overlay gate now includes inactive-fallback suspension and a defensive
 frontmost-app check in addition to idle-first catch-up, shared
 lifecycle, post-write reconciliation, circuit-breaker regressions, one-owner
 global-hotkey arbitration, direct newest-correction Change Back, and per-item
-Accessibility actions. The current broad gate passes 287 tests in 29 suites,
+Accessibility actions. The current broad gate passes 289 tests in 29 suites,
 including the hardened physical-harness wake, load-sampling, and punctuation
 contracts plus dormant bounded-sentence capture and stale-result validation.
 Deployment and the
@@ -56,8 +56,8 @@ also passes in Bear.
 | Type `teh` and punctuation | Passed for period, question mark, and newline with exact key-to-transition matching | Passed 5/5 for `.`, `?`, `!`, `;`, and `:` on 2026-08-01 | Exact word changes; punctuation and caret remain untouched |
 | Paste `teh ` | Passed for bulk/coalesced change | Passed 2026-08-01; Bear's paste normalization left the exact word unchanged | No correction and no squiggle |
 | Paste only a boundary after `teh` | Passed through missing-keystroke refusal | Passed 2026-08-01; a separately pasted boundary did not authorize the earlier word | No correction |
-| Active selection | Passed, including fresh-baseline resume | Pending | Observation pauses; no write |
-| Bounded context changes | Passed | Pending | Refuse without writing |
+| Active selection | Passed, including fresh-baseline resume | Passed 2026-08-01 with a selected-range boundary control | Observation pauses; a boundary that replaces a selection cannot authorize an older word; normal typing may resume from a fresh collapsed-caret baseline |
+| Bounded context changes | Passed, including deferred append-only authorization | Passed 2026-08-01 with physical Space, Left, and adjacent insertion | Refuse without writing; preserve every physical edit |
 | Change Back | Passed with learning, collection-wide sibling re-anchoring, direct Accessibility actions, and an exact AppKit global shortcut that targets only the newest correction | AppKit global shortcut and an early correction's direct Accessibility action both passed independently; the direct action retained every unaffected sibling | Restore only the word and suppress the same learned correction without activating Typover |
 | Choose an alternative | Overlay callback passed | Pending | Replace only the anchored word and remember the choice |
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
@@ -91,6 +91,24 @@ Closing Typover's main window while leaving its process alive initially
 reproduced a windowless-reactivation defect. The AppKit reopen bridge described
 in [Typover could remain running without a reopenable window](../bugs/2026-08-01-windowless-app-reopen.md)
 is deployed; the same close/reactivate sequence now restores the main window.
+
+The active-selection control selected a unique sentinel after an already
+written `teh`, then used the ESP32 to replace the selection with Space and
+Return. Bear retained the older `teh`; Typover recorded
+`baselineUnavailable` and `contextChanged` without applying. A preliminary
+control that typed a complete new `teh ` into the selected range did correct
+after Bear collapsed the selection and established a fresh baseline. That is
+the intended resumed-typing behavior, not a selection-authorized change to old
+text.
+
+The first bounded-context physical control exposed a genuine deferred-write
+bug: Space queued a correction, then Left and `x` changed the caret and adjacent
+text before idle, but Typover still changed `teh` to `the`. The fix in
+[Deferred correction could outlive caret and adjacent-text drift](../bugs/2026-08-01-deferred-correction-context-drift.md)
+binds every queued correction to its transient bounded context and permits only
+append-only growth before mutation. Repeating the exact six-report sequence
+preserved `tehx ` and logged `deferredContextChanged`; a separate 5/5 physical
+append burst proves ordinary continued typing still corrects.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

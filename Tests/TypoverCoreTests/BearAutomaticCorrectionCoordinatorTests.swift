@@ -311,6 +311,62 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
   }
 
+  @Test("A caret move and adjacent edit invalidate a deferred correction")
+  func refusesDeferredCorrectionAfterContextDrift() async throws {
+    let fixture = try Fixture(
+      deferredCorrectionIdleDelay: .milliseconds(80)
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+
+    fixture.inputMonitor.emitOther()
+    fixture.inputMonitor.emitOther()
+    fixture.reader.result = .ready(
+      snapshot(text: "tehx ", caret: 4, documentLength: 5)
+    )
+    fixture.monitor.emit(.selectionChanged)
+    fixture.monitor.emit(.valueChanged)
+
+    try await Task.sleep(for: .milliseconds(140))
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips >= 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
+    )
+  }
+
+  @Test("Append-only typing retains a deferred correction authorization")
+  func permitsDeferredCorrectionAfterAppendOnlyTyping() {
+    let authorized = snapshot(
+      text: "prefix teh ",
+      caret: 11,
+      documentLength: 16,
+      trailing: " tail"
+    )
+    let appended = snapshot(
+      text: "prefix teh next ",
+      caret: 16,
+      documentLength: 21,
+      trailing: " tail"
+    )
+
+    #expect(
+      BearDeferredTypingTransition.preservesAppendOnlyContext(
+        from: authorized,
+        to: appended
+      )
+    )
+  }
+
   @Test("A queued physical key postpones AX mutation before its callback arrives")
   func physicalInputIdleGatePreventsPrematureMutation() async throws {
     let physicalIdle = TestPhysicalIdleDuration(.milliseconds(5))

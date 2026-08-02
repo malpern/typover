@@ -325,6 +325,62 @@ enum BearTypingTransition {
   }
 }
 
+enum BearDeferredTypingTransition {
+  /// A deferred correction remains authorized only while the writer extends
+  /// the same caret position. Text before the original caret and the bounded
+  /// trailing context must remain unchanged; document growth must equal caret
+  /// movement. This permits ordinary continued typing but rejects navigation,
+  /// replacement, deletion, and adjacent edits before an AX write begins.
+  static func preservesAppendOnlyContext(
+    from authorized: BearTypingContextSnapshot,
+    to current: BearTypingContextSnapshot
+  ) -> Bool {
+    let documentGrowth = current.documentLength - authorized.documentLength
+    let caretMovement = current.caretLocation - authorized.caretLocation
+    guard
+      documentGrowth >= 0,
+      caretMovement == documentGrowth,
+      authorized.leadingText.utf16.count == authorized.leadingRange.length,
+      current.leadingText.utf16.count == current.leadingRange.length,
+      authorized.trailingText == current.trailingText
+    else {
+      return false
+    }
+
+    let overlapStart = max(
+      authorized.leadingRange.location,
+      current.leadingRange.location
+    )
+    let overlapEnd = authorized.caretLocation
+    let overlapLength = overlapEnd - overlapStart
+    guard overlapLength > 0 else {
+      return false
+    }
+
+    return utf16Substring(
+      authorized.leadingText,
+      range: NSRange(
+        location: overlapStart - authorized.leadingRange.location,
+        length: overlapLength
+      )
+    )
+      == utf16Substring(
+        current.leadingText,
+        range: NSRange(
+          location: overlapStart - current.leadingRange.location,
+          length: overlapLength
+        )
+      )
+  }
+
+  private static func utf16Substring(
+    _ text: String,
+    range: NSRange
+  ) -> String {
+    (text as NSString).substring(with: range)
+  }
+}
+
 @MainActor
 @Observable
 final class BearAutomaticCorrectionCoordinator {
@@ -332,6 +388,7 @@ final class BearAutomaticCorrectionCoordinator {
     let proposal: CorrectionProposal
     let targetRange: AccessibilityTextRange
     let boundaryObservedAt: ContinuousClock.Instant?
+    let authorizedContext: BearTypingContextSnapshot
   }
 
   private(set) var status: BearAutomaticCorrectionStatus = .disabled
@@ -787,7 +844,8 @@ final class BearAutomaticCorrectionCoordinator {
       DeferredCorrection(
         proposal: proposal,
         targetRange: completion.targetRange,
-        boundaryObservedAt: boundaryObservedAt
+        boundaryObservedAt: boundaryObservedAt,
+        authorizedContext: currentSnapshot
       )
     )
     diagnostics.recordDeferred()
@@ -846,6 +904,29 @@ final class BearAutomaticCorrectionCoordinator {
     await Task.yield()
     guard scanGeneration == typingInputGeneration else {
       scheduleDeferredCorrectionsIfNeeded()
+      return
+    }
+    let validationGeneration = typingInputGeneration
+    guard case .ready(let currentContext) = await readContext() else {
+      tracePrivate("outcome=deferredContextUnavailable")
+      diagnostics.recordSafeSkip(.contextChanged)
+      clearDeferredCorrections()
+      await rebaseline()
+      return
+    }
+    guard
+      validationGeneration == typingInputGeneration,
+      deferredCorrections.allSatisfy({
+        BearDeferredTypingTransition.preservesAppendOnlyContext(
+          from: $0.authorizedContext,
+          to: currentContext
+        )
+      })
+    else {
+      tracePrivate("outcome=deferredContextChanged")
+      diagnostics.recordSafeSkip(.contextChanged)
+      clearDeferredCorrections()
+      await rebaseline()
       return
     }
     let pending = deferredCorrections.sorted {
@@ -1053,7 +1134,8 @@ final class BearAutomaticCorrectionCoordinator {
         DeferredCorrection(
           proposal: proposal,
           targetRange: targetRange,
-          boundaryObservedAt: nil
+          boundaryObservedAt: nil,
+          authorizedContext: snapshot
         )
       )
       diagnostics.recordDeferred()

@@ -79,11 +79,21 @@ within 1.59–3.79 seconds. The physical punctuation row passes 5/5 across `.`,
 
 Installed lifecycle controls now cover paste and boundary-only paste refusal,
 matched disabled/enabled physical controls, closing and reopening Typover's
-main window in the same process, and two 24-annotation memory cycles. A real
+main window in the same process, active-selection boundary refusal, bounded
+caret/context drift, and two 24-annotation memory cycles. A real
 ESP32 Command-Tab and Command-F establish the inactive and retired energy
 boundaries: Typover remains at 0.0% CPU after either transition. The current
 debug build plateaus below a provisional 200 MiB RSS budget after two complete
 24-annotation cycles; a release build and longer soak remain required.
+
+An installed Space, Left, and adjacent-`x` control found that a deferred
+correction retained only its exact range and could therefore write after its
+authorizing caret context had drifted. Deferred corrections now retain a
+transient bounded snapshot and require append-only document growth at the same
+caret immediately before mutation. The exact physical failure sequence now
+preserves `tehx ` with an explicit `deferredContextChanged` skip, while a
+separate normal 5/5 append burst still corrects. See
+[Deferred correction context drift](../bugs/2026-08-01-deferred-correction-context-drift.md).
 
 An earlier quiet-machine rapid-typing pass corrected every completed typo,
 including 21 consecutive `teh ` insertions. All 21 corrections retained
