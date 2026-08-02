@@ -253,6 +253,10 @@ ordinary app or Accessibility lifecycle changes.
 - [x] Provide a privacy summary and a content-free diagnostic export. The
   optional local trace now has explicit consent, bounded retention, export,
   delete, and a separately gated bounded-writing mode.
+- [x] Expose beta build identity in the About window. It shows the marketing
+  version, build number, short source revision, and a visible **Modified**
+  marker for dirty development builds while retaining exact provenance in the
+  bundle metadata.
 - [ ] Produce a signed beta build and a repeatable clean-machine install and
   permission test. The Developer ID/notarization script and clean-machine
   checklist are implemented in

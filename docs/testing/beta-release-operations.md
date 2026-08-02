@@ -19,6 +19,10 @@ separate explicit actions.
   marker. A local Developer ID build may record `dirty=true` for development
   testing. A notarized candidate must record `dirty=false`; the build script
   refuses a dirty worktree before compiling or contacting Apple.
+- The About window shows the marketing version, build number, and a short
+  source revision. Development builds with uncommitted changes are explicitly
+  labeled **Modified**. The full revision and dirty marker remain available in
+  the bundle metadata for exact support correlation.
 - Release notes identify the marketing version, build number, revision,
   supported macOS and Bear versions, known limitations, privacy changes, data
   migrations, and rollback compatibility.
@@ -34,8 +38,10 @@ update is an explicit replacement:
 3. Keep the previous notarized zip until the new build passes its installed
    smoke test.
 4. Replace `Typover.app` in `/Applications`; do not run two copies.
-5. Launch the new app, confirm its version/build, permission state, Bear status,
-   and one controlled-editor correction before enabling Bear automation.
+5. Launch the new app and confirm the version, build, and source revision shown
+   in **About Typover** match the accepted artifact.
+6. Confirm its permission state, Bear status, and one controlled-editor
+   correction before enabling Bear automation.
 
 The stable bundle identifier and Developer ID requirement are intended to
 preserve macOS permission identity, but clean-machine and in-place update tests
