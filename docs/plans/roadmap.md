@@ -258,8 +258,11 @@ ordinary app or Accessibility lifecycle changes.
   checklist are implemented in
   [Beta distribution](../testing/beta-distribution.md). The local Developer ID
   archive now passes strict signature, bundle metadata, system-dependency, and
-  clean-zip verification; building and validating the notarized candidate and
-  executing the clean-machine permission checklist remain.
+  clean-zip verification. Every build now extracts the archive, rejects unsafe
+  or unexpected paths, compares the distributed bundle byte-for-byte with the
+  signed build output, and verifies the extracted signature; adversarial extra-
+  path and mismatched-bundle tests pass. Building and validating the notarized
+  candidate and executing the clean-machine permission checklist remain.
 
 ### Exit criteria
 

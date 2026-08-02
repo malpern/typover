@@ -21,6 +21,9 @@ if [[ ! -f "$archive_path" ]]; then
   exit 1
 fi
 
+temporary_directory="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/typover-beta-verify.XXXXXX")"
+trap '/bin/rm -rf "$temporary_directory"' EXIT HUP INT TERM
+
 info_plist="$app_path/Contents/Info.plist"
 executable="$app_path/Contents/MacOS/Typover"
 bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")"
@@ -40,6 +43,28 @@ if [[ ! -x "$executable" ]]; then
   exit 1
 fi
 
+for forbidden_component in \
+  "$app_path/Contents/Library/LaunchAgents" \
+  "$app_path/Contents/Library/LaunchDaemons" \
+  "$app_path/Contents/Library/LaunchServices" \
+  "$app_path/Contents/Library/LoginItems" \
+  "$app_path/Contents/Library/PrivilegedHelperTools" \
+  "$app_path/Contents/XPCServices"
+do
+  if [[ -e "$forbidden_component" ]]; then
+    echo "The beta app contains a forbidden background component: ${forbidden_component#"$app_path/"}" >&2
+    exit 1
+  fi
+done
+for forbidden_key in LSBackgroundOnly LSUIElement SMPrivilegedExecutables; do
+  if /usr/libexec/PlistBuddy -c "Print :$forbidden_key" "$info_plist" \
+    >/dev/null 2>&1
+  then
+    echo "The beta app declares forbidden background behavior: $forbidden_key" >&2
+    exit 1
+  fi
+done
+
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 
 if /usr/bin/otool -L "$executable" \
@@ -58,9 +83,49 @@ then
   exit 1
 fi
 
+archive_listing="$(/usr/bin/unzip -Z1 "$archive_path")"
+if [[ -z "$archive_listing" ]] || \
+  printf '%s\n' "$archive_listing" \
+    | /usr/bin/grep -Ev '^Typover\.app(/|$)' \
+    | /usr/bin/grep -q .
+then
+  echo "The beta archive contains content outside Typover.app." >&2
+  exit 1
+fi
+if printf '%s\n' "$archive_listing" \
+  | /usr/bin/grep -Eq '(^/|(^|/)\.\.(/|$))'
+then
+  echo "The beta archive contains an unsafe path." >&2
+  exit 1
+fi
+
+/usr/bin/ditto -x -k --noextattr "$archive_path" "$temporary_directory"
+archived_app="$temporary_directory/Typover.app"
+if [[ ! -d "$archived_app" ]]; then
+  echo "The beta archive does not expand to Typover.app." >&2
+  exit 1
+fi
+if ! /usr/bin/diff -qr "$app_path" "$archived_app" >/dev/null; then
+  echo "The beta archive does not contain the verified Typover.app exactly." >&2
+  exit 1
+fi
+
+archived_info_plist="$archived_app/Contents/Info.plist"
+archived_bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$archived_info_plist")"
+archived_short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$archived_info_plist")"
+archived_build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$archived_info_plist")"
+if [[ "$archived_bundle_identifier" != "$bundle_identifier" || \
+      "$archived_short_version" != "$short_version" || \
+      "$archived_build_number" != "$build_number" ]]; then
+  echo "The expanded beta metadata does not match the verified app." >&2
+  exit 1
+fi
+
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$archived_app"
+
 if [[ "$gatekeeper" == "--gatekeeper" ]]; then
-  /usr/sbin/spctl --assess --type execute --verbose=2 "$app_path"
-  /usr/bin/xcrun stapler validate "$app_path"
+  /usr/sbin/spctl --assess --type execute --verbose=2 "$archived_app"
+  /usr/bin/xcrun stapler validate "$archived_app"
 fi
 
 echo "Verified Typover $short_version ($build_number)"

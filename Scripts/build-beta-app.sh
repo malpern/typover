@@ -16,6 +16,14 @@ if [[ "$notarize" != "" && "$notarize" != "--notarize" ]]; then
   echo "Usage: Scripts/build-beta-app.sh [version] [--notarize]" >&2
   exit 2
 fi
+if [[ ! "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+  echo "Version must contain two or three dot-separated numeric components." >&2
+  exit 2
+fi
+if [[ ! "$build_number" =~ ^[0-9]{1,18}$ ]]; then
+  echo "TYPOVER_BUILD_NUMBER must contain 1-18 digits." >&2
+  exit 2
+fi
 
 cd "$repository_root"
 swift build --configuration "$configuration" --product Typover
@@ -89,11 +97,10 @@ if [[ "$notarize" == "--notarize" ]]; then
   /usr/sbin/spctl --assess --type execute --verbose=2 "$app_path"
 fi
 
-if /usr/bin/unzip -Z1 "$archive_path" \
-  | /usr/bin/grep -Eq '(^__MACOSX/|/\._)'
-then
-  echo "Beta archive contains unexpected AppleDouble metadata." >&2
-  exit 1
+verify_arguments=("$app_path" "$archive_path")
+if [[ "$notarize" == "--notarize" ]]; then
+  verify_arguments+=("--gatekeeper")
 fi
+"$script_directory/verify-beta-app.sh" "${verify_arguments[@]}"
 
 echo "$archive_path"

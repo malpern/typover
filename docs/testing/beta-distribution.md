@@ -16,14 +16,31 @@ Scripts/build-beta-app.sh 0.1
 
 This produces `.build/beta/Typover-0.1.zip`, verifies the strict code signature,
 strips local extended attributes, excludes AppleDouble metadata from the zip,
-and does not contact Apple.
+and does not contact Apple. Versions must contain two or three numeric
+components; build numbers must contain 1-18 digits. Invalid values are rejected
+before a build or output-path mutation occurs.
 
 The local, read-only package verifier checks the expected bundle identity,
 version fields, executable, strict signature, system-only dynamic dependencies,
-and archive metadata:
+and archive metadata. It also expands the zip into a temporary directory,
+rejects unsafe or unexpected archive paths, proves its bundle is byte-for-byte
+identical to the signed build output, and verifies the extracted signature. The
+build script runs this verifier automatically, so a zip that does not contain
+the exact reviewed app cannot be reported as a successful beta build. The
+verifier also rejects embedded launch agents, daemons, privileged helpers, XPC
+services, login items, and background-only bundle declarations, matching the
+initial beta's manually launched architecture:
 
 ```bash
 Scripts/verify-beta-app.sh
+```
+
+The rejection suite proves the verifier fails closed when an archive contains
+an extra top-level path, a bundle whose bytes differ from the signed build, or
+unsafe version/build inputs:
+
+```bash
+Scripts/test-beta-verifier.sh
 ```
 
 The 2026-08-01 local beta artifact was signed successfully with the configured
@@ -45,7 +62,8 @@ the accepted ticket to the app, recreates the zip with the stapled bundle, and
 runs Gatekeeper assessment. It does not publish the artifact or create a public
 release. Afterward, `Scripts/verify-beta-app.sh` accepts the app and archive
 paths followed by `--gatekeeper` to repeat Gatekeeper and stapled-ticket
-validation.
+validation against the extracted distribution copy rather than only the local
+build directory.
 
 ## Clean-machine gate
 
