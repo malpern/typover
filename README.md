@@ -76,7 +76,13 @@ open .build/Typover.app
 The script uses the installed Apple Development identity so macOS can retain
 Typover’s Accessibility approval across rebuilds. Ad-hoc signing identifies
 each new executable by its changing code hash and silently invalidates the
-previous approval.
+previous approval. The development bundle also records the exact Git revision
+and whether the worktree was modified, then verifies those fields and its code
+signature before returning. The rejection test can be repeated with:
+
+```bash
+./Scripts/test-development-verifier.sh
+```
 
 Requires macOS 27 or later and Swift 6.4 or later. The research build uses
 TextKit 2 and the viewport-layout hooks introduced for `NSTextView` in macOS

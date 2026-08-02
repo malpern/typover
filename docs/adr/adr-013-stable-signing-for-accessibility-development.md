@@ -21,7 +21,9 @@ write, and gave the writer no useful explanation.
 Package Bear-development builds with the installed Apple Development identity
 through `Scripts/build-development-app.sh`. The resulting designated
 requirement is based on Typover's bundle identifier and signing certificate,
-not a changing code hash.
+not a changing code hash. The packager starts from a fresh bundle, records the
+exact Git revision and worktree cleanliness in its Info.plist, and verifies the
+metadata and strict code signature before reporting success.
 
 Before bringing Bear forward, the preview checks Accessibility trust. If it is
 missing, Typover requests the standard macOS permission prompt and remains in
@@ -36,5 +38,7 @@ writes.
 - The first stable-signed build requires one fresh approval because it has a
   different identity from the earlier ad-hoc build.
 - Developers must not replace the packaged executable and re-sign it ad hoc.
+- Installed development builds can be traced to an exact source state through
+  the About window and verified bundle metadata.
 - Failed Bear previews now explain why nothing changed and never imply that a
   write occurred.
