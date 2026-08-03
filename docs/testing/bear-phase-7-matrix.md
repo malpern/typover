@@ -1,7 +1,7 @@
 # Bear Phase 7 robustness matrix
 
-- Status: Long-note, scrolling, attachment-adjacent, Dark appearance, and native Settings AX inspection passed; spoken VoiceOver navigation pending
-- Last updated: 2026-08-01
+- Status: Long-note, scrolling, attachment-adjacent, Dark appearance, native Settings AX inspection, and spoken VoiceOver navigation passed
+- Last updated: 2026-08-03
 - Fixtures: dedicated Phase 2 note plus uniquely identified disposable notes
 - Current environment: Bear 2.9.1 (14638), macOS 27.0
 
@@ -39,7 +39,7 @@ Accessibility behavior.
 | Bear relaunch | Bear termination lifecycle tests pass | Passed after fix on 2026-07-26 | Hide old annotation; never reuse a stale interaction |
 | Typover relaunch | Correction state is intentionally session-scoped | Passed on 2026-07-26 | No stale annotation returns after relaunch |
 | Light appearance | Native menu and gray squiggle manually verified | Passed on 2026-07-26 | Menu remains legible and squiggle remains visibly secondary |
-| Accessibility menu surface | Floating-window metadata and retained-action tests pass | AX window, button, menu, and Revert action passed; correction also passed with VoiceOver enabled; full VoiceOver speech navigation pending | Expose one logical correction stop and dispatch the same guarded actions without activating Typover |
+| Accessibility menu surface | Floating-window metadata, retained-action, VoiceOver lifecycle, and Bear-focus-return tests pass | Physical VoiceOver Window Chooser, correction button, Revert, alternative, dismissal, exact restoration, and Bear focus return passed on 2026-08-03 | Expose one logical correction stop and dispatch the same guarded actions while returning the writer to Bear |
 | Dark appearance | Native color behavior is deterministic | Passed 2026-08-01 with a live dark-editor squiggle and native menu visual review | Menu remains native; squiggle remains subtle and legible |
 | Scroll during refresh | Offscreen and partial-visibility tests pass | Passed 2026-08-01 in the 23,431-character note; the overlay hid offscreen and returned at the same anchored range | Hide before movement and redraw only after verified geometry |
 | Markdown constructs | Wrapped and formatted geometry tests pass | Heading, list, link, code, and wrap geometry passed | Accessibility coordinates remain authoritative |
@@ -197,7 +197,44 @@ See
 [Computer Use Settings-tree crash](../bugs/2026-08-03-computer-use-settings-tree-crash.md).
 
 This completes the independent Settings AX inspection. The unlocked visual
-review and the spoken VoiceOver journey remain separate acceptance rows.
+review remains a separate acceptance row.
+
+## Spoken VoiceOver navigation pass: 2026-08-03
+
+VoiceOver's caption panel and physical ESP32 HID input provided the spoken
+navigation evidence that Computer Use could not collect. In Typover Settings,
+VoiceOver reached the Permissions heading and announced each permission as one
+useful stop: `Accessibility, Allowed` with its Bear-range explanation and
+`Input Monitoring, Allowed` with its completion-key explanation. The large
+decorative permission symbols are now hidden from Accessibility instead of
+being announced as separate images.
+
+The first live correction pass exposed a real lifecycle defect. Window Chooser
+could discover `Correction options for the`, but choosing that window activated
+Typover and the normal inactive-app policy hid the overlay before VoiceOver
+could use it. Typover now preserves the correction only when its own activation
+occurs while VoiceOver is running. Ordinary Typover activation with VoiceOver
+off still hides the overlay. After an accessibility action completes, Typover
+closes the transient overlay and activates Bear after the VoiceOver action menu
+has dismissed.
+
+The installed release-configuration development build then passed the bounded
+physical journey. Run `typover-hid-2026-08-03T21-37-56Z` corrected 1/1 `teh`
+at 160 milliseconds per key and retained 1/1 overlays. VoiceOver selected the
+correction through Window Chooser, announced its button, opened the Actions
+menu, and announced `Revert to “teh”`. Invoking it restored only the exact word,
+made `net.shinyfrog.bear` frontmost, and moved the VoiceOver cursor back to the
+same Bear editor. Bear CLI independently confirmed the synthetic note ended in
+`teh `.
+
+A second run ending `21-39-45Z` also corrected 1/1 and retained 1/1 overlays.
+VoiceOver traversed from Revert to the announced alternative `ten`; Escape
+dismissed the Actions menu back to the correction button without changing the
+note. Deterministic overlay coverage passes 38/38, including the new
+VoiceOver-only preservation and ordinary-activation hiding policies.
+See
+[VoiceOver overlay activation](../bugs/2026-08-03-voiceover-overlay-activation.md)
+for the lifecycle diagnosis and regression boundary.
 
 The Mac's appearance began on Auto. In temporary Dark appearance, Typover was
 quit while the disposable marker was unchanged; no stale annotation returned.

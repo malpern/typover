@@ -57,6 +57,9 @@ public final class BearAnnotationOverlayController {
   private let selectionStabilizationDelays: [Duration]
   private let handlesKeyboardShortcut: Bool
   private let shortcutRegistrar: any BearAnnotationShortcutRegistering
+  private let hostApplicationBundleIdentifier: String?
+  private let voiceOverEnabled: @MainActor @Sendable () -> Bool
+  private let activateBear: @MainActor @Sendable () -> Void
   private var usesSharedLifecycle = false
 
   private var application: BearCorrectionApplication?
@@ -79,6 +82,7 @@ public final class BearAnnotationOverlayController {
   private var cachedFrontmostBundleIdentifier: String?
   private var trackedCorrectionID: String?
   private var reportedVisible = false
+  private var accessibilityInteractionIsActive = false
 
   public convenience init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
@@ -125,7 +129,16 @@ public final class BearAnnotationOverlayController {
     textChangeRefreshDelay: Duration,
     handlesKeyboardShortcut: Bool,
     selectionStabilizationDelays: [Duration],
-    shortcutRegistrar: any BearAnnotationShortcutRegistering
+    shortcutRegistrar: any BearAnnotationShortcutRegistering,
+    hostApplicationBundleIdentifier: String? = Bundle.main.bundleIdentifier,
+    voiceOverEnabled: @escaping @MainActor @Sendable () -> Bool = {
+      NSWorkspace.shared.isVoiceOverEnabled
+    },
+    activateBear: @escaping @MainActor @Sendable () -> Void = {
+      _ = NSRunningApplication.runningApplications(
+        withBundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+      ).first?.activate(options: [.activateAllWindows])
+    }
   ) {
     self.adapter = adapter
     self.presenter = presenter
@@ -137,6 +150,9 @@ public final class BearAnnotationOverlayController {
     self.handlesKeyboardShortcut = handlesKeyboardShortcut
     self.selectionStabilizationDelays = selectionStabilizationDelays
     self.shortcutRegistrar = shortcutRegistrar
+    self.hostApplicationBundleIdentifier = hostApplicationBundleIdentifier
+    self.voiceOverEnabled = voiceOverEnabled
+    self.activateBear = activateBear
   }
 
   isolated deinit {
@@ -248,6 +264,7 @@ public final class BearAnnotationOverlayController {
     lastResolvedRange = nil
     cachedFrontmostBundleIdentifier = nil
     trackedCorrectionID = nil
+    accessibilityInteractionIsActive = false
   }
 
   public func showMenu() {
@@ -461,7 +478,10 @@ public final class BearAnnotationOverlayController {
         } catch {
           return
         }
-        guard let self, self.textChangeRefreshTask == nil else {
+        guard let self,
+          self.textChangeRefreshTask == nil,
+          !self.accessibilityInteractionIsActive
+        else {
           continue
         }
         self.refresh(hideFirst: false)
@@ -487,6 +507,7 @@ public final class BearAnnotationOverlayController {
     refreshTask?.cancel()
     let adapter = adapter
     let interactionStartedAt = ContinuousClock().now
+    let shouldRestoreBearActivation = accessibilityInteractionIsActive
     interactionTask?.cancel()
     interactionTask = Task { [weak self] in
       switch action {
@@ -548,6 +569,7 @@ public final class BearAnnotationOverlayController {
         default:
           self.refresh(hideFirst: true)
         }
+        self.restoreBearActivationIfNeeded(shouldRestoreBearActivation)
 
       case .chooseAlternative(let replacement):
         let result = await BearAccessibilityOperationLane.shared.run {
@@ -591,6 +613,7 @@ public final class BearAnnotationOverlayController {
             self.refresh(hideFirst: true)
           }
         }
+        self.restoreBearActivationIfNeeded(shouldRestoreBearActivation)
       }
     }
   }
@@ -752,16 +775,32 @@ public final class BearAnnotationOverlayController {
     if name == NSWorkspace.didTerminateApplicationNotification,
       bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
     {
+      accessibilityInteractionIsActive = false
       finishTracking()
       return
     }
 
     if name == NSWorkspace.didActivateApplicationNotification {
       cachedFrontmostBundleIdentifier = bundleIdentifier
+      if bundleIdentifier == hostApplicationBundleIdentifier,
+        voiceOverEnabled()
+      {
+        accessibilityInteractionIsActive = true
+        cancelTextChangeRefresh()
+        refreshGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
+        if !usesSharedLifecycle {
+          invalidationMonitor.stop()
+        }
+        return
+      }
+      accessibilityInteractionIsActive = false
     } else if name == NSWorkspace.didHideApplicationNotification,
       bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
     {
       cachedFrontmostBundleIdentifier = nil
+      accessibilityInteractionIsActive = false
     } else {
       return
     }
@@ -824,6 +863,18 @@ public final class BearAnnotationOverlayController {
   private var isBearFrontmost: Bool {
     cachedFrontmostBundleIdentifier
       == BearAccessibilityProbe.bearBundleIdentifier
+  }
+
+  private func restoreBearActivationIfNeeded(_ needed: Bool) {
+    guard needed else {
+      return
+    }
+    accessibilityInteractionIsActive = false
+    let activateBear = activateBear
+    Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(150))
+      activateBear()
+    }
   }
 
   public static func currentDisplays() -> [BearOverlayDisplay] {

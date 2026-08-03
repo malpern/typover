@@ -143,6 +143,15 @@ and Bear's attachment record. A full-resolution Dark appearance pass confirmed
 the gray squiggle and native menu remain legible while Bear stays frontmost.
 Both synthetic notes were soft-deleted after verification.
 
+The spoken VoiceOver journey now passes on the installed release-configuration
+development build. Physical VoiceOver navigation reaches Typover's combined
+permission rows, discovers a correction through Window Chooser, announces the
+correction button, traverses Revert and an alternative, dismisses the Actions
+menu, and invokes exact Change Back. The first pass exposed that Window Chooser
+activation hid the overlay; Typover now preserves it only for a VoiceOver-driven
+host activation and returns both application focus and the VoiceOver cursor to
+Bear after the action. Ordinary Typover activation still hides the overlay.
+
 Detailed implementation history remains in the
 [controlled-editor milestone record](controlled-editor-roadmap.md) and
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
@@ -154,11 +163,11 @@ The word-level Bear behavior is functionally complete. The remaining work is
 ordered by what blocks a trustworthy beta rather than by how much additional
 test coverage could be collected:
 
-1. Finish the human-facing acceptance pass: complete spoken VoiceOver
-   navigation and the unlocked Typover Settings visual review. The native
-   Settings AX inspection passes; its Computer Use failure is diagnosed as an
-   external transport crash. Review the measured post-pause correction
-   behavior as a beta product decision.
+1. Finish the human-facing acceptance pass: complete the unlocked Typover
+   Settings visual review and review the measured post-pause correction
+   behavior as a beta product decision. Spoken VoiceOver navigation and the
+   native Settings AX inspection now pass; the remaining Computer Use failure
+   is a diagnosed external transport crash.
 2. Produce the signed and notarized beta candidate, then run the clean-machine
    installation, permission, recovery, update, and uninstall checklist.
 3. Qualify that final candidate—not every development build—with fresh Bear
@@ -221,9 +230,17 @@ Back action, and alternatives.
   stops. Computer Use still crashes identically, confirming the external
   boundary documented in
   [Computer Use Settings-tree crash](../bugs/2026-08-03-computer-use-settings-tree-crash.md).
-- [ ] Complete the remaining human accessibility acceptance work: spoken
-  VoiceOver navigation through status, settings, a correction, Change Back,
-  and an alternative, plus an independent unlocked-desktop visual review.
+- [x] Complete spoken VoiceOver navigation through Settings, a correction,
+  Change Back, an alternative, dismissal, and Bear focus return. Physical
+  VoiceOver caption evidence found and verified a host-activation lifecycle
+  bug; the installed fix preserves the overlay only for VoiceOver interaction
+  and returns the VoiceOver cursor to Bear after exact restoration. Keep the
+  evidence in [Bear Phase 7](../testing/bear-phase-7-matrix.md).
+  The lifecycle boundary is documented in
+  [VoiceOver overlay activation](../bugs/2026-08-03-voiceover-overlay-activation.md).
+- [ ] Complete an independent unlocked-desktop visual review of Typover
+  Settings. Do not block this row on the diagnosed Computer Use transport
+  crash; use direct observation or another independent visual surface.
 - [x] Record the first clean installed correction-to-visible-squiggle and
   menu-to-verified-change timing points without logging writing. A one-word
   correction became visible in 444.355 milliseconds and its real menu verified
@@ -530,8 +547,8 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Complete spoken VoiceOver navigation and the unlocked Typover Settings
-   visual review. Native Settings AX structure is already credited; do not
+1. Complete the unlocked Typover Settings visual review. Native Settings AX
+   structure and spoken VoiceOver navigation are already credited; do not
    block this row on the diagnosed Computer Use transport crash.
 2. Review the measured post-pause correction behavior and decide whether it is
    the intended beta experience. If it is not, design and physically validate a

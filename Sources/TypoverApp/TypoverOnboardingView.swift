@@ -173,6 +173,7 @@ private struct TypoverPermissionRow: View {
         .font(.title2)
         .foregroundStyle(.tint)
         .frame(width: 30)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 4) {
         HStack {
@@ -199,6 +200,7 @@ private struct TypoverPermissionRow: View {
     }
     .padding(14)
     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+    .accessibilityElement(children: .combine)
   }
 }
 

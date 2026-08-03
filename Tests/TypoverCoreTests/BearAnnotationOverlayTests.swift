@@ -1337,6 +1337,69 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test(
+    "VoiceOver can keep the host overlay active and return focus to Bear"
+  )
+  func voiceOverHostActivationPreservesInteraction() async {
+    let presenter = SpyBearAnnotationPresenter()
+    var bearActivationCount = 0
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      hostApplicationBundleIdentifier: "com.malpern.typover",
+      voiceOverEnabled: { true },
+      activateBear: { bearActivationCount += 1 }
+    )
+    controller.track(anchoredOverlayApplication(location: 10))
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: "com.malpern.typover"
+    )
+
+    #expect(presenter.isVisible)
+    #expect(!controller.changeBack())
+    #expect(presenter.interaction != nil)
+    presenter.interaction?.handler(.changeBack)
+    #expect(
+      await waitForBearOverlay {
+        bearActivationCount == 1 && !presenter.isVisible
+      }
+    )
+  }
+
+  @MainActor
+  @Test("Host activation still hides overlays when VoiceOver is off")
+  func ordinaryHostActivationHidesOverlay() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      hostApplicationBundleIdentifier: "com.malpern.typover",
+      voiceOverEnabled: { false }
+    )
+    controller.track(anchoredOverlayApplication(location: 10))
+    #expect(
+      await waitForBearOverlay {
+        presenter.isVisible
+      }
+    )
+
+    controller.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: "com.malpern.typover"
+    )
+
+    #expect(!presenter.isVisible)
+    controller.stop()
+  }
+
+  @MainActor
   @Test("Fallback refreshes reuse workspace frontmost state")
   func fallbackRefreshesReuseFrontmostState() async throws {
     let presenter = SpyBearAnnotationPresenter()
@@ -1703,7 +1766,10 @@ private func testController(
   invalidationMonitor: StubBearInvalidationMonitor =
     StubBearInvalidationMonitor(),
   handlesKeyboardShortcut: Bool = true,
-  textChangeRefreshDelay: Duration = .zero
+  textChangeRefreshDelay: Duration = .zero,
+  hostApplicationBundleIdentifier: String? = "com.malpern.typover",
+  voiceOverEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
+  activateBear: @escaping @MainActor @Sendable () -> Void = {}
 ) -> BearAnnotationOverlayController {
   BearAnnotationOverlayController(
     adapter: service,
@@ -1732,7 +1798,15 @@ private func testController(
     },
     fallbackRefreshInterval: .seconds(60),
     textChangeRefreshDelay: textChangeRefreshDelay,
-    handlesKeyboardShortcut: handlesKeyboardShortcut
+    handlesKeyboardShortcut: handlesKeyboardShortcut,
+    selectionStabilizationDelays: [
+      .milliseconds(40),
+      .milliseconds(180),
+    ],
+    shortcutRegistrar: BearAnnotationShortcutCenter.shared,
+    hostApplicationBundleIdentifier: hostApplicationBundleIdentifier,
+    voiceOverEnabled: voiceOverEnabled,
+    activateBear: activateBear
   )
 }
 
