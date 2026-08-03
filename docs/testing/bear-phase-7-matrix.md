@@ -1,6 +1,6 @@
 # Bear Phase 7 robustness matrix
 
-- Status: Long-note, scrolling, attachment-adjacent, Dark appearance, native Settings AX inspection, and spoken VoiceOver navigation passed
+- Status: Long-note, scrolling, attachment-adjacent, Dark appearance, native Settings AX inspection, unlocked Settings visual review, and spoken VoiceOver navigation passed
 - Last updated: 2026-08-03
 - Fixtures: dedicated Phase 2 note plus uniquely identified disposable notes
 - Current environment: Bear 2.9.1 (14638), macOS 27.0
@@ -196,8 +196,25 @@ Computer Use still crashed identically, confirming an external transport bug.
 See
 [Computer Use Settings-tree crash](../bugs/2026-08-03-computer-use-settings-tree-crash.md).
 
-This completes the independent Settings AX inspection. The unlocked visual
-review remains a separate acceptance row.
+This completes the independent Settings AX inspection.
+
+## Unlocked Settings visual review: 2026-08-03
+
+Native full-resolution window captures reviewed the installed
+release-configuration development app from the top of Typover Settings through
+its final learning controls. Permissions, writing model readiness, automatic
+correction, Bear compatibility, local diagnostics privacy, correction activity,
+provider statistics, the empty remembered-choices state, and destructive reset
+controls all remained readable, aligned, and reachable through the native
+scroll surface. Enabled, disabled, success, and empty states were visually
+distinct without clipping or overlap.
+
+The review found one polish defect in the provider breakdown: a count of one
+was rendered as `1 corrections`. Typover now uses localized singular and plural
+count resources, with focused coverage for zero, one, and multiple corrections.
+The installed corrected build visually reads `1 correction`; the focused
+Settings suite passes 7/7. This completes the independent unlocked-desktop
+visual acceptance row without relying on the crashing Computer Use transport.
 
 ## Spoken VoiceOver navigation pass: 2026-08-03
 

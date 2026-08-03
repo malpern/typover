@@ -9,6 +9,13 @@ import TypoverCore
 
 @MainActor
 struct LearningSettingsViewTests {
+  @Test("Correction counts use singular and plural labels")
+  func correctionCountLabels() {
+    #expect(String(localized: correctionCountLabel(0)) == "0 corrections")
+    #expect(String(localized: correctionCountLabel(1)) == "1 correction")
+    #expect(String(localized: correctionCountLabel(2)) == "2 corrections")
+  }
+
   @Test("Permission model reports the current checker snapshot")
   func permissionModelRefreshes() {
     let model = TypoverPermissionModel(

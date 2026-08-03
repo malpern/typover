@@ -870,7 +870,7 @@ private struct CorrectionSourceStatisticsRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
 
       Text(
-        "\(statistics.correctionsApplied.formatted()) corrections"
+        correctionCountLabel(statistics.correctionsApplied)
       )
       .foregroundStyle(.secondary)
 
@@ -909,6 +909,22 @@ private struct CorrectionSourceStatisticsRow: View {
     }
     .font(.callout)
   }
+}
+
+func correctionCountLabel(_ count: Int) -> LocalizedStringResource {
+  if count == 1 {
+    return LocalizedStringResource(
+      "\(count) correction",
+      bundle: #bundle,
+      comment: "A source-specific count containing exactly one correction."
+    )
+  }
+
+  return LocalizedStringResource(
+    "\(count) corrections",
+    bundle: #bundle,
+    comment: "A source-specific count containing zero or multiple corrections."
+  )
 }
 
 extension CorrectionSource {

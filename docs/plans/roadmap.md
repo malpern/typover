@@ -163,11 +163,11 @@ The word-level Bear behavior is functionally complete. The remaining work is
 ordered by what blocks a trustworthy beta rather than by how much additional
 test coverage could be collected:
 
-1. Finish the human-facing acceptance pass: complete the unlocked Typover
-   Settings visual review and review the measured post-pause correction
-   behavior as a beta product decision. Spoken VoiceOver navigation and the
-   native Settings AX inspection now pass; the remaining Computer Use failure
-   is a diagnosed external transport crash.
+1. Finish the human-facing acceptance pass by reviewing the measured post-pause
+   correction behavior as a beta product decision. The unlocked Settings visual
+   review, spoken VoiceOver navigation, and native Settings AX inspection now
+   pass; the remaining Computer Use failure is a diagnosed external transport
+   crash.
 2. Produce the signed and notarized beta candidate, then run the clean-machine
    installation, permission, recovery, update, and uninstall checklist.
 3. Qualify that final candidate—not every development build—with fresh Bear
@@ -238,9 +238,13 @@ Back action, and alternatives.
   evidence in [Bear Phase 7](../testing/bear-phase-7-matrix.md).
   The lifecycle boundary is documented in
   [VoiceOver overlay activation](../bugs/2026-08-03-voiceover-overlay-activation.md).
-- [ ] Complete an independent unlocked-desktop visual review of Typover
-  Settings. Do not block this row on the diagnosed Computer Use transport
-  crash; use direct observation or another independent visual surface.
+- [x] Complete an independent unlocked-desktop visual review of Typover
+  Settings. Native full-resolution captures covered the installed Settings
+  surface from permissions through the final learning controls. The review
+  found and fixed the provider-count label `1 corrections`; localized zero,
+  singular, and plural coverage now passes, and the installed UI reads
+  `1 correction`. Keep the evidence in
+  [Bear Phase 7](../testing/bear-phase-7-matrix.md).
 - [x] Record the first clean installed correction-to-visible-squiggle and
   menu-to-verified-change timing points without logging writing. A one-word
   correction became visible in 444.355 milliseconds and its real menu verified
@@ -547,15 +551,12 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Complete the unlocked Typover Settings visual review. Native Settings AX
-   structure and spoken VoiceOver navigation are already credited; do not
-   block this row on the diagnosed Computer Use transport crash.
-2. Review the measured post-pause correction behavior and decide whether it is
+1. Review the measured post-pause correction behavior and decide whether it is
    the intended beta experience. If it is not, design and physically validate a
    bounded earlier-catch-up policy before release qualification.
-3. Build the signed and notarized beta candidate and run the clean-machine
+2. Build the signed and notarized beta candidate and run the clean-machine
    install and permission checklist.
-4. On that final candidate, run one fresh-process qualification: fresh Bear,
+3. On that final candidate, run one fresh-process qualification: fresh Bear,
    fresh Typover, release-config memory retirement, and the bounded
    second-machine soak.
 
