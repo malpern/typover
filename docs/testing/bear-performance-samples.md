@@ -1,19 +1,24 @@
 # Bear performance samples
 
 - Status: Active evidence log
-- Updated: 2026-08-01
+- Updated: 2026-08-03
 - Privacy: Content-free process and interaction measurements only
 
 This log records reproducible installed-app measurements for the Bear beta
-gate. It never includes note titles, words, replacements, surrounding text, or
-document identifiers.
+gate. It never includes private note titles, writing, surrounding text, or
+document identifiers. Synthetic fixture tokens may be named when needed to
+describe a deterministic interaction.
 
 ## Environment
 
 - Hardware: Apple M5, 24 GiB memory, arm64
 - macOS: 27.0 (26A5378n)
 - Bear: 2.9.1 (14638)
-- Typover: Apple Development-signed debug app in `/Applications/Typover.app`
+- Current Typover candidate: clean Apple Development-signed release-config app in
+  `/Applications/Typover.app`, source revision `88f6555`
+
+Earlier sections name debug or release configuration explicitly where it
+differs from the current candidate.
 
 ## Idle waiting baseline — 2026-07-26
 
@@ -135,16 +140,58 @@ does provide a reproducible local release-config budget of **200 MiB RSS after
 three retired 24-annotation cycles**, with no observed linear per-session
 growth and no inactive CPU cost.
 
+## Visible correction and menu interaction latency — 2026-08-03
+
+Revision `88f6555` moved the correction-to-squiggle measurement boundary from
+verified Bear text replacement to the overlay presenter's first visible frame.
+The clean installed build then passed a focused five-word physical row at 160
+milliseconds per key with 5/5 exact corrections and 5/5 retained overlays. The
+completion-boundary-to-visible-squiggle samples were:
+
+| Correction in post-burst application order | Visible latency |
+| ---: | ---: |
+| 1 | 474.904 ms |
+| 2 | 1,154.540 ms |
+| 3 | 1,824.610 ms |
+| 4 | 2,522.821 ms |
+| 5 | 3,206.381 ms |
+
+The median was 1,824.610 milliseconds. This is not five samples of drawing
+cost. Typover's 220-millisecond idle-first safety policy waits until continuous
+input stops, then verifies and applies the bounded corrections from the end of
+the burst toward its beginning. The most recent word therefore appeared in
+under half a second, while earlier words accumulated the duration of the
+uninterrupted burst. A separate one-word control measured 444.355 milliseconds
+from its completion boundary to a visible squiggle.
+
+The one-word control also supplied the interaction sample. An external native
+Accessibility client opened the real nonactivating correction menu and invoked
+**Revert to “teh”** while Bear remained frontmost. Bear verified the exact
+restoration in **62.441 milliseconds**, retained editor focus, and ended with
+the expected original word. An attempted app-scoped Computer Use inspection is
+not credited: inspecting Typover's main application surface briefly activated
+Typover and correctly retired the Bear overlays.
+
+The credited local artifacts end in `20-58-17Z` for the five-word row and
+`21-00-45Z` for the one-word interaction control. This is a focused acceptance
+point, not a broad percentile distribution. It closes the instrumentation gap
+and exposes a product tradeoff for beta review: Change Back is immediate, but
+visible corrections intentionally wait for a typing pause.
+
 ## Remaining samples
 
 Typover now records both timing paths in memory for the current session:
 completion boundary to tracked annotation, and correction-menu choice to a
 verified Change Back or alternative replacement. Settings reports the median
 for each path; the diagnostics retain at most 200 samples and no writing.
-Some installed samples remain pending.
+The first installed visible-squiggle and Change Back timing points are now
+recorded. Some broader samples remain pending.
 
-- correction boundary to visible squiggle while typing naturally in Bear;
-- squiggle click to verified Change Back and alternative replacement;
+- decide whether the measured post-pause visible-correction behavior is the
+  intended beta experience or whether an earlier safe catch-up design is
+  required;
+- collect a verified alternative-replacement interaction sample if its path
+  changes independently of Change Back;
 - sustained typing with several recent annotations;
 - repeated sustained typing and safe-miss behavior beyond the passing physical
   load matrix;

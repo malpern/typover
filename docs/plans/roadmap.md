@@ -122,6 +122,18 @@ choice. The next physical `teh ` became `ten `, proving that the remembered
 preference was used. The deliberately bad test preference was then removed
 without clearing the existing statistics history.
 
+The first installed visible-latency acceptance point is now recorded against a
+clean revision. A one-word physical correction showed its gray squiggle in
+444.355 milliseconds, and the real nonactivating menu verified Change Back in
+62.441 milliseconds while Bear stayed frontmost. In an uninterrupted
+five-word sequence, all five corrections and overlays passed, but the
+idle-first safety policy delayed the earlier words until the burst ended:
+visible samples ranged from 474.904 to 3,206.381 milliseconds with a
+1,824.610-millisecond median. This is a deliberate reliability tradeoff rather
+than overlay drawing lag. Beta acceptance must explicitly decide whether
+post-pause correction is the intended experience before shortening the idle
+gate or allowing Accessibility writes during active input.
+
 The remaining Phase 7 interaction gaps narrowed as well. A physical correction
 at paragraph 150 of a 23,431-character disposable note changed only the bounded
 midpoint word. Scrolling it offscreen hid the overlay and scrolling back made
@@ -142,10 +154,10 @@ The word-level Bear behavior is functionally complete. The remaining work is
 ordered by what blocks a trustworthy beta rather than by how much additional
 test coverage could be collected:
 
-1. Finish the human-facing acceptance pass: measure visible correction and
-   menu latency, complete spoken VoiceOver navigation, and independently
-   inspect Typover Settings after diagnosing the Computer Use accessibility
-   tree transport failure.
+1. Finish the human-facing acceptance pass: complete spoken VoiceOver
+   navigation and independently inspect Typover Settings after diagnosing the
+   Computer Use accessibility tree transport failure. Review the measured
+   post-pause correction behavior as a beta product decision.
 2. Produce the signed and notarized beta candidate, then run the clean-machine
    installation, permission, recovery, update, and uninstall checklist.
 3. Qualify that final candidate—not every development build—with fresh Bear
@@ -203,9 +215,19 @@ Back action, and alternatives.
   navigation through status, settings, a correction, Change Back, and an
   alternative; diagnose the Typover Settings accessibility-tree transport
   failure; then record an independent unlocked-desktop visual and AX pass.
-- [ ] Close the remaining performance-measurement gaps without logging
-  writing: correction-to-visible-squiggle timing, menu-to-verified-change
-  timing, and a bounded second-machine beta soak. Content-free safe-skip,
+- [x] Record the first clean installed correction-to-visible-squiggle and
+  menu-to-verified-change timing points without logging writing. A one-word
+  correction became visible in 444.355 milliseconds and its real menu verified
+  Change Back in 62.441 milliseconds while Bear remained frontmost. A focused
+  uninterrupted five-word row passed 5/5 corrections and 5/5 overlays, with
+  visible timing from 474.904 to 3,206.381 milliseconds because the idle-first
+  policy waits for the burst to stop. Keep the evidence in
+  [Bear performance samples](../testing/bear-performance-samples.md).
+- [ ] Decide whether post-pause correction is the intended beta experience.
+  Do not shorten the idle gate or write while input is active without new
+  physical evidence that the change preserves exact text, selection, focus,
+  and overlay retention.
+- [ ] Complete a bounded second-machine beta soak. Content-free safe-skip,
   refusal, load, recovery, memory, and energy evidence is already recorded;
   both debug and release-config runs support a provisional 200 MiB RSS budget.
   Keep the evidence in
@@ -499,12 +521,12 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Record correction-to-visible-squiggle and menu-to-verified-change latency
-   with a short physical Bear row. Add direct keyboard-to-Bear arrival timing
-   only if it can be measured without perturbing the result.
-2. Complete spoken VoiceOver navigation and diagnose the Typover Settings
+1. Complete spoken VoiceOver navigation and diagnose the Typover Settings
    accessibility-tree transport failure before crediting the remaining visual
    and AX acceptance row.
+2. Review the measured post-pause correction behavior and decide whether it is
+   the intended beta experience. If it is not, design and physically validate a
+   bounded earlier-catch-up policy before release qualification.
 3. Build the signed and notarized beta candidate and run the clean-machine
    install and permission checklist.
 4. On that final candidate, run one fresh-process qualification: fresh Bear,
