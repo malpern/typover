@@ -266,6 +266,21 @@ of `eth` despite ordered fixture input and is retained as invalid evidence. It
 did not recur in the next 100 physical tokens. See
 [Combined-load first token transposition](../bugs/2026-08-03-combined-load-first-token-transposition.md).
 
+## Installed circuit-breaker sequence: 2026-08-03
+
+The debug-only `post-write-unreconciled` seam passed its complete physical
+sequence. The first one-word run changed `teh` to `the`, retained valid focus,
+received all ten fixture reports with zero late reports, exposed no overlay,
+and logged both the injected verification failure and the mutation-circuit
+pause. The generic harness correctly labels this artifact invalid because its
+ordinary success contract requires a normal application event and overlay.
+
+Without relaunching Typover, a second one-word run preserved `teh` as a safe
+miss with no overlay, proving the open circuit refused further mutation. After
+a normal relaunch with no fault environment, a third run corrected 1/1 and
+retained 1/1 visible overlay. The local artifacts end in `19-38-15Z`,
+`19-39-09Z`, and `19-40-43Z`.
+
 ## Punctuation result: 2026-08-01
 
 The schema-4 run ending `01-48-30Z` corrected all five physical segments to

@@ -502,10 +502,13 @@ the other 19 overlays. A real pointer click on a later sibling opened its
 native correction menu while Bear remained frontmost and its text stayed
 unchanged.
 
-Next, finish the full multi-stage IME marked-text row and the
-post-write-inconclusive circuit-breaker, then record
-correction-to-visible-squiggle and menu latency. Complete spoken VoiceOver
-navigation. Diagnose the Settings accessibility-tree transport failure before
+The installed post-write-inconclusive circuit-breaker row now passes: one
+physical faulted write changed the word without creating a squiggle, the same
+process refused the next correction, and a normal relaunch restored a 1/1
+correction with its overlay. Next, finish the full multi-stage IME marked-text
+row, then record correction-to-visible-squiggle and menu latency. Complete
+spoken VoiceOver navigation. Diagnose the Settings accessibility-tree
+transport failure before
 crediting a visual settings pass. Add direct keyboard-to-Bear arrival timing
 rather than inferring it from the ESP32 schedule, repeat the controlled load
 matrix after fresh app launches, and extend the three-cycle release soak to a

@@ -66,7 +66,7 @@ also passes in Bear.
 | Marked-text composition | Composition-changing transitions are rejected | Partial 2026-08-01: a physical Option-E dead-key composition preserved exact `tehé ` with no correction; a full IME marked-range pass remains | Never correct while composition is active |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Passed 2026-08-01 with physical Space, Command-Z, and Shift-Command-Z | Cancel the queued correction; do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
-| Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
+| Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Passed 2026-08-03 with the installed debug-only fault seam, a same-process refusal, and a normal-relaunch recovery control | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
 | Close and reopen Typover's main window | Passed with an AppKit reopen delegate targeting the stable `main` scene | Passed 2026-08-01 while the existing process remained alive | Reactivating Typover restores its main window without creating a duplicate process |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
 
@@ -200,15 +200,23 @@ the window is inspected independently on an unlocked desktop. The later
 zero-window observation occurred after macOS had locked the session and is not
 treated as product evidence.
 
-The development build now has a one-shot, debug-only installed-test seam for
+The development build has a one-shot, debug-only installed-test seam for
 the post-write-inconclusive row. Launching it with
 `TYPOVER_DEBUG_BEAR_FAULT=post-write-unreconciled` lets the real guarded Bear
 write complete, then replaces only that first successful result with a
 content-free unreconciled report. The coordinator must pause its mutation
 circuit, expose `pausedAfterIndeterminateWrite`, leave the changed text intact,
 and create no squiggle. Release builds compile this seam out. The installed row
-remains pending until the physical run verifies the text, status, absence of an
-annotation, fault log, and recovery after a normal relaunch.
+passed on 2026-08-03. The first physical `teh` became `the` with zero visible
+overlays; both required fault logs recorded the injected verification failure
+and paused mutation circuit. In the same process a second physical `teh`
+remained unchanged with no overlay. After a normal relaunch without the fault
+environment, a third physical `teh` became `the` with one visible overlay.
+Bear focus remained valid, every fixture report arrived with zero late reports,
+and the generic harness artifacts end in `19-38-15Z`, `19-39-09Z`, and
+`19-40-43Z`. The first artifact is intentionally `harness-invalid` because the
+ordinary harness requires a successful-application log and overlay; those are
+exactly the two signals this fault row must withhold.
 
 ## Bear 2.9.1 compatibility pass: 2026-07-29
 
