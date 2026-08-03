@@ -63,7 +63,7 @@ also passes in Bear.
 | Continue typing rapidly | Passed with idle-first mutation, boundary preservation, a fixed boundary deadline, bounded coalesced-boundary catch-up, serialized AX work, and 21 repeated correction interactions | Redesigned runtime passed 20/20 at 160 ms/character on 2026-08-01 with valid focus and fixture evidence | Preserve all later input; apply queued corrections only after idle; existing squiggles may briefly hide while typing and return after idle |
 | Switch notes or windows | Passed; focus changes cancel queued input and discard the old annotation session before reattachment | Passed 2026-08-01 by switching between two disposable notes during the idle window | Reattach only to the newly focused Bear editor; do not carry unidentifiable note anchors across focus |
 | Typover disabled | Passed; stop and fresh re-enable lifecycle covered | Passed 2026-08-01 with matched one-word disabled and enabled physical controls | Stop observation and hide the active Typover annotation |
-| Marked-text composition | Composition-changing transitions are rejected | Partial 2026-08-01: a physical Option-E dead-key composition preserved exact `tehé ` with no correction; a full IME marked-range pass remains | Never correct while composition is active |
+| Marked-text composition | Composition-changing transitions are rejected; collapsing a selection establishes a fresh baseline | Passed 2026-08-03: Japanese Kana exposed an active marked range through physical input and conversion, committed it without a correction or overlay, and a newline-separated U.S. control then corrected 1/1 with its overlay retained | Never correct while composition is active; resume from a fresh collapsed-caret baseline after commit |
 | Undo/Redo | Command-Z and Shift-Command-Z explicitly disarm correction | Passed 2026-08-01 with physical Space, Command-Z, and Shift-Command-Z | Cancel the queued correction; do not treat Undo/Redo as new typing |
 | Multiple recent corrections | Passed; reverting correction five of 21 retains the other 20, length-changing alternatives shift later ranges, and overlaps alone invalidate | A fresh 20-overlay physical burst retained all overlays; reverting correction five left the other 19, and a later sibling's pointer menu remained interactive without moving focus | Keep each valid correction independently reversible |
 | Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Passed 2026-08-03 with the installed debug-only fault seam, a same-process refusal, and a normal-relaunch recovery control | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
@@ -185,8 +185,31 @@ pressing E, released the dead key, pressed E to commit `é`, and then pressed
 Space. Bear retained exact `tehé `, Typover logged the final Space as a
 completion boundary but made no correction, and all 13 fixture reports arrived
 with no late reports and 29 microseconds maximum deviation. This verifies a
-real macOS dead-key composition path. It is not credited as the full marked-text
-row until a multi-stage IME exposes and commits an active marked range in Bear.
+real macOS dead-key composition path.
+
+The full installed marked-text row passed on 2026-08-03 with Apple's Japanese
+Kana input source temporarily enabled. Bear's official CLI brought a fresh
+disposable note to the foreground at its exact terminal caret before every
+physical stage. A physical `T` produced `か`; Bear visibly retained the blue
+IME underline and the harness read the exact additional character. Physical
+Space kept the range active, and the harness reported `selectionActive`. The
+first physical Return left the conversion range active and underlined; a
+second physical Return ended composition. Bear then exposed a
+collapsed caret after exact committed `か`, with no blue underline and no gray
+Typover overlay. The four fixture runs completed with all reports delivered,
+zero late reports, and maximum per-run lateness between 14 and 30
+microseconds. Typover logged the associated input, value, and selection
+changes but no applied correction or overlay action.
+
+After switching back to U.S. English, an intentionally adjacent `かteh` control
+produced a content-free `noSuggestion` safe miss; it is recorded as a
+mixed-script tokenization control, not a recovery failure. The identical
+physical one-word row from the following newline then passed 1/1 with exact
+Bear and Typover log evidence and its gray overlay retained 1/1. Its schema-5
+artifact is
+`~/.local/state/typover/bear-hid/typover-hid-2026-08-03T20-36-18Z/summary.json`.
+The temporary Japanese source and keyboard-navigation setting were removed
+afterward, restoring the original U.S.-only input configuration.
 
 Opening Settings remains an automation coverage gap. The installed window
 appears and Typover remains running, but requesting its full accessibility tree

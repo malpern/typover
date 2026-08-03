@@ -505,10 +505,12 @@ unchanged.
 The installed post-write-inconclusive circuit-breaker row now passes: one
 physical faulted write changed the word without creating a squiggle, the same
 process refused the next correction, and a normal relaunch restored a 1/1
-correction with its overlay. Next, finish the full multi-stage IME marked-text
-row, then record correction-to-visible-squiggle and menu latency. Complete
-spoken VoiceOver navigation. Diagnose the Settings accessibility-tree
-transport failure before
+correction with its overlay. The full multi-stage IME marked-text row also now
+passes: active Japanese Kana composition remained untouched, committed without
+an overlay, and a newline-separated U.S. physical control resumed at 1/1 with
+its overlay retained. Next, record correction-to-visible-squiggle and menu
+latency. Complete spoken VoiceOver navigation. Diagnose the Settings
+accessibility-tree transport failure before
 crediting a visual settings pass. Add direct keyboard-to-Bear arrival timing
 rather than inferring it from the ESP32 schedule, repeat the controlled load
 matrix after fresh app launches, and extend the three-cycle release soak to a
