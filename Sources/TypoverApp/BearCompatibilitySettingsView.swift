@@ -508,6 +508,7 @@ private struct BearCompatibilityStatus: View {
           .font(.title2)
           .foregroundStyle(report.status.tint)
           .frame(width: 28)
+          .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(report.status.title)

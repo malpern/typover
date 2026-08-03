@@ -155,9 +155,10 @@ ordered by what blocks a trustworthy beta rather than by how much additional
 test coverage could be collected:
 
 1. Finish the human-facing acceptance pass: complete spoken VoiceOver
-   navigation and independently inspect Typover Settings after diagnosing the
-   Computer Use accessibility tree transport failure. Review the measured
-   post-pause correction behavior as a beta product decision.
+   navigation and the unlocked Typover Settings visual review. The native
+   Settings AX inspection passes; its Computer Use failure is diagnosed as an
+   external transport crash. Review the measured post-pause correction
+   behavior as a beta product decision.
 2. Produce the signed and notarized beta candidate, then run the clean-machine
    installation, permission, recovery, update, and uninstall checklist.
 3. Qualify that final candidate—not every development build—with fresh Bear
@@ -211,10 +212,18 @@ Back action, and alternatives.
   [Phase 7](../testing/bear-phase-7-matrix.md): long-note interaction,
   scrolling and overlay return, attachment-adjacent correction, and Dark
   appearance.
-- [ ] Complete the remaining accessibility acceptance work: spoken VoiceOver
-  navigation through status, settings, a correction, Change Back, and an
-  alternative; diagnose the Typover Settings accessibility-tree transport
-  failure; then record an independent unlocked-desktop visual and AX pass.
+- [x] Diagnose the Typover Settings accessibility-tree transport failure and
+  complete an independent native AX pass. `SkyComputerUseService` crashes with
+  `EXC_BREAKPOINT` while Typover remains alive; the native Settings tree returns
+  55 descendants and the expected stable control identifiers. Decorative
+  status and statistic images are now hidden, statistic cards expose one
+  labeled value, and the installed native tree reports zero standalone image
+  stops. Computer Use still crashes identically, confirming the external
+  boundary documented in
+  [Computer Use Settings-tree crash](../bugs/2026-08-03-computer-use-settings-tree-crash.md).
+- [ ] Complete the remaining human accessibility acceptance work: spoken
+  VoiceOver navigation through status, settings, a correction, Change Back,
+  and an alternative, plus an independent unlocked-desktop visual review.
 - [x] Record the first clean installed correction-to-visible-squiggle and
   menu-to-verified-change timing points without logging writing. A one-word
   correction became visible in 444.355 milliseconds and its real menu verified
@@ -521,9 +530,9 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Complete spoken VoiceOver navigation and diagnose the Typover Settings
-   accessibility-tree transport failure before crediting the remaining visual
-   and AX acceptance row.
+1. Complete spoken VoiceOver navigation and the unlocked Typover Settings
+   visual review. Native Settings AX structure is already credited; do not
+   block this row on the diagnosed Computer Use transport crash.
 2. Review the measured post-pause correction behavior and decide whether it is
    the intended beta experience. If it is not, design and physically validate a
    bounded earlier-catch-up policy before release qualification.

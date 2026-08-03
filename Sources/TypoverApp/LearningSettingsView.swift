@@ -526,6 +526,7 @@ private struct AppleModelStatus: View {
         .font(.title2)
         .foregroundStyle(availability.tint)
         .frame(width: 28)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 4) {
         Text(availability.title)
@@ -555,6 +556,7 @@ private struct RemoteModelStatus: View {
           .font(.title2)
           .foregroundStyle(credentialStatus.tint)
           .frame(width: 28)
+          .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 4) {
           Text(credentialStatus.title)
@@ -968,6 +970,7 @@ private struct StatisticCard: View {
         .font(.title2)
         .foregroundStyle(.tint)
         .frame(width: 28)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(value)
@@ -985,6 +988,9 @@ private struct StatisticCard: View {
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(title))
+    .accessibilityValue(value)
   }
 }
 
@@ -1108,6 +1114,7 @@ private struct RememberedRuleRow: View {
           Image(systemName: "arrow.right")
             .font(.caption)
             .foregroundStyle(.tertiary)
+            .accessibilityHidden(true)
 
           switch rule.preference {
           case .preferred(let replacement):
@@ -1170,6 +1177,7 @@ private struct RememberedRulesEmptyState: View {
         )
       } icon: {
         Image(systemName: "text.badge.checkmark")
+          .accessibilityHidden(true)
       }
     } description: {
       Text(

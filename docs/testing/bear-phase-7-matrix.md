@@ -1,6 +1,6 @@
 # Bear Phase 7 robustness matrix
 
-- Status: Long-note, scrolling, attachment-adjacent, and Dark appearance interaction passed; spoken VoiceOver navigation pending
+- Status: Long-note, scrolling, attachment-adjacent, Dark appearance, and native Settings AX inspection passed; spoken VoiceOver navigation pending
 - Last updated: 2026-08-01
 - Fixtures: dedicated Phase 2 note plus uniquely identified disposable notes
 - Current environment: Bear 2.9.1 (14638), macOS 27.0
@@ -177,6 +177,27 @@ the correction path coexists with the running screen reader, not evidence of a
 completed spoken-navigation journey. A person must still verify Window Chooser
 discovery, the announced label and help, menu traversal, dismissal, and focus
 return using VoiceOver itself.
+
+## Typover Settings Accessibility inspection: 2026-08-03
+
+Computer Use continued to fail when serializing Typover's SwiftUI Settings
+window. The failure is now diagnosed rather than treated as missing Typover
+evidence: `SkyComputerUseService` crashed twice with `EXC_BREAKPOINT` /
+`SIGTRAP`, while Typover remained alive and its native app-scoped
+Accessibility tree returned normally.
+
+The independent native pass found 55 Settings descendants and the expected
+stable identifiers for every visible interactive control. It also found
+decorative statistic, status, empty-state, and direction symbols exposed as
+separate image stops. The installed accessibility cleanup hides those images
+and combines each statistic card into one labeled value. A repeat native pass
+then reported zero standalone images and retained the expected controls.
+Computer Use still crashed identically, confirming an external transport bug.
+See
+[Computer Use Settings-tree crash](../bugs/2026-08-03-computer-use-settings-tree-crash.md).
+
+This completes the independent Settings AX inspection. The unlocked visual
+review and the spoken VoiceOver journey remain separate acceptance rows.
 
 The Mac's appearance began on Auto. In temporary Dark appearance, Typover was
 quit while the disposable marker was unchanged; no stale annotation returned.
