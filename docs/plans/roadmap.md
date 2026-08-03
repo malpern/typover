@@ -1,8 +1,8 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-01
-- Current milestone: 1 — Bear word-correction beta
+- Updated: 2026-08-03
+- Current milestone: 1 — Bear word-correction beta final acceptance
 
 ## Goal
 
@@ -136,6 +136,48 @@ Detailed implementation history remains in the
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
 evidence, not competing roadmaps.
 
+## Remaining plan at a glance
+
+The word-level Bear behavior is functionally complete. The remaining work is
+ordered by what blocks a trustworthy beta rather than by how much additional
+test coverage could be collected:
+
+1. Finish the human-facing acceptance pass: measure visible correction and
+   menu latency, complete spoken VoiceOver navigation, and independently
+   inspect Typover Settings after diagnosing the Computer Use accessibility
+   tree transport failure.
+2. Produce the signed and notarized beta candidate, then run the clean-machine
+   installation, permission, recovery, update, and uninstall checklist.
+3. Qualify that final candidate—not every development build—with fresh Bear
+   and Typover processes, the release-config memory envelope, and a bounded
+   second-machine soak.
+4. Resolve public-beta operations: license, support channel, release notes,
+   rollback, and public privacy and compatibility claims.
+5. After the word-level beta is trustworthy, proceed to bounded local
+   contextual correction, then a TextEdit adapter, and finally broader model
+   benchmarking.
+
+## Proportionate testing strategy
+
+Use the smallest test that can establish the behavior being changed:
+
+- During ordinary development, run targeted deterministic tests for the
+  touched policy, transaction, adapter, or UI behavior.
+- Run a focused 1–5 word physical Bear row only when a change touches physical
+  input observation, Bear Accessibility, exact-range mutation, overlays, or
+  interaction handling.
+- Run the full physical matrix only for a release candidate, a supported
+  Bear/macOS version change, a material observer/transaction/overlay
+  architecture change, or an unexplained installed-app regression.
+- Keep specialized rows such as IME composition, 20-word overlay retention,
+  severe load, and multi-cycle memory as release regression coverage rather
+  than routine per-change checks.
+- Preserve fail-closed admission: a shared desktop, lost Bear focus, a busy
+  host, incomplete fixture reports, or missing log evidence invalidates the
+  run. It is infrastructure evidence, not a Typover pass or failure.
+- Do not collect more evidence merely because the harness can. Add or repeat a
+  row only when it protects a product claim or answers a live uncertainty.
+
 ## Milestone 1: Bear word-correction beta
 
 ### Outcome
@@ -147,37 +189,26 @@ Back action, and alternatives.
 
 ### Work
 
-- Complete the permissioned installed-app scenarios in the
-  [Phase 8 matrix](../testing/bear-phase-8-matrix.md):
-  - punctuation;
-  - paste and boundary-only paste refusal;
-  - active selections and bounded-context drift;
-  - Change Back and alternatives;
-  - rapid continued typing;
-  - note and window switching;
-  - disabling and re-enabling Typover;
-  - marked-text composition and Undo/Redo;
-  - multiple recent corrections.
-- Absorb the remaining relevant
-  [Phase 7 robustness rows](../testing/bear-phase-7-matrix.md):
-  - long-note interaction;
-  - scrolling during refresh;
-  - attachment-adjacent correction;
-  - final Dark appearance review; and
-  - full spoken VoiceOver navigation.
-- [ ] Measure correction-to-squiggle latency, interaction latency, safe misses,
-  refusals, false changes, memory, energy, and recovery behavior without
-  logging writing. Session-only applied, safe-skip, refusal, and
-  correction-to-annotation and menu-to-verified-change measurements are
-  implemented. Installed load timing, active memory, process power, and
-  post-burst recovery samples are recorded. Fresh-process relaunch and a
-  two-cycle 24-annotation memory/retirement sample now pass with a provisional
-  200 MiB debug budget. A clean release-config build also passes three physical
-  24-annotation cycles and returns to the same 191,456 KiB plateau after cycles
-  two and three, establishing a provisional 200 MiB release-config budget.
-  Visible-squiggle timing, menu interaction timing, and a longer beta soak on a
-  second clean machine remain.
-  The evidence log is
+- [x] Complete the word-level permissioned installed-app scenarios in the
+  [Phase 8 matrix](../testing/bear-phase-8-matrix.md): punctuation, paste and
+  boundary-only refusal, selections and context drift, Change Back and
+  alternatives, continued typing, note switching, enable/disable lifecycle,
+  Undo/Redo, full IME marked text, and multiple recent corrections. Sentence
+  correction belongs to Milestone 3 and is not a Milestone 1 gap.
+- [x] Complete the relevant visual and robustness rows from
+  [Phase 7](../testing/bear-phase-7-matrix.md): long-note interaction,
+  scrolling and overlay return, attachment-adjacent correction, and Dark
+  appearance.
+- [ ] Complete the remaining accessibility acceptance work: spoken VoiceOver
+  navigation through status, settings, a correction, Change Back, and an
+  alternative; diagnose the Typover Settings accessibility-tree transport
+  failure; then record an independent unlocked-desktop visual and AX pass.
+- [ ] Close the remaining performance-measurement gaps without logging
+  writing: correction-to-visible-squiggle timing, menu-to-verified-change
+  timing, and a bounded second-machine beta soak. Content-free safe-skip,
+  refusal, load, recovery, memory, and energy evidence is already recorded;
+  both debug and release-config runs support a provisional 200 MiB RSS budget.
+  Keep the evidence in
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
@@ -228,40 +259,14 @@ Back action, and alternatives.
   remains invalid and unexplained; it did not recur in the next 100 physical
   tokens. See
   [Combined-load first token transposition](../bugs/2026-08-03-combined-load-first-token-transposition.md).
-- [ ] Complete the remaining severe-load qualification: repeat after a fresh
-  Bear process as well as a fresh Typover process, capture per-character
-  USB-to-screen-paint timing if it can be measured without perturbing Bear, and
-  rerun the release-config memory envelope on the final candidate. Use a fresh
-  disposable note for exact overlay evidence; an accumulated-note viewport may
-  legitimately expose only the on-screen subset of correction windows.
-  The app's main editor scene now has a stable `main` restoration identity and
-  presented launch behavior so root-view changes cannot strand future installs
-  on stale synthesized SwiftUI restoration identifiers. An AppKit reopen
-  delegate now restores that exact scene when the already-running app has no
-  visible windows; the installed close/reactivate check passes.
-  A reported rainbow wait cursor while opening an early
-  squiggle exposed collection-scaled main-thread churn: every overlay fallback
-  refresh synchronously queried LaunchServices and reissued unchanged
-  WindowServer operations. Frontmost state is now event-cached and panel
-  presentation is idempotent. The full 248-test gate passes; the installed
-  multi-correction click check now passes against a fresh 20-overlay physical
-  run. See
-  [Bear overlay main-thread churn](../bugs/2026-07-31-bear-overlay-main-thread-churn.md).
-  The same installed pass exposed a separate empty-note ambiguity: repeated
-  middle anchors had no unique context while later words were appended. Every
-  verified automatic edit is now serialized through the overlay collection so
-  older corrections re-anchor from their exact transformed ranges. Queue
-  targets are snapshotted before the new annotation is added so a correction
-  cannot invalidate itself; unverified ambiguous edits still fail closed. See
-  [Empty-note repeated anchors](../bugs/2026-07-31-empty-note-repeated-anchor-ambiguity.md).
-  The first idle-first physical burst corrected 20/20 but exposed one remaining
-  settling race: all 20 squiggles appeared initially, then older overlays were
-  retired while Bear value notifications interleaved with sibling re-anchors.
-  Verified edits are now batched to settled text and self-induced invalidations
-  are deferred until the batch completes. Existing verified panels remain
-  visible while serialized re-anchoring is in flight. A 2026-08-01 installed
-  run corrected 20/20 physical words and recorded 20 exact visible overlay
-  ranges with zero lifecycle hides after settling. See
+- [ ] Qualify the final release candidate once with fresh Bear and Typover
+  processes, a fresh disposable note, the release-config memory-retirement
+  envelope, and the bounded second-machine soak. Capture per-character
+  USB-to-screen-paint timing only if it can be measured without perturbing
+  Bear. The fixed churn, anchor, and settling failures remain documented in
+  [Bear overlay main-thread churn](../bugs/2026-07-31-bear-overlay-main-thread-churn.md),
+  [Empty-note repeated anchors](../bugs/2026-07-31-empty-note-repeated-anchor-ambiguity.md),
+  and
   [Bear post-burst overlay retirement](../bugs/2026-07-31-bear-post-burst-overlay-retirement.md).
 - Keep automatic Bear correction off by default until the exit criteria pass.
 
@@ -494,24 +499,18 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-The physical 20-word Bear burst now passes correction, overlay retention, and
-all three independently credited interaction rows. One physical
-Control–Option–Command–M chord restored exactly the newest correction. A direct
-Accessibility action on correction five changed only that word and retained
-the other 19 overlays. A real pointer click on a later sibling opened its
-native correction menu while Bear remained frontmost and its text stayed
-unchanged.
+1. Record correction-to-visible-squiggle and menu-to-verified-change latency
+   with a short physical Bear row. Add direct keyboard-to-Bear arrival timing
+   only if it can be measured without perturbing the result.
+2. Complete spoken VoiceOver navigation and diagnose the Typover Settings
+   accessibility-tree transport failure before crediting the remaining visual
+   and AX acceptance row.
+3. Build the signed and notarized beta candidate and run the clean-machine
+   install and permission checklist.
+4. On that final candidate, run one fresh-process qualification: fresh Bear,
+   fresh Typover, release-config memory retirement, and the bounded
+   second-machine soak.
 
-The installed post-write-inconclusive circuit-breaker row now passes: one
-physical faulted write changed the word without creating a squiggle, the same
-process refused the next correction, and a normal relaunch restored a 1/1
-correction with its overlay. The full multi-stage IME marked-text row also now
-passes: active Japanese Kana composition remained untouched, committed without
-an overlay, and a newline-separated U.S. physical control resumed at 1/1 with
-its overlay retained. Next, record correction-to-visible-squiggle and menu
-latency. Complete spoken VoiceOver navigation. Diagnose the Settings
-accessibility-tree transport failure before
-crediting a visual settings pass. Add direct keyboard-to-Bear arrival timing
-rather than inferring it from the ESP32 schedule, repeat the controlled load
-matrix after fresh app launches, and extend the three-cycle release soak to a
-clean second-machine beta session.
+Do not routinely repeat the full 20-word, severe-load, circuit-breaker, or IME
+rows. They are release regression coverage and should be rerun only when the
+testing strategy above calls for them.
