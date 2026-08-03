@@ -1,5 +1,11 @@
 import Foundation
 
+public enum BearHIDOverlayRetentionClassification: String, Codable, Sendable {
+  case retained
+  case mismatch
+  case unavailable
+}
+
 public struct BearHIDOverlayRetentionEvidence: Codable, Equatable, Sendable {
   public let baselineVisibleCorrections: Int?
   public let finalVisibleCorrections: Int?
@@ -31,5 +37,24 @@ public struct BearHIDOverlayRetentionEvidence: Codable, Equatable, Sendable {
     }
     return finalVisibleCorrections
       == expectedVisibleCorrectionsFromEmptyBaseline
+  }
+
+  public var classification: BearHIDOverlayRetentionClassification {
+    switch fullyRetainedFromEmptyBaseline {
+    case true: .retained
+    case false: .mismatch
+    case nil: .unavailable
+    }
+  }
+
+  public var conciseDescription: String {
+    switch classification {
+    case .retained:
+      "overlays retained \(finalVisibleCorrections ?? 0)/\(expectedVisibleCorrectionsFromEmptyBaseline)"
+    case .mismatch:
+      "overlay sample \(finalVisibleCorrections ?? 0)/\(expectedVisibleCorrectionsFromEmptyBaseline)"
+    case .unavailable:
+      "overlay evidence unavailable"
+    }
   }
 }

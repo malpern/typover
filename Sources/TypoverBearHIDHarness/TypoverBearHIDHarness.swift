@@ -1135,7 +1135,7 @@ private enum TypoverBearHIDHarness {
         )
       )
       print(
-        "\(testCase.intervalMilliseconds) ms: \(artifact.analysis.correctedWords)/\(testCase.words) corrected (\(artifact.evidenceClassification))"
+        "\(testCase.intervalMilliseconds) ms: \(artifact.analysis.correctedWords)/\(testCase.words) corrected (\(artifact.evidenceClassification); \(artifact.overlayRetention.conciseDescription))"
       )
       guard artifact.focusRemainedValid,
         artifact.evidenceClassification != "unexpected-text",
@@ -1431,7 +1431,7 @@ private enum TypoverBearHIDHarness {
     let monitorMessage: String =
       switch evidenceClassification {
       case "passed":
-        "All \(analysis.correctedWords) corrections matched Typover log evidence."
+        "All \(analysis.correctedWords) corrections matched Typover log evidence · \(overlayRetention.conciseDescription)."
       case "safe-misses-observed":
         "\(analysis.correctedWords) corrected · \(analysis.missedWords) preserved safe misses."
       default:

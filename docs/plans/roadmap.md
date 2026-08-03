@@ -215,18 +215,25 @@ Back action, and alternatives.
   Schema 4 also fixes explicit-note targeting, PID-based power sampling, bounded
   convergence observation, and locale-stable latency evidence. Rejected earlier
   artifacts remain diagnostic-only.
-- [ ] Extend severe-load evidence with repeat runs after fresh app/Bear launches,
-  direct keyboard-to-Bear arrival timing, overlay-retention checks during the
-  load, and a documented steady-state memory budget. The current ESP32 trace
-  proves scheduled reports and final Bear text. Schema 5 now also records the
-  host-observable interval from Typover's physical completion-boundary callback
-  to Bear's first paired `AXValueChanged` callback, and separately counts the
-  reverse callback ordering that cannot produce a valid sample. A fresh
-  installed quiet/load run still needs to populate those fields. Schema 5 also
-  records before/after visible correction-window counts while the chosen load
-  remains active and marks exact retention only when Typover began with no old
-  correction windows. Fresh one-case runs must populate that evidence.
-  Per-character USB-to-screen-paint timing remains a separate deeper metric.
+- [x] Populate schema-5 arrival and overlay-retention evidence under controlled
+  combined load. Three consecutive fresh-Typover rows pass 60/60 physical
+  corrections at 160 milliseconds per key. A separate fresh-note row passes
+  20/20 with 20/20 visible correction windows, all 162 fixture reports, zero
+  late reports, 21.4% minimum host CPU idle, 40.7% peak Typover CPU, and
+  165,264 KiB peak Typover RSS. Completion-boundary-to-AX-value samples span
+  1.19-12.58 milliseconds with no reverse callback ordering. A fourth
+  fresh-process row also passes 20/20 exact text but is not credited for
+  overlays because only four current-line windows remained on screen after
+  Bear scrolled the accumulated note. One preceding first-token `eth` artifact
+  remains invalid and unexplained; it did not recur in the next 100 physical
+  tokens. See
+  [Combined-load first token transposition](../bugs/2026-08-03-combined-load-first-token-transposition.md).
+- [ ] Complete the remaining severe-load qualification: repeat after a fresh
+  Bear process as well as a fresh Typover process, capture per-character
+  USB-to-screen-paint timing if it can be measured without perturbing Bear, and
+  rerun the release-config memory envelope on the final candidate. Use a fresh
+  disposable note for exact overlay evidence; an accumulated-note viewport may
+  legitimately expose only the on-screen subset of correction windows.
   The app's main editor scene now has a stable `main` restoration identity and
   presented launch behavior so root-view changes cannot strand future installs
   on stale synthesized SwiftUI restoration identifiers. An AppKit reopen

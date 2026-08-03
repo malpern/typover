@@ -1,7 +1,7 @@
 # Bear Phase 8 automatic-correction matrix
 
-- Status: Bear 2.9.1 rapid correction, release-config soak, lifecycle control, and repeated-correction interaction passed
-- Updated: 2026-08-01
+- Status: Bear 2.9.1 rapid correction, schema-5 combined-load repetition, release-config soak, lifecycle control, and repeated-correction interaction passed
+- Updated: 2026-08-03
 - Default: Off
 - Engine: Apple Spelling, on device
 
@@ -69,6 +69,40 @@ also passes in Bear.
 | Post-write verification is inconclusive | Passed for anchor recovery and unreconciled-write circuit breaking | Pending | Recover an exact reversible anchor or pause all further automatic mutation; never claim that nothing changed |
 | Close and reopen Typover's main window | Passed with an AppKit reopen delegate targeting the stable `main` scene | Passed 2026-08-01 while the existing process remained alive | Reactivating Typover restores its main window without creating a duplicate process |
 | Sentence correction | Not yet implemented | Pending | Run selected local model asynchronously after a verified terminator |
+
+## Schema-5 fresh-process combined-load repetition: 2026-08-03
+
+The installed app passed four consecutive one-case combined-load text runs
+after a fresh Typover launch for each run. All 80 physical `teh` tokens became
+`the`, Bear remained frontmost, every run received all 162 fixture reports with
+zero late reports, and the maximum observed HID lateness was 89 microseconds.
+The local artifacts end in `19-01-02Z`, `19-04-26Z`, `19-05-19Z`, and
+`19-06-11Z`.
+
+Schema 5 populated the host-observable completion-boundary-to-AX-value metric.
+The first diagnostic pass recorded 21 paired samples between 1.19 and 12.58
+milliseconds, no reverse callback ordering, 20 Typover application events, and
+20 distinct bounded `teh` to `the` deferred writes. Controlled contention
+reduced machine CPU idle to 26.75% while all 20 visible correction windows
+remained present.
+
+A canonical fresh-note control then passed another 20/20 corrections with
+20/20 visible correction windows, valid focus, complete load evidence, all 162
+fixture reports, zero late reports, and 43 microseconds maximum lateness. Host
+CPU idle reached 21.4%, Typover peaked at 40.7% CPU and 165,264 KiB resident
+memory, and the local artifact ends in `19-08-14Z`.
+
+An earlier same-load artifact ending `18-58-31Z` is intentionally classified
+invalid: its first final token was `eth` even though the fixture trace contains
+the ordered `t`, `e`, `h`, Space reports. The next 100 physical tokens did not
+reproduce it. See
+[Combined-load first token transposition](../bugs/2026-08-03-combined-load-first-token-transposition.md).
+
+An accumulated-note control ending `19-06-11Z` corrected 20/20 text tokens but
+sampled only the four overlay windows still visible after Bear scrolled the
+wrapped appended line. It is useful viewport-culling evidence, not a failed
+annotation-retention row. Exact overlay retention is credited only to the
+fresh-note control.
 
 ## Installed refusal and lifecycle controls: 2026-08-01
 

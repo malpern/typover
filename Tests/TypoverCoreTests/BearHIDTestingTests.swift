@@ -73,6 +73,8 @@ struct BearHIDTestingTests {
     )
     #expect(exact.expectedVisibleCorrectionsFromEmptyBaseline == 20)
     #expect(exact.fullyRetainedFromEmptyBaseline == true)
+    #expect(exact.classification == .retained)
+    #expect(exact.conciseDescription == "overlays retained 20/20")
 
     let capped = BearHIDOverlayRetentionEvidence(
       baselineVisibleCorrections: 0,
@@ -89,6 +91,8 @@ struct BearHIDTestingTests {
       maximumTrackedCorrections: 24
     )
     #expect(priorCorrections.fullyRetainedFromEmptyBaseline == nil)
+    #expect(priorCorrections.classification == .unavailable)
+    #expect(priorCorrections.conciseDescription == "overlay evidence unavailable")
 
     let missing = BearHIDOverlayRetentionEvidence(
       baselineVisibleCorrections: 0,
@@ -97,6 +101,8 @@ struct BearHIDTestingTests {
       maximumTrackedCorrections: 24
     )
     #expect(missing.fullyRetainedFromEmptyBaseline == false)
+    #expect(missing.classification == .mismatch)
+    #expect(missing.conciseDescription == "overlay sample 19/20")
   }
 
   @Test("Correction latency accepts historical grouped and stable numeric logs")

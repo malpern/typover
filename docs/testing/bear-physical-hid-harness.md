@@ -237,6 +237,35 @@ The evidence is local in the runs ending `01-39-14Z`, `01-40-39Z`,
 a tested recovery envelope, not a universal guarantee for arbitrary system
 load or future Bear versions.
 
+## Schema-5 repeat and overlay result: 2026-08-03
+
+Four consecutive fresh-Typover combined-load rows passed 80/80 physical text
+corrections at 160 milliseconds per character. All runs retained valid Bear
+focus, complete load evidence, all 162 fixture reports, and zero late reports.
+The local artifacts end in `19-01-02Z`, `19-04-26Z`, `19-05-19Z`, and
+`19-06-11Z`.
+
+The first row populated 21 completion-boundary-to-AX-value samples between
+1.19 and 12.58 milliseconds and recorded no reverse callback ordering. Its
+bounded-writing trace contains 20 distinct exact deferred applications, and
+its overlay sample remained 20/20 while combined contention was active.
+
+A newly created disposable-note control ending `19-08-14Z` also passed 20/20
+with 20/20 visible correction windows. It is the canonical exact-retention
+artifact because the installed app began with no old correction windows and
+all newly corrected text remained in the visible Bear viewport.
+
+Do not infer lost annotations from a lower visible-window count after a long
+disposable note scrolls. The accumulated-note row ending `19-06-11Z` corrected
+20/20 but sampled only four on-screen overlays; it is recorded as viewport
+evidence rather than the retention control. Use a fresh disposable note for an
+exact overlay row.
+
+One preceding combined-load artifact ending `18-58-31Z` produced a first token
+of `eth` despite ordered fixture input and is retained as invalid evidence. It
+did not recur in the next 100 physical tokens. See
+[Combined-load first token transposition](../bugs/2026-08-03-combined-load-first-token-transposition.md).
+
 ## Punctuation result: 2026-08-01
 
 The schema-4 run ending `01-48-30Z` corrected all five physical segments to
