@@ -114,6 +114,7 @@ public final class BearAnnotationOverlayCollectionController {
     _ application: BearCorrectionApplication,
     alternatives: [String] = [],
     userRecency: Date? = nil,
+    onFirstVisible: (@MainActor @Sendable () -> Void)? = nil,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )? = nil,
@@ -141,6 +142,7 @@ public final class BearAnnotationOverlayCollectionController {
     controller.trackWithResolutionCoordinatingEdits(
       application,
       alternatives: alternatives,
+      onFirstVisible: onFirstVisible,
       onInteractionLatency: onInteractionLatency,
       onResolution: onResolution,
       onVerifiedEdit: { [weak self, weak controller] edit in

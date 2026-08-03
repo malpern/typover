@@ -451,6 +451,39 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Visibility timing reports only the first presented squiggle")
+  func firstVisibleReportsOnce() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let monitor = StubBearInvalidationMonitor()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      invalidationMonitor: monitor
+    )
+    var visibleCount = 0
+
+    controller.trackWithResolution(
+      overlayApplication(),
+      onFirstVisible: {
+        visibleCount += 1
+      }
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenter.showCount == 1
+      }
+    )
+
+    monitor.send(.selectionChanged)
+    #expect(
+      await waitForBearOverlay {
+        presenter.showCount >= 2
+      }
+    )
+    #expect(visibleCount == 1)
+  }
+
+  @MainActor
   @Test("Multiple corrections keep independent overlays and actions")
   func multipleCorrectionsRemainIndependent() async {
     let service = StubBearCorrectionService()

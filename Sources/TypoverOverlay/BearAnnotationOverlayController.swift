@@ -70,6 +70,7 @@ public final class BearAnnotationOverlayController {
   private var workspaceObservers: [NSObjectProtocol] = []
   private var shortcutToken: UUID?
   private var alternatives: [String] = []
+  private var onFirstVisible: (@MainActor @Sendable () -> Void)?
   private var onInteractionLatency: (@MainActor @Sendable (Duration) -> Void)?
   private var onFinished: (@MainActor @Sendable () -> Void)?
   private var onResolution: (@MainActor @Sendable (BearAnnotationResolution) -> Void)?
@@ -150,6 +151,7 @@ public final class BearAnnotationOverlayController {
     trackWithResolution(
       application,
       alternatives: alternatives,
+      onFirstVisible: nil,
       onInteractionLatency: nil,
       onResolution: nil,
       onFinished: onFinished
@@ -159,6 +161,7 @@ public final class BearAnnotationOverlayController {
   public func trackWithResolution(
     _ application: BearCorrectionApplication,
     alternatives: [String] = [],
+    onFirstVisible: (@MainActor @Sendable () -> Void)? = nil,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )? = nil,
@@ -170,6 +173,7 @@ public final class BearAnnotationOverlayController {
     trackWithResolutionCoordinatingEdits(
       application,
       alternatives: alternatives,
+      onFirstVisible: onFirstVisible,
       onInteractionLatency: onInteractionLatency,
       onResolution: onResolution,
       onVerifiedEdit: nil,
@@ -180,6 +184,7 @@ public final class BearAnnotationOverlayController {
   func trackWithResolutionCoordinatingEdits(
     _ application: BearCorrectionApplication,
     alternatives: [String] = [],
+    onFirstVisible: (@MainActor @Sendable () -> Void)? = nil,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )? = nil,
@@ -194,6 +199,7 @@ public final class BearAnnotationOverlayController {
     stop()
     self.application = application
     self.alternatives = alternatives
+    self.onFirstVisible = onFirstVisible
     self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
     self.onVerifiedEdit = onVerifiedEdit
@@ -234,6 +240,7 @@ public final class BearAnnotationOverlayController {
     removeWorkspaceObservers()
     unregisterKeyboardShortcut()
     alternatives = []
+    onFirstVisible = nil
     onInteractionLatency = nil
     onResolution = nil
     onVerifiedEdit = nil
@@ -795,6 +802,9 @@ public final class BearAnnotationOverlayController {
       return
     }
     reportedVisible = true
+    let onFirstVisible = onFirstVisible
+    self.onFirstVisible = nil
+    onFirstVisible?()
     logger.notice(
       "Overlay visible id=\(correctionID, privacy: .public) range=\(range?.location ?? -1, privacy: .public):\(range?.length ?? 0, privacy: .public)"
     )

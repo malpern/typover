@@ -109,12 +109,12 @@ final class BearAutomaticCorrectionDiagnostics {
     lastOutcome = outcome
   }
 
-  func recordApplied(elapsed: Duration?) {
+  func recordApplied() {
     correctionsApplied += 1
     lastOutcome = .applied
-    guard let elapsed else {
-      return
-    }
+  }
+
+  func recordVisible(elapsed: Duration) {
     correctionToAnnotationMilliseconds.append(Self.milliseconds(elapsed))
     if correctionToAnnotationMilliseconds.count > maximumLatencySamples {
       correctionToAnnotationMilliseconds.removeFirst(

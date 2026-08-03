@@ -1386,6 +1386,7 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
     _ application: BearCorrectionApplication,
     alternatives _: [String],
     userRecency: Date?,
+    onFirstVisible: (@MainActor @Sendable () -> Void)?,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )?,
@@ -1396,6 +1397,7 @@ private final class TestAnnotationTracker: BearAnnotationTracking {
   ) {
     applications.append(application)
     userRecencies.append(userRecency)
+    onFirstVisible?()
     self.onInteractionLatency = onInteractionLatency
     self.onResolution = onResolution
   }

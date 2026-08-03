@@ -113,6 +113,7 @@ protocol BearAnnotationTracking: AnyObject {
     _ application: BearCorrectionApplication,
     alternatives: [String],
     userRecency: Date?,
+    onFirstVisible: (@MainActor @Sendable () -> Void)?,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )?,
@@ -130,6 +131,7 @@ extension BearAnnotationOverlayController: BearAnnotationTracking {
     _ application: BearCorrectionApplication,
     alternatives: [String],
     userRecency _: Date?,
+    onFirstVisible: (@MainActor @Sendable () -> Void)?,
     onInteractionLatency: (
       @MainActor @Sendable (Duration) -> Void
     )?,
@@ -141,6 +143,7 @@ extension BearAnnotationOverlayController: BearAnnotationTracking {
     trackWithResolution(
       application,
       alternatives: alternatives,
+      onFirstVisible: onFirstVisible,
       onInteractionLatency: onInteractionLatency,
       onResolution: onResolution,
       onFinished: onFinished
@@ -1061,7 +1064,7 @@ final class BearAutomaticCorrectionCoordinator {
       recordVerifiedApplication(
         application,
         proposal: correction.proposal,
-        elapsed: correctionElapsed
+        boundaryObservedAt: correction.boundaryObservedAt
       )
       if !application.report.isVerifiedApplication {
         diagnostics.recordPostWriteReconciled()
@@ -1097,7 +1100,7 @@ final class BearAutomaticCorrectionCoordinator {
   private func recordVerifiedApplication(
     _ application: BearCorrectionApplication,
     proposal: CorrectionProposal,
-    elapsed: Duration?
+    boundaryObservedAt: ContinuousClock.Instant?
   ) {
     suppressesNextRedundantAutomaticValueChange = true
     learningStore.recordApplied(proposal)
@@ -1111,15 +1114,28 @@ final class BearAutomaticCorrectionCoordinator {
       application,
       alternatives: proposal.alternatives,
       userRecency: proposal.correction.createdAt,
+      onFirstVisible: { [weak self] in
+        guard let self, let boundaryObservedAt else {
+          return
+        }
+        let elapsed = boundaryObservedAt.duration(to: self.clock.now)
+        self.diagnostics.recordVisible(elapsed: elapsed)
+        self.logger.notice(
+          "Automatic correction visible latencyMs=\(Optional(elapsed).traceMilliseconds, privacy: .public)"
+        )
+      },
       onInteractionLatency: { [weak self] elapsed in
         self?.diagnostics.recordInteractionLatency(elapsed)
+        self?.logger.notice(
+          "Overlay interaction verified latencyMs=\(Optional(elapsed).traceMilliseconds, privacy: .public)"
+        )
       },
       onResolution: { [weak self] resolution in
         self?.record(resolution, for: proposal)
       },
       onFinished: nil
     )
-    diagnostics.recordApplied(elapsed: elapsed)
+    diagnostics.recordApplied()
   }
 
   private func openMutationCircuit(
