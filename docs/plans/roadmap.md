@@ -42,7 +42,7 @@ Status meanings:
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **In progress — user-presence gate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, and post-pause product decision | Grant final-candidate Input Monitoring, then run fresh physical Bear qualification and soak |
 | Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
-| Public-beta operations | **In progress — lifecycle closed** | MIT license, GitHub Issues decision, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification and public repository visibility |
+| Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |
 | Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
@@ -392,8 +392,9 @@ ordered by what blocks a trustworthy beta:
 3. Qualify that final candidate—not every development build—with fresh Bear
    and Typover processes, the release-config memory envelope, and a bounded
    second-machine soak.
-4. Resolve public-beta operations: license, support channel, release notes,
-   rollback, and public privacy and compatibility claims.
+4. Finish public-beta operations: the MIT-licensed source, roadmap, waitlist,
+   support channel, release notes, and rollback guidance are public; the
+   artifact-to-claim audit remains before publishing the beta binary.
 5. After the word-level beta is trustworthy, begin the deferred milestones:
    bounded local contextual correction, then a TextEdit adapter, and finally
    broader model benchmarking.
@@ -633,8 +634,9 @@ ordinary app or Accessibility lifecycle changes.
 
 ## Parallel track: Release operations
 
-**Status: In progress — the full signed lifecycle matrix passes; permissioned
-claim audit and repository visibility remain.**
+**Status: In progress — the full signed lifecycle matrix passes and the source
+repository, roadmap, waitlist, and support channel are public; the permissioned
+artifact-to-claim audit remains.**
 
 This track may proceed after the minimum beta shell is stable. It does not
 block local contextual-correction development, but it must pass before Typover
@@ -650,8 +652,8 @@ is offered as a public beta.
   recoverable app-only removal preserved state, and explicit full-data removal
   cleared the app, process, preferences, Application Support, and launch-item
   footprint without touching macOS-owned TCC records.
-- [x] Select GitHub Issues as the beta support channel; make the repository
-  public before inviting ordinary testers.
+- [x] Publish the MIT-licensed repository, visual roadmap, privacy-conscious
+  waitlist issue form, and GitHub Issues support channel.
 - [x] Select and document the MIT license.
 - [ ] Accept the intended public distribution artifact. Candidate 0.1.0 passes
   signing, notarization, receipt, installation, update, rollback, soak, and
