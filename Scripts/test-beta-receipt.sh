@@ -82,9 +82,37 @@ fi
 
 notarization_receipt="$temporary_directory/notarization.json"
 /bin/cp "$receipt_path" "$notarization_receipt"
-/usr/bin/plutil -replace notarized -bool true "$notarization_receipt"
+notarization_app="$app_path"
+notarization_archive="$archive_path"
+receipt_notarized="$(
+  /usr/bin/plutil -extract notarized raw -expect bool "$receipt_path"
+)"
+if [[ "$receipt_notarized" == "true" ]]; then
+  # A notarized input cannot become a false notarization claim by setting the
+  # same receipt field to true. Build an otherwise identical copy without its
+  # stapled ticket, then make the temporary receipt match only that archive.
+  # Code signing remains valid; the receipt must still fail the explicit
+  # Gatekeeper/stapler gate.
+  notarization_app="$temporary_directory/Typover.app"
+  notarization_archive="$temporary_directory/Typover-unstapled.zip"
+  /usr/bin/ditto "$app_path" "$notarization_app"
+  /bin/rm -f "$notarization_app/Contents/CodeResources"
+  /usr/bin/codesign --verify --deep --strict "$notarization_app"
+  /usr/bin/ditto -c -k --keepParent --norsrc --noextattr \
+    "$notarization_app" "$notarization_archive"
+  /usr/bin/plutil -replace archive -string \
+    "$(basename "$notarization_archive")" "$notarization_receipt"
+  notarization_sha256="$(
+    /usr/bin/shasum -a 256 "$notarization_archive" \
+      | /usr/bin/awk '{ print $1 }'
+  )"
+  /usr/bin/plutil -replace archiveSHA256 -string \
+    "$notarization_sha256" "$notarization_receipt"
+else
+  /usr/bin/plutil -replace notarized -bool true "$notarization_receipt"
+fi
 if "$script_directory/verify-beta-receipt.sh" \
-  "$app_path" "$archive_path" "$notarization_receipt" \
+  "$notarization_app" "$notarization_archive" "$notarization_receipt" \
     >"$temporary_directory/notarization.out" 2>&1
 then
   echo "Receipt verifier incorrectly accepted a false notarization claim." >&2
