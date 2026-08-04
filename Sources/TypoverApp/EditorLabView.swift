@@ -401,16 +401,39 @@ final class TypoverTextView: NSTextView {
   private func scheduleContextualCorrection(
     after userEdit: PendingUserEdit
   ) {
+    guard CompletedSentenceDetector.isSentenceTerminator(userEdit.replacement)
+    else {
+      return
+    }
+
+    let selection = selectedRange()
+    guard selection.length == 0 else {
+      Self.contextualLogger.debug(
+        "Skipped contextual request because selection length was nonzero"
+      )
+      return
+    }
+    guard !hasMarkedText() else {
+      Self.contextualLogger.debug(
+        "Skipped contextual request because marked text was active"
+      )
+      return
+    }
+    guard let textStorage else {
+      Self.contextualLogger.debug(
+        "Skipped contextual request because text storage was unavailable"
+      )
+      return
+    }
     guard
-      CompletedSentenceDetector.isSentenceTerminator(userEdit.replacement),
-      selectedRange().length == 0,
-      !hasMarkedText(),
-      let textStorage,
       let sentence = CompletedSentenceDetector.immediatelyBeforeCaret(
         in: textStorage.string,
-        caretUTF16Offset: selectedRange().location
+        caretUTF16Offset: selection.location
       )
     else {
+      Self.contextualLogger.debug(
+        "Skipped contextual request because no completed sentence was found; caret=\(selection.location, privacy: .public); textLength=\(textStorage.length, privacy: .public)"
+      )
       return
     }
 

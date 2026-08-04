@@ -1258,36 +1258,38 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.tracker.applications.isEmpty)
   }
 
-  @Test("Debug post-write fault injection alters only one successful write")
-  func debugPostWriteFaultIsOneShot() {
-    let base = TestCorrectionApplicator()
-    let applicator = BearAutomaticCorrectionDebugFaults.correctionApplicator(
-      base: base,
-      environment: [
-        BearAutomaticCorrectionDebugFaults.environmentKey:
-          BearAutomaticCorrectionDebugFaults.unreconciledPostWriteValue
-      ]
-    )
+  #if DEBUG
+    @Test("Debug post-write fault injection alters only one successful write")
+    func debugPostWriteFaultIsOneShot() {
+      let base = TestCorrectionApplicator()
+      let applicator = BearAutomaticCorrectionDebugFaults.correctionApplicator(
+        base: base,
+        environment: [
+          BearAutomaticCorrectionDebugFaults.environmentKey:
+            BearAutomaticCorrectionDebugFaults.unreconciledPostWriteValue
+        ]
+      )
 
-    let first = applicator.apply(
-      original: "teh",
-      replacement: "the",
-      at: AccessibilityTextRange(location: 0, length: 3)
-    )
-    let second = applicator.apply(
-      original: "teh",
-      replacement: "the",
-      at: AccessibilityTextRange(location: 4, length: 3)
-    )
+      let first = applicator.apply(
+        original: "teh",
+        replacement: "the",
+        at: AccessibilityTextRange(location: 0, length: 3)
+      )
+      let second = applicator.apply(
+        original: "teh",
+        replacement: "the",
+        at: AccessibilityTextRange(location: 4, length: 3)
+      )
 
-    #expect(first.report.status == .verificationFailed)
-    #expect(first.report.writeOccurred)
-    #expect(first.correctionRecord == nil)
-    #expect(first.correctionAnchor == nil)
-    #expect(second.report.isVerifiedApplication)
-    #expect(second.isReversibleApplication)
-    #expect(base.requests.count == 2)
-  }
+      #expect(first.report.status == .verificationFailed)
+      #expect(first.report.writeOccurred)
+      #expect(first.correctionRecord == nil)
+      #expect(first.correctionAnchor == nil)
+      #expect(second.report.isVerifiedApplication)
+      #expect(second.isReversibleApplication)
+      #expect(base.requests.count == 2)
+    }
+  #endif
 
   @Test("Typing transition requires unchanged bounded context")
   func rejectsChangedContext() {
