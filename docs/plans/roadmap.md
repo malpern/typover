@@ -44,7 +44,7 @@ Status meanings:
 | Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
 | Public-beta operations | **In progress — lifecycle closed** | MIT license, GitHub Issues decision, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification and public repository visibility |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
-| Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, and build a compatibility probe |
+| Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |
 | Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
 
 ## Completed foundations
@@ -721,6 +721,19 @@ than the architecture itself.
 - [ ] Implement TextEdit as the second adapter and genericity proof.
 - [ ] Build a content-free compatibility probe that classifies an editor as
   full, correction-only, cooperative-integration-required, or unsupported.
+- [ ] Run that probe against the macOS ChatGPT and Claude message composers.
+  Treat them as separate targets even if they share an implementation
+  technology or expose similar Accessibility trees.
+- [ ] For each chat app, document focused-composer discovery, bounded text and
+  selection reads, value/selection notifications, exact-range replacement,
+  caret behavior, geometry, rich-text or attachment behavior, IME behavior,
+  and changes across supported app versions.
+- [ ] Restrict inspection to bounded text in the active composer. Do not read
+  conversation history, sidebars, past messages, or application databases.
+- [ ] Prove that correction handling cannot activate Send, submit on Return,
+  change the selected conversation, disturb an attachment, or move focus out
+  of the composer. If the app cannot expose a safe transaction boundary,
+  classify it as cooperative-integration-required or unsupported.
 - [ ] Exclude secure text fields, password editors, and any target whose text or
   selection contract cannot be inspected safely.
 - [ ] Add applications only after their own permissioned matrix passes. Native
@@ -730,6 +743,9 @@ than the architecture itself.
 
 - Bear and TextEdit use the same generic correction pipeline with only target
   profiles and documented quirks differing.
+- Any supported ChatGPT or Claude adapter changes only the verified active
+  composer range and never submits a message. Support is app- and
+  version-specific; passing one chat app does not qualify the other.
 - An unsupported editor fails closed without showing a misplaced annotation or
   changing text.
 - Product language names supported applications instead of claiming universal

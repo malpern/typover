@@ -1,0 +1,51 @@
+name: Join the Typover waitlist
+description: Ask to be invited when the macOS beta opens
+title: "[Waitlist] "
+labels:
+  - waitlist
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in Typover. This signup is a **public GitHub issue** so you never need to publish an email address. Do not include private writing, credentials, or diagnostic data.
+  - type: dropdown
+    id: writing-surface
+    attributes:
+      label: Where do you do most of your writing on a Mac?
+      options:
+        - Bear
+        - ChatGPT or Claude
+        - TextEdit, Notes, or another native editor
+        - Email or messaging apps
+        - A mix of apps
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: beta-interest
+    attributes:
+      label: What would you most like to test?
+      options:
+        - Fast spelling correction that stays reversible
+        - Punctuation and grammar correction
+        - Local-first writing intelligence
+        - Compatibility with the apps I already use
+        - Accessibility and keyboard workflows
+        - General early access
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else you want Typover to understand?
+      description: Optional. Please describe the workflow, not the private text you write.
+      placeholder: I write long notes in Bear and want corrections that do not interrupt typing.
+  - type: checkboxes
+    id: expectations
+    attributes:
+      label: Early-access expectations
+      options:
+        - label: I understand Typover is in development and the first beta is focused on supported versions of Bear for macOS.
+          required: true
+        - label: I did not include private writing or sensitive information in this public issue.
+          required: true
