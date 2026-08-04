@@ -156,6 +156,14 @@ window. Removing one choice affects the shared editor immediately. The writer
 can reset statistics independently or clear all local learning after a
 confirmation.
 
+User-selectable behavior settings—including correction scope, sentence rewrite
+permission, model choice, Bear automatic correction, and diagnostic toggles—are
+stored in Typover’s standard macOS application-preferences domain
+(`com.malpern.typover`). They survive relaunch and remain local to this Mac.
+Structured correction preferences and statistics stay in Typover’s Application
+Support data file, and provider API keys remain encrypted in Add Secret; neither
+belongs in the preferences plist.
+
 Settings identifies whether a remembered rule came from a chosen correction, a
 local edit, Change Back, or an earlier Typover version. Accents, apostrophes,
 capitalization, and punctuation can remain part of an implicit local edit.

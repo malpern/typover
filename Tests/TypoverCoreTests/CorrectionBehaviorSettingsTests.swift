@@ -20,7 +20,7 @@ struct CorrectionBehaviorSettingsTests {
     #expect(!settings.bearAutomaticCorrectionEnabled)
   }
 
-  @Test("Correction scope and sentence rewrite permission persist")
+  @Test("All user-selectable correction settings persist in app preferences")
   func persistsBehavior() throws {
     let fixture = try DefaultsFixture()
     defer { fixture.remove() }
