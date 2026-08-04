@@ -128,6 +128,99 @@ struct CorrectionLearningStoreTests {
     #expect(store.rememberedRules.first?.origin == .explicitChoice)
   }
 
+  @Test("A manual mapping produces a correction without an engine proposal")
+  func appliesManualMappingDirectly() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let mapping = try ManualCorrectionMapping(
+      original: " brb ",
+      replacement: " be right back ",
+      language: nil
+    )
+
+    store.addManualMapping(mapping)
+
+    let proposal = try #require(
+      store.manualProposal(for: "brb", language: "en_US")
+    )
+    #expect(proposal.correction.replacement == "be right back")
+    #expect(proposal.source == .rememberedPreference)
+    #expect(proposal.language == "en_US")
+    #expect(store.rememberedRules.first?.origin == .manualEntry)
+
+    let relaunched = CorrectionLearningStore(fileURL: fixture.fileURL)
+    #expect(
+      relaunched.manualProposal(for: "brb", language: "fr")?
+        .correction.replacement == "be right back"
+    )
+  }
+
+  @Test("Manual mapping validation rejects ambiguous empty and multiline input")
+  func validatesManualMappings() throws {
+    #expect(throws: ManualCorrectionMapping.ValidationError.emptyOriginal) {
+      try ManualCorrectionMapping(original: "  ", replacement: "text")
+    }
+    #expect(throws: ManualCorrectionMapping.ValidationError.emptyReplacement) {
+      try ManualCorrectionMapping(original: "text", replacement: "  ")
+    }
+    #expect(throws: ManualCorrectionMapping.ValidationError.unchanged) {
+      try ManualCorrectionMapping(original: "text", replacement: "text")
+    }
+    #expect(
+      throws: ManualCorrectionMapping.ValidationError.unsupportedLineBreak
+    ) {
+      try ManualCorrectionMapping(
+        original: "one\ntwo",
+        replacement: "three"
+      )
+    }
+    #expect(throws: ManualCorrectionMapping.ValidationError.originalTooLong) {
+      try ManualCorrectionMapping(
+        original: String(repeating: "a", count: 257),
+        replacement: "text"
+      )
+    }
+    #expect(
+      throws: ManualCorrectionMapping.ValidationError.replacementTooLong
+    ) {
+      try ManualCorrectionMapping(
+        original: "text",
+        replacement: String(repeating: "a", count: 1_025)
+      )
+    }
+  }
+
+  @Test("A language-specific manual mapping overrides an all-language mapping")
+  func resolvesManualMappingLanguageScope() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    store.addManualMapping(
+      try ManualCorrectionMapping(
+        original: "colour",
+        replacement: "color"
+      )
+    )
+    store.addManualMapping(
+      try ManualCorrectionMapping(
+        original: "colour",
+        replacement: "couleur",
+        language: "fr"
+      )
+    )
+
+    #expect(
+      store.manualProposal(for: "colour", language: "en_US")?
+        .correction.replacement == "color"
+    )
+    #expect(
+      store.manualProposal(for: "colour", language: "fr")?
+        .correction.replacement == "couleur"
+    )
+    #expect(store.rememberedRules.count == 2)
+  }
+
   @Test("Statistics count unique corrected words and override outcomes")
   func calculatesStatistics() {
     let fixture = makeFixture()

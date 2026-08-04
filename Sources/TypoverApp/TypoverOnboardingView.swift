@@ -1,5 +1,5 @@
-import ApplicationServices
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import Observation
 import SwiftUI
@@ -101,7 +101,7 @@ private struct TypoverOnboardingHeader: View {
         "Typover corrects the smallest verified range, leaves a light-gray squiggle, and keeps every change reversible. To do that in Bear, macOS asks for two permissions.",
         bundle: #bundle,
         comment:
-          "Benefit-led introduction to Typover's first-run permission explanation."
+        "Benefit-led introduction to Typover's first-run permission explanation."
       )
       .font(.title3)
       .foregroundStyle(.secondary)
@@ -119,14 +119,14 @@ private struct TypoverPermissionBenefits: View {
       TypoverPermissionRow(
         title: "Accessibility",
         explanation:
-          "Lets Typover verify and replace only the intended Bear word, position its squiggle, and change the word back.",
+        "Lets Typover verify and replace only the intended Bear word, position its squiggle, and change the word back.",
         isAllowed: snapshot.accessibilityAllowed,
         systemImage: "accessibility"
       )
       TypoverPermissionRow(
         title: "Input Monitoring",
         explanation:
-          "Lets Typover distinguish a word you just completed from pasted or programmatic text. Typover does not record your keystrokes.",
+        "Lets Typover distinguish a word you just completed from pasted or programmatic text. Typover does not record your keystrokes.",
         isAllowed: snapshot.inputMonitoringAllowed,
         systemImage: "keyboard"
       )
@@ -137,7 +137,7 @@ private struct TypoverPermissionBenefits: View {
             "Open Privacy & Security…",
             bundle: #bundle,
             comment:
-              "Button that opens System Settings for Typover permission setup."
+            "Button that opens System Settings for Typover permission setup."
           )
         }
         .accessibilityIdentifier("typover.onboarding.open-system-settings")
@@ -149,7 +149,7 @@ private struct TypoverPermissionBenefits: View {
             "You stay in control",
             bundle: #bundle,
             comment:
-              "Reassurance beside Typover's first-run permission setup button."
+            "Reassurance beside Typover's first-run permission setup button."
           )
         } icon: {
           Image(systemName: "lock.shield")
@@ -166,19 +166,20 @@ private struct TypoverPermissionRow: View {
   let explanation: LocalizedStringResource
   let isAllowed: Bool
   let systemImage: String
+  var isCompact = false
 
   var body: some View {
     HStack(alignment: .top, spacing: 14) {
       Image(systemName: systemImage)
-        .font(.title2)
+        .font(isCompact ? .body : .title2)
         .foregroundStyle(.tint)
-        .frame(width: 30)
+        .frame(width: isCompact ? 22 : 30)
         .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 4) {
         HStack {
           Text(title)
-            .font(.headline)
+            .font(isCompact ? .body : .headline)
           Spacer()
           Label {
             Text(isAllowed ? "Allowed" : "Not yet allowed")
@@ -198,8 +199,13 @@ private struct TypoverPermissionRow: View {
           .foregroundStyle(.secondary)
       }
     }
-    .padding(14)
-    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+    .padding(isCompact ? 0 : 14)
+    .background {
+      if !isCompact {
+        RoundedRectangle(cornerRadius: 12)
+          .fill(.quaternary.opacity(0.5))
+      }
+    }
     .accessibilityElement(children: .combine)
   }
 }
@@ -213,7 +219,7 @@ private struct TypoverOnboardingActions: View {
         "You can finish permission setup later in Typover Settings.",
         bundle: #bundle,
         comment:
-          "Explanation that Typover's first-run permission setup can be deferred."
+        "Explanation that Typover's first-run permission setup can be deferred."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -225,7 +231,7 @@ private struct TypoverOnboardingActions: View {
           "Continue to Typover",
           bundle: #bundle,
           comment:
-            "Button that finishes Typover's first-run explanation and opens the editor."
+          "Button that finishes Typover's first-run explanation and opens the editor."
         )
       }
       .buttonStyle(.borderedProminent)
@@ -239,64 +245,56 @@ struct TypoverPermissionsSettingsSection: View {
   @State private var permissionModel = TypoverPermissionModel()
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 12) {
-        TypoverPermissionRow(
-          title: "Accessibility",
-          explanation:
-            "Required for exact Bear ranges, reversible changes, and squiggle geometry.",
-          isAllowed: permissionModel.snapshot.accessibilityAllowed,
-          systemImage: "accessibility"
-        )
-        TypoverPermissionRow(
-          title: "Input Monitoring",
-          explanation:
-            "Required to pair a real completion key with Bear's text change.",
-          isAllowed: permissionModel.snapshot.inputMonitoringAllowed,
-          systemImage: "keyboard"
-        )
-        HStack {
-          Button(action: permissionModel.openSystemSettings) {
-            Text(
-              "Open Privacy & Security…",
-              bundle: #bundle,
-              comment:
-                "Button in Typover Settings that opens macOS permission settings."
-            )
-          }
-          .accessibilityIdentifier("typover.settings.permissions.open")
-
-          Button(action: permissionModel.refresh) {
-            Text(
-              "Refresh",
-              bundle: #bundle,
-              comment:
-                "Button that refreshes Typover's macOS permission status."
-            )
-          }
-          .accessibilityIdentifier("typover.settings.permissions.refresh")
+    Section {
+      TypoverPermissionRow(
+        title: "Accessibility",
+        explanation:
+        "Required for exact Bear ranges, reversible changes, and squiggle geometry.",
+        isAllowed: permissionModel.snapshot.accessibilityAllowed,
+        systemImage: "accessibility",
+        isCompact: true
+      )
+      TypoverPermissionRow(
+        title: "Input Monitoring",
+        explanation:
+        "Required to pair a real completion key with Bear's text change.",
+        isAllowed: permissionModel.snapshot.inputMonitoringAllowed,
+        systemImage: "keyboard",
+        isCompact: true
+      )
+      HStack {
+        Button(action: permissionModel.openSystemSettings) {
+          Text(
+            "Open Privacy & Security…",
+            bundle: #bundle,
+            comment:
+            "Button in Typover Settings that opens macOS permission settings."
+          )
         }
+        .accessibilityIdentifier("typover.settings.permissions.open")
 
-        Text(
-          "Typover must remain open while you write in Bear. This beta does not add itself to Login Items.",
-          bundle: #bundle,
-          comment:
-            "Explanation of Typover's manual-launch behavior during the initial beta."
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        Button(action: permissionModel.refresh) {
+          Text(
+            "Refresh",
+            bundle: #bundle,
+            comment:
+            "Button that refreshes Typover's macOS permission status."
+          )
+        }
+        .accessibilityIdentifier("typover.settings.permissions.refresh")
       }
-      .padding(4)
-    } label: {
-      Label {
-        Text(
-          "Permissions",
-          bundle: #bundle,
-          comment: "Heading for Typover's macOS permission status."
-        )
-      } icon: {
-        Image(systemName: "checkmark.shield")
-      }
+    } header: {
+      Text(
+        "Permissions",
+        bundle: #bundle,
+        comment: "Heading for Typover's macOS permission status."
+      )
+    } footer: {
+      Text(
+        "Typover must remain open while you write in Bear.",
+        bundle: #bundle,
+        comment: "Explanation of Typover's manual-launch behavior."
+      )
     }
     .task { permissionModel.refresh() }
     .onReceive(

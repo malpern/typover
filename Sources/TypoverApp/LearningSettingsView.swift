@@ -7,6 +7,8 @@ import TypoverCore
 import TypoverRemoteIntelligence
 
 struct LearningSettingsView: View {
+  static let selectedPaneDefaultsKey = "settings-selected-pane"
+
   let behaviorSettings: CorrectionBehaviorSettings
   let learningStore: CorrectionLearningStore
   let credentialStore: SecretsAppCredentialStore
@@ -21,6 +23,9 @@ struct LearningSettingsView: View {
   @State private var bearEventReport: BearAccessibilityEventReport?
   @State private var isCheckingBear = false
   @State private var isObservingBear = false
+  @AppStorage(Self.selectedPaneDefaultsKey) private var selectedPane =
+    SettingsPane.general.rawValue
+
   init(
     behaviorSettings: CorrectionBehaviorSettings,
     learningStore: CorrectionLearningStore,
@@ -31,7 +36,7 @@ struct LearningSettingsView: View {
     bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter(),
     bearOverlayPreviewCoordinator: BearOverlayPreviewCoordinator? = nil,
     bearAutomaticCorrectionCoordinator:
-      BearAutomaticCorrectionCoordinator? = nil
+    BearAutomaticCorrectionCoordinator? = nil
   ) {
     self.behaviorSettings = behaviorSettings
     self.learningStore = learningStore
@@ -40,80 +45,63 @@ struct LearningSettingsView: View {
     self.bearEventMonitor = bearEventMonitor
     self.bearOverlayPreviewCoordinator =
       bearOverlayPreviewCoordinator
-      ?? BearOverlayPreviewCoordinator(
-        bearProbe: bearProbe,
-        bearCorrectionAdapter: bearCorrectionAdapter
-      )
+        ?? BearOverlayPreviewCoordinator(
+          bearProbe: bearProbe,
+          bearCorrectionAdapter: bearCorrectionAdapter
+        )
     self.bearAutomaticCorrectionCoordinator =
       bearAutomaticCorrectionCoordinator
-      ?? BearAutomaticCorrectionCoordinator(
-        learningStore: learningStore,
-        correctionAdapter: bearCorrectionAdapter
-      )
+        ?? BearAutomaticCorrectionCoordinator(
+          learningStore: learningStore,
+          correctionAdapter: bearCorrectionAdapter
+        )
   }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        LearningSettingsHeader()
-        TypoverPermissionsSettingsSection()
-        ContextualModelSection(
+    Group {
+      switch currentPane {
+      case .general:
+        GeneralSettingsPane(
           behaviorSettings: behaviorSettings,
           credentialStore: credentialStore
         )
-        CorrectionBehaviorSection(
-          behaviorSettings: behaviorSettings
-        )
-        BearCompatibilitySection(
-          report: bearAccessibilityReport,
+      case .bear:
+        BearSettingsPane(
+          behaviorSettings: behaviorSettings,
+          accessibilityReport: bearAccessibilityReport,
           eventReport: bearEventReport,
           isChecking: isCheckingBear,
           isObserving: isObservingBear,
-          automaticCorrectionEnabled:
-            behaviorSettings.bearAutomaticCorrectionEnabled,
-          automaticCorrectionStatus:
-            bearAutomaticCorrectionCoordinator.status,
-          automaticCorrectionDiagnostics:
-            bearAutomaticCorrectionCoordinator.diagnostics,
-          overlayPreviewStatus: bearOverlayPreviewCoordinator.status,
-          onAutomaticCorrectionChanged: { enabled in
-            behaviorSettings.bearAutomaticCorrectionEnabled = enabled
-            bearAutomaticCorrectionCoordinator.setEnabled(enabled)
-          },
+          automaticCorrectionCoordinator:
+          bearAutomaticCorrectionCoordinator,
+          overlayPreviewCoordinator: bearOverlayPreviewCoordinator,
           onCheck: checkBearCompatibility,
-          onObserve: observeBearEvents,
-          onPreviewOverlay:
-            bearOverlayPreviewCoordinator.previewSelectedTypo,
-          onStopOverlayPreview: bearOverlayPreviewCoordinator.stopPreview
+          onObserve: observeBearEvents
         )
-        BearDiagnosticsPrivacySection()
-        CorrectionStatisticsSection(
-          statistics: learningStore.statistics(),
-          sourceStatistics: learningStore.statisticsBySource(),
-          onReset: {
-            isConfirmingStatisticsReset = true
-          }
+      case .learning:
+        LearningSettingsPane(
+          learningStore: learningStore,
+          onResetStatistics: { isConfirmingStatisticsReset = true }
         )
-        RememberedRulesSection(
-          rules: learningStore.rememberedRules,
-          onRemove: learningStore.removeRule
-        )
-        LearningPrivacySection(
-          onResetAll: {
-            isConfirmingResetAll = true
-          }
+      case .privacy:
+        PrivacySettingsPane(
+          onResetAll: { isConfirmingResetAll = true }
         )
       }
-      .padding(24)
     }
-    .frame(width: 640)
-    .frame(minHeight: 560)
+    .frame(width: 680, height: 540)
+    .background(
+      SettingsWindowConfigurationView(
+        title: "Typover Settings",
+        selection: $selectedPane
+      )
+    )
     .confirmationDialog(
       String(
         localized: "Reset correction statistics?",
         bundle: #bundle,
         comment:
-          "Title of the confirmation shown before clearing Typover correction statistics."
+        "Title of the confirmation shown before clearing Typover correction statistics."
       ),
       isPresented: $isConfirmingStatisticsReset,
       titleVisibility: .visible
@@ -127,8 +115,7 @@ struct LearningSettingsView: View {
           comment: "Confirmation button that clears Typover correction statistics."
         )
       }
-      Button(role: .cancel) {
-      } label: {
+      Button(role: .cancel) {} label: {
         Text(
           "Cancel",
           bundle: #bundle,
@@ -140,7 +127,7 @@ struct LearningSettingsView: View {
         "Remembered correction choices will not be changed.",
         bundle: #bundle,
         comment:
-          "Explanation that resetting statistics preserves learned correction preferences."
+        "Explanation that resetting statistics preserves learned correction preferences."
       )
     }
     .confirmationDialog(
@@ -148,7 +135,7 @@ struct LearningSettingsView: View {
         localized: "Reset all Typover learning?",
         bundle: #bundle,
         comment:
-          "Title of the confirmation shown before clearing all Typover local learning data."
+        "Title of the confirmation shown before clearing all Typover local learning data."
       ),
       isPresented: $isConfirmingResetAll,
       titleVisibility: .visible
@@ -160,11 +147,10 @@ struct LearningSettingsView: View {
           "Reset All Learning",
           bundle: #bundle,
           comment:
-            "Confirmation button that clears all Typover correction preferences and statistics."
+          "Confirmation button that clears all Typover correction preferences and statistics."
         )
       }
-      Button(role: .cancel) {
-      } label: {
+      Button(role: .cancel) {} label: {
         Text(
           "Cancel",
           bundle: #bundle,
@@ -176,9 +162,13 @@ struct LearningSettingsView: View {
         "This removes every remembered correction choice and all correction statistics from this Mac.",
         bundle: #bundle,
         comment:
-          "Explanation of the data removed by resetting all Typover learning."
+        "Explanation of the data removed by resetting all Typover learning."
       )
     }
+  }
+
+  private var currentPane: SettingsPane {
+    SettingsPane(rawValue: selectedPane) ?? .general
   }
 
   private func checkBearCompatibility() {
@@ -223,7 +213,302 @@ struct LearningSettingsView: View {
       isObservingBear = false
     }
   }
+}
 
+private enum SettingsPane: String, CaseIterable, Identifiable {
+  case general
+  case bear
+  case learning
+  case privacy
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .general: "General"
+    case .bear: "Bear"
+    case .learning: "Learning"
+    case .privacy: "Privacy"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .general: "gearshape"
+    case .bear: "pawprint"
+    case .learning: "brain"
+    case .privacy: "hand.raised"
+    }
+  }
+
+  var toolbarIdentifier: NSToolbarItem.Identifier {
+    NSToolbarItem.Identifier("typover.settings.pane.\(rawValue)")
+  }
+}
+
+private struct SettingsWindowConfigurationView: NSViewRepresentable {
+  let title: String
+
+  @Binding var selection: String
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(selection: $selection)
+  }
+
+  func makeNSView(context: Context) -> ConfigurationView {
+    ConfigurationView(coordinator: context.coordinator)
+  }
+
+  func updateNSView(_ nsView: ConfigurationView, context: Context) {
+    context.coordinator.selection = $selection
+    context.coordinator.updateSelection()
+    nsView.title = title
+    nsView.configureWindow()
+  }
+
+  final class ConfigurationView: NSView {
+    var title: String
+    let coordinator: Coordinator
+
+    init(coordinator: Coordinator) {
+      title = ""
+      self.coordinator = coordinator
+      super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+      fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      configureWindow()
+    }
+
+    override func viewWillDraw() {
+      super.viewWillDraw()
+      configureWindow()
+    }
+
+    func configureWindow() {
+      guard let window else { return }
+      coordinator.installToolbar(on: window)
+      window.title = title
+      window.titleVisibility = .visible
+      window.toolbarStyle = .preference
+      window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+      window.standardWindowButton(.zoomButton)?.isEnabled = false
+    }
+  }
+
+  @MainActor
+  final class Coordinator: NSObject, NSToolbarDelegate {
+    private static let toolbarIdentifier = NSToolbar.Identifier(
+      "typover.settings.toolbar"
+    )
+
+    var selection: Binding<String>
+    let toolbar: NSToolbar
+
+    init(selection: Binding<String>) {
+      self.selection = selection
+      toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
+      super.init()
+      toolbar.delegate = self
+      toolbar.displayMode = .iconAndLabel
+      toolbar.sizeMode = .regular
+      toolbar.allowsUserCustomization = false
+      toolbar.autosavesConfiguration = false
+    }
+
+    func installToolbar(on window: NSWindow) {
+      if window.toolbar !== toolbar {
+        window.toolbar = toolbar
+      }
+      updateSelection()
+    }
+
+    @objc func selectPane(_ sender: NSToolbarItem) {
+      guard let pane = SettingsPane.allCases.first(where: {
+        $0.toolbarIdentifier == sender.itemIdentifier
+      }) else { return }
+      selection.wrappedValue = pane.rawValue
+      updateSelection()
+    }
+
+    func updateSelection() {
+      let pane = SettingsPane(rawValue: selection.wrappedValue) ?? .general
+      toolbar.selectedItemIdentifier = pane.toolbarIdentifier
+    }
+
+    func toolbar(
+      _: NSToolbar,
+      itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+      willBeInsertedIntoToolbar _: Bool
+    ) -> NSToolbarItem? {
+      guard let pane = SettingsPane.allCases.first(where: {
+        $0.toolbarIdentifier == itemIdentifier
+      }) else { return nil }
+
+      let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+      item.label = pane.title
+      item.paletteLabel = pane.title
+      item.toolTip = pane.title
+      item.image = NSImage(
+        systemSymbolName: pane.systemImage,
+        accessibilityDescription: pane.title
+      )
+      item.target = self
+      item.action = #selector(selectPane(_:))
+      item.visibilityPriority = .high
+      return item
+    }
+
+    func toolbarDefaultItemIdentifiers(
+      _: NSToolbar
+    ) -> [NSToolbarItem.Identifier] {
+      SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbarAllowedItemIdentifiers(
+      _: NSToolbar
+    ) -> [NSToolbarItem.Identifier] {
+      SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbarSelectableItemIdentifiers(
+      _: NSToolbar
+    ) -> [NSToolbarItem.Identifier] {
+      SettingsPane.allCases.map(\.toolbarIdentifier)
+    }
+
+    func toolbarImmovableItemIdentifiers(
+      _: NSToolbar
+    ) -> Set<NSToolbarItem.Identifier> {
+      Set(SettingsPane.allCases.map(\.toolbarIdentifier))
+    }
+  }
+}
+
+private struct GeneralSettingsPane: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let credentialStore: SecretsAppCredentialStore
+
+  var body: some View {
+    Form {
+      CorrectionBehaviorSection(behaviorSettings: behaviorSettings)
+      ContextualModelSection(
+        behaviorSettings: behaviorSettings,
+        credentialStore: credentialStore
+      )
+    }
+    .formStyle(.grouped)
+  }
+}
+
+private struct BearSettingsPane: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let accessibilityReport: BearAccessibilityReport?
+  let eventReport: BearAccessibilityEventReport?
+  let isChecking: Bool
+  let isObserving: Bool
+  let automaticCorrectionCoordinator: BearAutomaticCorrectionCoordinator
+  let overlayPreviewCoordinator: BearOverlayPreviewCoordinator
+  let onCheck: () -> Void
+  let onObserve: () -> Void
+
+  var body: some View {
+    Form {
+      BearCompatibilitySection(
+        report: accessibilityReport,
+        eventReport: eventReport,
+        isChecking: isChecking,
+        isObserving: isObserving,
+        automaticCorrectionEnabled:
+        behaviorSettings.bearAutomaticCorrectionEnabled,
+        automaticCorrectionStatus: automaticCorrectionCoordinator.status,
+        automaticCorrectionDiagnostics: automaticCorrectionCoordinator.diagnostics,
+        overlayPreviewStatus: overlayPreviewCoordinator.status,
+        onAutomaticCorrectionChanged: { enabled in
+          behaviorSettings.bearAutomaticCorrectionEnabled = enabled
+          automaticCorrectionCoordinator.setEnabled(enabled)
+        },
+        onCheck: onCheck,
+        onObserve: onObserve,
+        onPreviewOverlay: overlayPreviewCoordinator.previewSelectedTypo,
+        onStopOverlayPreview: overlayPreviewCoordinator.stopPreview
+      )
+      TypoverPermissionsSettingsSection()
+    }
+    .formStyle(.grouped)
+  }
+}
+
+private struct LearningSettingsPane: View {
+  let learningStore: CorrectionLearningStore
+  let onResetStatistics: () -> Void
+
+  var body: some View {
+    Form {
+      CorrectionStatisticsSection(
+        statistics: learningStore.statistics(),
+        sourceStatistics: learningStore.statisticsBySource(),
+        onReset: onResetStatistics
+      )
+      RememberedRulesSection(
+        rules: learningStore.rememberedRules,
+        onAdd: learningStore.addManualMapping,
+        onRemove: learningStore.removeRule
+      )
+    }
+    .formStyle(.grouped)
+  }
+}
+
+private struct PrivacySettingsPane: View {
+  let onResetAll: () -> Void
+
+  var body: some View {
+    Form {
+      Section {
+        Label {
+          Text(
+            "Spelling checks, remembered choices, and correction statistics stay on this Mac when Apple Intelligence is selected.",
+            bundle: #bundle,
+            comment: "Local-first privacy summary in Typover Settings."
+          )
+        } icon: {
+          Image(systemName: "lock.shield")
+            .foregroundStyle(.green)
+        }
+
+        Text(
+          "Choosing OpenAI or Anthropic sends completed sentences to that provider only when contextual checking runs.",
+          bundle: #bundle,
+          comment: "Cloud model privacy summary in Typover Settings."
+        )
+        .foregroundStyle(.secondary)
+      } header: {
+        Text("Writing Privacy", bundle: #bundle)
+      }
+
+      BearDiagnosticsPrivacySection()
+
+      Section {
+        Button(role: .destructive, action: onResetAll) {
+          Text("Reset All Learning…", bundle: #bundle)
+        }
+        .accessibilityIdentifier("typover.settings.learning.reset-all")
+      } footer: {
+        Text(
+          "Removes remembered correction choices and correction statistics from this Mac.",
+          bundle: #bundle
+        )
+      }
+    }
+    .formStyle(.grouped)
+  }
 }
 
 enum BearOverlayPreviewStatus: Equatable {
@@ -251,7 +536,7 @@ enum BearOverlayPreviewStatus: Equatable {
     case .bearNotRunning:
       return .bearUnavailable
     case .focusedEditorUnavailable, .focusedElementIsNotTextArea,
-      .editorAvailableButNotFocused:
+         .editorAvailableButNotFocused:
       return .editorUnavailable
     }
   }
@@ -283,114 +568,69 @@ private struct CorrectionBehaviorSection: View {
   var body: some View {
     @Bindable var behaviorSettings = behaviorSettings
 
-    GroupBox {
-      VStack(alignment: .leading, spacing: 16) {
-        VStack(alignment: .leading, spacing: 8) {
-          Text(
-            "Correction scope",
-            bundle: #bundle,
-            comment:
-              "Label above the Typover contextual-correction scope picker."
-          )
-          .font(.headline)
-
-          Picker(
-            String(
-              localized: "Correction scope",
-              bundle: #bundle,
-              comment:
-                "Accessibility label for the Typover correction-scope picker."
-            ),
-            selection: $behaviorSettings.contextualScope
-          ) {
-            Text(
-              "Careful",
-              bundle: #bundle,
-              comment:
-                "Conservative Typover correction-scope option."
-            )
-            .tag(ContextualCorrectionScope.careful)
-
-            Text(
-              "Comprehensive",
-              bundle: #bundle,
-              comment:
-                "Broader Typover correction-scope option covering grammar and punctuation."
-            )
-            .tag(ContextualCorrectionScope.comprehensive)
-          }
-          .labelsHidden()
-          .pickerStyle(.segmented)
-          .accessibilityIdentifier("typover.settings.correction-scope")
-
-          Text(behaviorSettings.contextualScope.explanation)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-        }
-
-        Divider()
-
-        VStack(alignment: .leading, spacing: 5) {
-          Toggle(
-            isOn: $behaviorSettings.allowsSentenceRewrites
-          ) {
-            Text(
-              "Allow sentence rewrites",
-              bundle: #bundle,
-              comment:
-                "Setting that permits Typover's selected model to rephrase a completed sentence."
-            )
-          }
-          .disabled(
-            behaviorSettings.contextualScope != .comprehensive
-          )
-          .accessibilityIdentifier(
-            "typover.settings.allow-sentence-rewrites"
-          )
-
-          if behaviorSettings.contextualScope == .comprehensive {
-            Text(
-              "The selected model may rephrase one completed sentence for clarity while preserving its meaning and tone. The rewrite remains visible, reversible, and undoable.",
-              bundle: #bundle,
-              comment:
-                "Explanation below the enabled sentence-rewrite setting."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .padding(.leading, 20)
-          } else {
-            Text(
-              behaviorSettings.allowsSentenceRewrites
-                ? "Sentence rewriting is paused in Careful. Choose Comprehensive to use it."
-                : "Choose Comprehensive to make sentence rewriting available.",
-              bundle: #bundle,
-              comment:
-                "Explanation below the unavailable sentence-rewrite setting."
-            )
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .padding(.leading, 20)
-          }
-        }
-      }
-      .padding(4)
-    } label: {
-      Label {
-        Text(
-          "Automatic correction",
+    Section {
+      Picker(
+        String(
+          localized: "Correction scope",
           bundle: #bundle,
           comment:
-            "Heading for Typover's automatic-correction behavior settings."
+          "Accessibility label for the Typover correction-scope picker."
+        ),
+        selection: $behaviorSettings.contextualScope
+      ) {
+        Text(
+          "Careful",
+          bundle: #bundle,
+          comment: "Conservative Typover correction-scope option."
         )
-      } icon: {
-        Image(systemName: "slider.horizontal.3")
+        .tag(ContextualCorrectionScope.careful)
+
+        Text(
+          "Comprehensive",
+          bundle: #bundle,
+          comment:
+          "Broader Typover correction-scope option covering grammar and punctuation."
+        )
+        .tag(ContextualCorrectionScope.comprehensive)
       }
+      .pickerStyle(.segmented)
+      .accessibilityIdentifier("typover.settings.correction-scope")
+
+      Toggle(
+        isOn: $behaviorSettings.allowsSentenceRewrites
+      ) {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(
+            "Allow sentence rewrites",
+            bundle: #bundle,
+            comment:
+            "Setting that permits Typover's selected model to rephrase a completed sentence."
+          )
+          Text(
+            "Rephrase one completed sentence for clarity while preserving meaning and tone.",
+            bundle: #bundle,
+            comment: "Concise explanation for Typover sentence rewrites."
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        }
+      }
+      .disabled(behaviorSettings.contextualScope != .comprehensive)
+      .accessibilityIdentifier("typover.settings.allow-sentence-rewrites")
+    } header: {
+      Text(
+        "Automatic Correction",
+        bundle: #bundle,
+        comment: "Heading for Typover's automatic-correction behavior settings."
+      )
+    } footer: {
+      Text(behaviorSettings.contextualScope.explanation)
     }
   }
 }
 
-extension ContextualCorrectionScope {
-  fileprivate var explanation: LocalizedStringResource {
+private extension ContextualCorrectionScope {
+  var explanation: LocalizedStringResource {
     switch self {
     case .careful:
       "Correct spelling, capitalization, apostrophes, and unambiguous contextual mistakes."
@@ -416,68 +656,58 @@ private struct ContextualModelSection: View {
   var body: some View {
     @Bindable var behaviorSettings = behaviorSettings
 
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
-        LabeledContent {
-          Picker(
-            String(
-              localized: "Writing model",
-              bundle: #bundle,
-              comment:
-                "Accessibility label for the Typover contextual-model picker."
-            ),
-            selection: $behaviorSettings.contextualModel
-          ) {
-            ForEach(ContextualCorrectionModel.allCases, id: \.self) { model in
-              Text(model.title)
-                .tag(model)
+    Section {
+      LabeledContent {
+        Picker(
+          String(
+            localized: "Writing model",
+            bundle: #bundle,
+            comment:
+            "Accessibility label for the Typover contextual-model picker."
+          ),
+          selection: $behaviorSettings.contextualModel
+        ) {
+          ForEach(ContextualCorrectionModel.allCases, id: \.self) { model in
+            Text(model.title)
+              .tag(model)
+          }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("typover.settings.contextual-model")
+      } label: {
+        Text(
+          "Model",
+          bundle: #bundle,
+          comment: "Label beside Typover's contextual writing-model picker."
+        )
+      }
+
+      if behaviorSettings.contextualModel == .apple {
+        AppleModelStatus(
+          availability: AppleContextualModelAvailability.current(
+            for: NSSpellChecker.shared.userPreferredLanguages.first
+          )
+        )
+      } else {
+        RemoteModelStatus(
+          model: behaviorSettings.contextualModel,
+          credentialStatus: credentialStatus,
+          didFailToOpenSecretsApp: didFailToOpenSecretsApp,
+          onManageCredential: manageCredential,
+          onRefresh: {
+            Task {
+              await refreshCredentialStatus()
             }
           }
-          .labelsHidden()
-          .pickerStyle(.menu)
-          .accessibilityIdentifier("typover.settings.contextual-model")
-        } label: {
-          Text(
-            "Model",
-            bundle: #bundle,
-            comment: "Label beside Typover's contextual writing-model picker."
-          )
-        }
-
-        Divider()
-
-        if behaviorSettings.contextualModel == .apple {
-          AppleModelStatus(
-            availability: AppleContextualModelAvailability.current(
-              for: NSSpellChecker.shared.userPreferredLanguages.first
-            )
-          )
-        } else {
-          RemoteModelStatus(
-            model: behaviorSettings.contextualModel,
-            credentialStatus: credentialStatus,
-            didFailToOpenSecretsApp: didFailToOpenSecretsApp,
-            onManageCredential: manageCredential,
-            onRefresh: {
-              Task {
-                await refreshCredentialStatus()
-              }
-            }
-          )
-        }
-      }
-      .padding(4)
-    } label: {
-      Label {
-        Text(
-          "Writing model",
-          bundle: #bundle,
-          comment:
-            "Heading for Typover's contextual writing-model settings."
         )
-      } icon: {
-        Image(systemName: "cpu")
       }
+    } header: {
+      Text(
+        "Writing Model",
+        bundle: #bundle,
+        comment: "Heading for Typover's contextual writing-model settings."
+      )
     }
     .task(id: behaviorSettings.contextualModel) {
       await refreshCredentialStatus()
@@ -578,7 +808,7 @@ private struct RemoteModelStatus: View {
               : "Add API Key…",
             bundle: #bundle,
             comment:
-              "Button that opens Add Secret to configure the selected cloud model credential."
+            "Button that opens Add Secret to configure the selected cloud model credential."
           )
         }
         .accessibilityIdentifier("typover.settings.model.manage-key")
@@ -588,7 +818,7 @@ private struct RemoteModelStatus: View {
             "Refresh",
             bundle: #bundle,
             comment:
-              "Button that refreshes the selected cloud model credential status."
+            "Button that refreshes the selected cloud model credential status."
           )
         }
         .accessibilityIdentifier("typover.settings.model.refresh-key")
@@ -599,7 +829,7 @@ private struct RemoteModelStatus: View {
           "Managed by Add Secret",
           bundle: #bundle,
           comment:
-            "Note explaining which app securely manages cloud provider credentials."
+          "Note explaining which app securely manages cloud provider credentials."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -619,7 +849,7 @@ private struct RemoteModelStatus: View {
             "Add Secret could not be opened. Make sure it is installed in Applications.",
             bundle: #bundle,
             comment:
-              "Error shown when Typover cannot launch Add Secret for a provider key."
+            "Error shown when Typover cannot launch Add Secret for a provider key."
           )
         } icon: {
           Image(systemName: "exclamationmark.triangle.fill")
@@ -631,8 +861,8 @@ private struct RemoteModelStatus: View {
   }
 }
 
-extension ContextualCorrectionModel {
-  fileprivate var title: LocalizedStringResource {
+private extension ContextualCorrectionModel {
+  var title: LocalizedStringResource {
     switch self {
     case .apple:
       "Apple Intelligence (On Device)"
@@ -643,7 +873,7 @@ extension ContextualCorrectionModel {
     }
   }
 
-  fileprivate var remoteExplanation: LocalizedStringResource {
+  var remoteExplanation: LocalizedStringResource {
     switch self {
     case .apple:
       ""
@@ -654,7 +884,7 @@ extension ContextualCorrectionModel {
     }
   }
 
-  fileprivate var privacyNotice: LocalizedStringResource {
+  var privacyNotice: LocalizedStringResource {
     switch self {
     case .apple:
       ""
@@ -666,8 +896,8 @@ extension ContextualCorrectionModel {
   }
 }
 
-extension ProviderCredentialStatus {
-  fileprivate var title: LocalizedStringResource {
+private extension ProviderCredentialStatus {
+  var title: LocalizedStringResource {
     switch self {
     case .checking:
       "Checking API key…"
@@ -678,7 +908,7 @@ extension ProviderCredentialStatus {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .checking:
       "clock.fill"
@@ -689,7 +919,7 @@ extension ProviderCredentialStatus {
     }
   }
 
-  fileprivate var tint: Color {
+  var tint: Color {
     switch self {
     case .checking:
       .orange
@@ -701,8 +931,8 @@ extension ProviderCredentialStatus {
   }
 }
 
-extension ContextualCorrectionAvailability {
-  fileprivate var title: LocalizedStringResource {
+private extension ContextualCorrectionAvailability {
+  var title: LocalizedStringResource {
     switch self {
     case .available:
       "Ready on this Mac"
@@ -717,7 +947,7 @@ extension ContextualCorrectionAvailability {
     }
   }
 
-  fileprivate var explanation: LocalizedStringResource {
+  var explanation: LocalizedStringResource {
     switch self {
     case .available:
       "Completed sentences can be checked privately with Apple’s on-device model. Text is not sent to the cloud."
@@ -732,7 +962,7 @@ extension ContextualCorrectionAvailability {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .available:
       "checkmark.circle.fill"
@@ -743,7 +973,7 @@ extension ContextualCorrectionAvailability {
     }
   }
 
-  fileprivate var tint: Color {
+  var tint: Color {
     switch self {
     case .available:
       .green
@@ -755,108 +985,64 @@ extension ContextualCorrectionAvailability {
   }
 }
 
-private struct LearningSettingsHeader: View {
-  var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text(
-        "Typover Settings",
-        bundle: #bundle,
-        comment: "Title of the Typover settings window."
-      )
-      .font(.largeTitle)
-      .fontWeight(.semibold)
-
-      Text(
-        "Choose how Typover corrects your writing, see how it is performing, and manage remembered choices.",
-        bundle: #bundle,
-        comment: "Introductory explanation in the Typover settings window."
-      )
-      .font(.body)
-      .foregroundStyle(.secondary)
-    }
-  }
-}
-
 private struct CorrectionStatisticsSection: View {
   let statistics: CorrectionStatistics
   let sourceStatistics: [CorrectionSourceStatistics]
   let onReset: () -> Void
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
-        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
-          GridRow {
-            StatisticCard(
-              title: "Corrections",
-              value: statistics.correctionsApplied.formatted(),
-              systemImage: "text.badge.checkmark"
-            )
-            StatisticCard(
-              title: "Override rate",
-              value: statistics.overrideRate.formatted(
-                .percent.precision(.fractionLength(0))
-              ),
-              systemImage: "arrow.uturn.backward"
-            )
-          }
-          GridRow {
-            StatisticCard(
-              title: "Changed back",
-              value: statistics.reverted.formatted(),
-              systemImage: "arrow.counterclockwise"
-            )
-            StatisticCard(
-              title: "Other choices",
-              value: (statistics.alternativesChosen
-                + statistics.manuallyEdited).formatted(),
-              systemImage: "slider.horizontal.3"
-            )
-          }
-        }
-
-        if !sourceStatistics.isEmpty {
-          Divider()
-
-          VStack(spacing: 8) {
-            ForEach(sourceStatistics) { source in
-              CorrectionSourceStatisticsRow(statistics: source)
-            }
-          }
-        }
-
-        HStack {
-          Text(
-            "Statistics never contain document text.",
-            bundle: #bundle,
-            comment: "Privacy note below Typover correction statistics."
-          )
-          .font(.caption)
-          .foregroundStyle(.secondary)
-
-          Spacer()
-
-          Button(role: .destructive, action: onReset) {
-            Text(
-              "Reset Statistics…",
-              bundle: #bundle,
-              comment: "Button that begins clearing Typover correction statistics."
-            )
-          }
-          .accessibilityIdentifier("typover.settings.statistics.reset")
-        }
+    Section {
+      LabeledContent("Corrections") {
+        Text(statistics.correctionsApplied, format: .number)
+          .monospacedDigit()
       }
-      .padding(4)
-    } label: {
-      Label {
+      LabeledContent("Changed back") {
+        Text(statistics.reverted, format: .number)
+          .monospacedDigit()
+      }
+      LabeledContent("Other choices") {
         Text(
-          "Correction activity",
-          bundle: #bundle,
-          comment: "Heading for the Typover correction-statistics section."
+          statistics.alternativesChosen + statistics.manuallyEdited,
+          format: .number
         )
-      } icon: {
-        Image(systemName: "chart.bar.xaxis")
+        .monospacedDigit()
       }
+      LabeledContent("Override rate") {
+        Text(
+          statistics.overrideRate,
+          format: .percent.precision(.fractionLength(0))
+        )
+        .monospacedDigit()
+      }
+
+      if !sourceStatistics.isEmpty {
+        DisclosureGroup("By Source") {
+          ForEach(sourceStatistics) { source in
+            CorrectionSourceStatisticsRow(statistics: source)
+          }
+        }
+      }
+
+      Button(role: .destructive, action: onReset) {
+        Text(
+          "Reset Statistics…",
+          bundle: #bundle,
+          comment: "Button that begins clearing Typover correction statistics."
+        )
+      }
+      .accessibilityIdentifier("typover.settings.statistics.reset")
+    } header: {
+      Text(
+        "Correction Activity",
+        bundle: #bundle,
+        comment: "Heading for the Typover correction-statistics section."
+      )
+    } footer: {
+      Text(
+        "Statistics never contain document text.",
+        bundle: #bundle,
+        comment: "Privacy note below Typover correction statistics."
+      )
     }
   }
 }
@@ -886,7 +1072,7 @@ private struct CorrectionSourceStatisticsRow: View {
           "Percentage changed back or overridden",
           bundle: #bundle,
           comment:
-            "Tooltip explaining a source-specific Typover override percentage."
+          "Tooltip explaining a source-specific Typover override percentage."
         )
       )
 
@@ -902,7 +1088,7 @@ private struct CorrectionSourceStatisticsRow: View {
             "Typical correction time",
             bundle: #bundle,
             comment:
-              "Tooltip explaining source-specific Typover correction latency."
+            "Tooltip explaining source-specific Typover correction latency."
           )
         )
       }
@@ -927,8 +1113,8 @@ func correctionCountLabel(_ count: Int) -> LocalizedStringResource {
   )
 }
 
-extension CorrectionSource {
-  fileprivate var title: LocalizedStringResource {
+private extension CorrectionSource {
+  var title: LocalizedStringResource {
     switch self {
     case .demo:
       "Demo"
@@ -951,7 +1137,7 @@ extension CorrectionSource {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .demo:
       "hammer"
@@ -975,100 +1161,81 @@ extension CorrectionSource {
   }
 }
 
-private struct StatisticCard: View {
-  let title: LocalizedStringResource
-  let value: String
-  let systemImage: String
-
-  var body: some View {
-    HStack(spacing: 12) {
-      Image(systemName: systemImage)
-        .font(.title2)
-        .foregroundStyle(.tint)
-        .frame(width: 28)
-        .accessibilityHidden(true)
-
-      VStack(alignment: .leading, spacing: 2) {
-        Text(value)
-          .font(.title2)
-          .fontWeight(.semibold)
-          .contentTransition(.numericText())
-
-        Text(title)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-
-      Spacer()
-    }
-    .padding(12)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(Text(title))
-    .accessibilityValue(value)
-  }
-}
-
 private struct RememberedRulesSection: View {
   let rules: [RememberedCorrectionRule]
+  let onAdd: (ManualCorrectionMapping) -> Void
   let onRemove: (RememberedCorrectionRule.ID) -> Void
+  @State private var isAddingMapping = false
   @State private var forgottenRuleConfirmation:
     ForgottenRuleConfirmation?
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(
-        "Typover remembers a manual change only when it can tie that edit to the marked correction. Larger or ambiguous edits count as overrides but are not reused.",
-        bundle: #bundle,
-        comment:
-          "Safety explanation for Typover's local correction preference learning."
-      )
-      .font(.callout)
-      .foregroundStyle(.secondary)
+    Group {
+      Section {
+        HStack {
+          Text(
+            "Create a correction Typover applies whenever the typed text matches.",
+            bundle: #bundle,
+            comment: "Short description beside the button for manually adding a Typover correction mapping."
+          )
+          .foregroundStyle(.secondary)
 
-      GroupBox {
-        VStack(spacing: 0) {
-          if rules.isEmpty {
-            RememberedRulesEmptyState()
-          } else {
-            ForEach(rules) { rule in
-              RememberedRuleRow(
-                rule: rule,
-                onRemove: {
-                  onRemove(rule.id)
-                  withAnimation(.easeOut(duration: 0.18)) {
-                    forgottenRuleConfirmation =
-                      ForgottenRuleConfirmation(
-                        original: rule.original
-                      )
-                  }
-                }
+          Spacer()
+
+          Button {
+            isAddingMapping = true
+          } label: {
+            Label {
+              Text(
+                "Add Mapping…",
+                bundle: #bundle,
+                comment: "Button that opens the form for adding a manual Typover correction mapping."
               )
-
-              if rule.id != rules.last?.id {
-                Divider()
-              }
+            } icon: {
+              Image(systemName: "plus")
             }
           }
+          .accessibilityIdentifier("typover.settings.rule.add")
         }
-      } label: {
-        Label {
-          Text(
-            "Remembered corrections",
-            bundle: #bundle,
-            comment: "Heading for Typover's remembered correction preferences."
-          )
-        } icon: {
-          Image(systemName: "brain")
+
+        if rules.isEmpty {
+          RememberedRulesEmptyState()
+        } else {
+          ForEach(rules) { rule in
+            RememberedRuleRow(
+              rule: rule,
+              onRemove: {
+                onRemove(rule.id)
+                withAnimation(.easeOut(duration: 0.18)) {
+                  forgottenRuleConfirmation =
+                    ForgottenRuleConfirmation(original: rule.original)
+                }
+              }
+            )
+          }
         }
+      } header: {
+        Text(
+          "Remembered Corrections",
+          bundle: #bundle,
+          comment: "Heading for Typover's remembered correction preferences."
+        )
+      } footer: {
+        Text(
+          "Learned choices come only from edits tied to one marked correction. Manual mappings can contain words or phrases.",
+          bundle: #bundle,
+          comment:
+          "Safety explanation for Typover's local correction preference learning."
+        )
       }
 
       if let forgottenRuleConfirmation {
-        ForgottenRuleConfirmationView(
-          original: forgottenRuleConfirmation.original
-        )
-        .transition(.move(edge: .top).combined(with: .opacity))
+        Section {
+          ForgottenRuleConfirmationView(
+            original: forgottenRuleConfirmation.original
+          )
+          .transition(.move(edge: .top).combined(with: .opacity))
+        }
       }
     }
     .task(id: forgottenRuleConfirmation?.id) {
@@ -1087,6 +1254,163 @@ private struct RememberedRulesSection: View {
         forgottenRuleConfirmation = nil
       }
     }
+    .sheet(isPresented: $isAddingMapping) {
+      AddCorrectionMappingView(onAdd: onAdd)
+    }
+  }
+}
+
+private struct AddCorrectionMappingView: View {
+  private static let availableLanguages =
+    NSSpellChecker.shared.availableLanguages
+
+  let onAdd: (ManualCorrectionMapping) -> Void
+
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.locale) private var locale
+  @FocusState private var focusedField: Field?
+  @State private var original = ""
+  @State private var replacement = ""
+  @State private var language = ""
+  @State private var validationError:
+    ManualCorrectionMapping.ValidationError?
+
+  private enum Field {
+    case original
+    case replacement
+  }
+
+  var body: some View {
+    VStack(spacing: 0) {
+      Form {
+        Section {
+          TextField(
+            "When I type",
+            text: $original,
+            prompt: Text("teh", bundle: #bundle)
+          )
+          .focused($focusedField, equals: .original)
+          .accessibilityIdentifier("typover.settings.mapping.original")
+
+          TextField(
+            "Replace it with",
+            text: $replacement,
+            prompt: Text("the", bundle: #bundle)
+          )
+          .focused($focusedField, equals: .replacement)
+          .accessibilityIdentifier("typover.settings.mapping.replacement")
+        } header: {
+          Text("Correction", bundle: #bundle)
+        } footer: {
+          Text(
+            "Words, phrases, capitalization, accents, and punctuation are supported.",
+            bundle: #bundle,
+            comment: "Supported content explanation in the manual correction mapping form."
+          )
+        }
+
+        Section {
+          Picker("Language", selection: $language) {
+            Text(
+              "Any Language",
+              bundle: #bundle,
+              comment: "Option that makes a manual Typover mapping apply regardless of writing language."
+            )
+            .tag("")
+
+            ForEach(localizedLanguages, id: \.identifier) { option in
+              Text(option.name)
+                .tag(option.identifier)
+            }
+          }
+          .accessibilityIdentifier("typover.settings.mapping.language")
+        } header: {
+          Text("Scope", bundle: #bundle)
+        } footer: {
+          Text(
+            "Any Language is useful for names, abbreviations, and personal shorthand.",
+            bundle: #bundle,
+            comment: "Explanation of the language scope for a manual correction mapping."
+          )
+        }
+
+        if let validationError {
+          Section {
+            Label {
+              Text(validationError.message)
+            } icon: {
+              Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.red)
+            }
+            .accessibilityIdentifier("typover.settings.mapping.error")
+          }
+        }
+      }
+      .formStyle(.grouped)
+
+      Divider()
+
+      HStack {
+        Spacer()
+
+        Button("Cancel", role: .cancel) {
+          dismiss()
+        }
+        .keyboardShortcut(.cancelAction)
+        .accessibilityIdentifier("typover.settings.mapping.cancel")
+
+        Button {
+          addMapping()
+        } label: {
+          Text(
+            "Add Mapping",
+            bundle: #bundle,
+            comment: "Default button that saves a manual Typover correction mapping."
+          )
+        }
+        .keyboardShortcut(.defaultAction)
+        .disabled(!hasRequiredValues)
+        .accessibilityIdentifier("typover.settings.mapping.save")
+      }
+      .padding(16)
+    }
+    .frame(width: 500, height: 320)
+    .navigationTitle("Add Mapping")
+    .onAppear {
+      focusedField = .original
+    }
+  }
+
+  private var hasRequiredValues: Bool {
+    !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && !replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
+  private var localizedLanguages: [(identifier: String, name: String)] {
+    Self.availableLanguages
+      .map { identifier in
+        (
+          identifier: identifier,
+          name: locale.localizedString(forIdentifier: identifier) ?? identifier
+        )
+      }
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+  }
+
+  private func addMapping() {
+    do {
+      let mapping = try ManualCorrectionMapping(
+        original: original,
+        replacement: replacement,
+        language: language
+      )
+      onAdd(mapping)
+      dismiss()
+    } catch let error as ManualCorrectionMapping.ValidationError {
+      validationError = error
+    } catch {
+      assertionFailure("Unexpected manual mapping validation error: \(error)")
+    }
   }
 }
 
@@ -1101,10 +1425,10 @@ private struct ForgottenRuleConfirmationView: View {
   var body: some View {
     Label {
       Text(
-        "Forgot “\(original)”. Future occurrences will use Apple Spelling; existing text won’t change.",
+        "Forgot “\(original)”. Future occurrences will use Typover’s normal correction rules; existing text won’t change.",
         bundle: #bundle,
         comment:
-          "Temporary confirmation after forgetting a correction choice. The variable is the original typed word."
+        "Temporary confirmation after forgetting a correction choice. The variable is the original typed word."
       )
     } icon: {
       Image(systemName: "checkmark.circle.fill")
@@ -1142,7 +1466,7 @@ private struct RememberedRuleRow: View {
             .accessibilityHidden(true)
 
           switch rule.preference {
-          case .preferred(let replacement):
+          case let .preferred(replacement):
             Text(replacement)
               .font(.body.monospaced())
           case .suppressed:
@@ -1150,7 +1474,7 @@ private struct RememberedRuleRow: View {
               "Don’t correct",
               bundle: #bundle,
               comment:
-                "Label for a remembered Typover preference that suppresses automatic correction."
+              "Label for a remembered Typover preference that suppresses automatic correction."
             )
             .foregroundStyle(.secondary)
           }
@@ -1165,7 +1489,7 @@ private struct RememberedRuleRow: View {
               bundle: #bundle,
               comment: "Separator between remembered-rule metadata."
             )
-              .accessibilityHidden(true)
+            .accessibilityHidden(true)
             Text(locale.localizedString(forIdentifier: language) ?? language)
           }
         }
@@ -1216,18 +1540,18 @@ private struct RememberedRulesEmptyState: View {
       }
     } description: {
       Text(
-        "Choosing another correction, changing it back, or directly editing the marked word can create a remembered correction here.",
+        "Add a mapping, choose another correction, change it back, or directly edit the marked word to create a remembered correction.",
         bundle: #bundle,
         comment:
-          "Empty-state explanation of how Typover learns correction preferences."
+        "Empty-state explanation of how Typover learns correction preferences."
       )
     }
     .frame(maxWidth: .infinity, minHeight: 120)
   }
 }
 
-extension RememberedCorrectionOrigin {
-  fileprivate var title: LocalizedStringResource {
+private extension RememberedCorrectionOrigin {
+  var title: LocalizedStringResource {
     switch self {
     case .explicitChoice:
       "Chosen correction"
@@ -1235,40 +1559,29 @@ extension RememberedCorrectionOrigin {
       "Learned from a local edit"
     case .changedBack:
       "Changed back"
+    case .manualEntry:
+      "Added manually"
     case .legacy:
       "Remembered by an earlier version"
     }
   }
 }
 
-private struct LearningPrivacySection: View {
-  let onResetAll: () -> Void
-
-  var body: some View {
-    HStack(alignment: .center, spacing: 12) {
-      Label {
-        Text(
-          "Learning preferences and statistics stay on this Mac.",
-          bundle: #bundle,
-          comment: "Privacy assurance in the Typover learning settings window."
-        )
-      } icon: {
-        Image(systemName: "lock.shield")
-      }
-      .font(.callout)
-      .foregroundStyle(.secondary)
-
-      Spacer()
-
-      Button(role: .destructive, action: onResetAll) {
-        Text(
-          "Reset All Learning…",
-          bundle: #bundle,
-          comment:
-            "Button that begins clearing every Typover preference and correction statistic."
-        )
-      }
-      .accessibilityIdentifier("typover.settings.learning.reset-all")
+private extension ManualCorrectionMapping.ValidationError {
+  var message: LocalizedStringResource {
+    switch self {
+    case .emptyOriginal:
+      "Enter the text Typover should recognize."
+    case .emptyReplacement:
+      "Enter the replacement text."
+    case .unchanged:
+      "The replacement must differ from the typed text."
+    case .originalTooLong:
+      "The text to recognize is too long."
+    case .replacementTooLong:
+      "The replacement is too long."
+    case .unsupportedLineBreak:
+      "Mappings can’t contain line breaks or control characters."
     }
   }
 }

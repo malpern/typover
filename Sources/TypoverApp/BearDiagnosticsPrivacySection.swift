@@ -41,7 +41,7 @@ struct BearDiagnosticsPrivacySection: View {
         localized: "Delete the local Bear diagnostic trace?",
         bundle: #bundle,
         comment:
-          "Title of the confirmation shown before deleting Typover's local Bear diagnostic trace."
+        "Title of the confirmation shown before deleting Typover's local Bear diagnostic trace."
       ),
       isPresented: $isConfirmingDelete,
       titleVisibility: .visible
@@ -53,7 +53,7 @@ struct BearDiagnosticsPrivacySection: View {
           "Delete Trace",
           bundle: #bundle,
           comment:
-            "Confirmation button that deletes Typover's local Bear diagnostic trace."
+          "Confirmation button that deletes Typover's local Bear diagnostic trace."
         )
       }
       Button(role: .cancel) {} label: {
@@ -61,7 +61,7 @@ struct BearDiagnosticsPrivacySection: View {
           "Cancel",
           bundle: #bundle,
           comment:
-            "Button that cancels deleting Typover's local Bear diagnostic trace."
+          "Button that cancels deleting Typover's local Bear diagnostic trace."
         )
       }
     } message: {
@@ -69,7 +69,7 @@ struct BearDiagnosticsPrivacySection: View {
         "This removes the trace from this Mac. Typover's content-free session counters and remembered correction choices are unchanged.",
         bundle: #bundle,
         comment:
-          "Explanation of what deleting Typover's local Bear diagnostic trace does and does not remove."
+        "Explanation of what deleting Typover's local Bear diagnostic trace does and does not remove."
       )
     }
     .alert(
@@ -77,7 +77,7 @@ struct BearDiagnosticsPrivacySection: View {
         localized: "Diagnostic Trace Error",
         bundle: #bundle,
         comment:
-          "Title of an error alert for Typover's local Bear diagnostic trace."
+        "Title of an error alert for Typover's local Bear diagnostic trace."
       ),
       isPresented: $isShowingError
     ) {
@@ -86,7 +86,7 @@ struct BearDiagnosticsPrivacySection: View {
           "OK",
           bundle: #bundle,
           comment:
-            "Button that dismisses a Typover diagnostic-trace error alert."
+          "Button that dismisses a Typover diagnostic-trace error alert."
         )
       }
     } message: {
@@ -104,7 +104,7 @@ struct BearDiagnosticsPrivacySection: View {
     let panel = NSSavePanel()
     panel.nameFieldStringValue = "Typover Bear Diagnostic Trace.jsonl"
     panel.allowedContentTypes = [
-      UTType(filenameExtension: "jsonl") ?? .json,
+      UTType(filenameExtension: "jsonl") ?? .json
     ]
     guard panel.runModal() == .OK, let destination = panel.url else {
       return
@@ -142,32 +142,32 @@ private struct BearDiagnosticsPrivacyContent: View {
   let onDelete: () -> Void
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
-        BearDiagnosticsCaptureControls(
-          isEnabled: $isEnabled,
-          includesWriting: $includesWriting
-        )
-        Divider()
-        BearDiagnosticsStorageControls(
-          storedBytes: storedBytes,
-          isExporting: isExporting,
-          onExport: onExport,
-          onDelete: onDelete
-        )
-      }
-      .padding(4)
-    } label: {
-      Label {
-        Text(
-          "Bear diagnostics privacy",
-          bundle: #bundle,
-          comment:
-            "Heading for Typover's Bear diagnostic privacy and retention controls."
-        )
-      } icon: {
-        Image(systemName: "lock.doc")
-      }
+    Section {
+      BearDiagnosticsCaptureControls(
+        isEnabled: $isEnabled,
+        includesWriting: $includesWriting
+      )
+      BearDiagnosticsStorageControls(
+        storedBytes: storedBytes,
+        isExporting: isExporting,
+        onExport: onExport,
+        onDelete: onDelete
+      )
+    } header: {
+      Text(
+        "Bear Diagnostics",
+        bundle: #bundle,
+        comment:
+        "Heading for Typover's Bear diagnostic privacy and retention controls."
+      )
+    } footer: {
+      Text(
+        isEnabled
+          ? "Stored only on this Mac for up to 24 hours or 1 MB and never uploaded."
+          : "Off. Enable it to keep content-free timing for a diagnostic session.",
+        bundle: #bundle,
+        comment: "Privacy and retention summary for Bear diagnostics."
+      )
     }
   }
 }
@@ -183,27 +183,17 @@ private struct BearDiagnosticsCaptureControls: View {
           "Save a local Bear diagnostic trace",
           bundle: #bundle,
           comment:
-            "Setting that enables Typover's bounded local Bear diagnostic trace."
+          "Setting that enables Typover's bounded local Bear diagnostic trace."
         )
       }
       .accessibilityIdentifier("typover.settings.bear-diagnostics.enabled")
-
-      Text(
-        "Off by default. When enabled, Typover keeps content-free event timing on this Mac for up to 24 hours or 1 MB. It never uploads the trace.",
-        bundle: #bundle,
-        comment:
-          "Privacy and retention explanation for Typover's local Bear diagnostic trace."
-      )
-      .font(.callout)
-      .foregroundStyle(.secondary)
-      .padding(.leading, 20)
 
       Toggle(isOn: $includesWriting) {
         Text(
           "Include bounded writing context",
           bundle: #bundle,
           comment:
-            "Setting that allows Typover's local diagnostic trace to include bounded Bear writing context."
+          "Setting that allows Typover's local diagnostic trace to include bounded Bear writing context."
         )
       }
       .disabled(!isEnabled)
@@ -211,13 +201,13 @@ private struct BearDiagnosticsCaptureControls: View {
         "typover.settings.bear-diagnostics.includes-writing"
       )
 
-      if includesWriting && isEnabled {
+      if includesWriting, isEnabled {
         Label {
           Text(
             "The trace may contain words near the caret, originals, and replacements. Use this only for a diagnostic session, then export or delete it.",
             bundle: #bundle,
             comment:
-              "Warning shown when the user permits bounded writing in Typover's local diagnostic trace."
+            "Warning shown when the user permits bounded writing in Typover's local diagnostic trace."
           )
         } icon: {
           Image(systemName: "exclamationmark.shield")
@@ -243,7 +233,7 @@ private struct BearDiagnosticsStorageControls: View {
           "Stored locally:",
           bundle: #bundle,
           comment:
-            "Label before the size of Typover's local Bear diagnostic trace."
+          "Label before the size of Typover's local Bear diagnostic trace."
         )
         Text(Int64(storedBytes), format: .byteCount(style: .file))
       }
@@ -261,7 +251,7 @@ private struct BearDiagnosticsStorageControls: View {
             "Export…",
             bundle: #bundle,
             comment:
-              "Button that exports Typover's local Bear diagnostic trace."
+            "Button that exports Typover's local Bear diagnostic trace."
           )
         }
       }
@@ -273,7 +263,7 @@ private struct BearDiagnosticsStorageControls: View {
           "Delete",
           bundle: #bundle,
           comment:
-            "Button that deletes Typover's local Bear diagnostic trace."
+          "Button that deletes Typover's local Bear diagnostic trace."
         )
       }
       .disabled(storedBytes == 0)

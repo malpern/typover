@@ -10,7 +10,72 @@ public enum RememberedCorrectionOrigin: String, Codable, Equatable, Sendable {
   case explicitChoice
   case implicitLocalEdit
   case changedBack
+  case manualEntry
   case legacy
+}
+
+public struct ManualCorrectionMapping: Equatable, Sendable {
+  public enum ValidationError: Error, Equatable, Sendable {
+    case emptyOriginal
+    case emptyReplacement
+    case unchanged
+    case originalTooLong
+    case replacementTooLong
+    case unsupportedLineBreak
+  }
+
+  public let original: String
+  public let replacement: String
+  public let language: String?
+
+  public init(
+    original: String,
+    replacement: String,
+    language: String? = nil
+  ) throws {
+    let trimmedOriginal = original.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    let trimmedReplacement = replacement.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+
+    guard !trimmedOriginal.isEmpty else {
+      throw ValidationError.emptyOriginal
+    }
+    guard !trimmedReplacement.isEmpty else {
+      throw ValidationError.emptyReplacement
+    }
+    guard trimmedOriginal != trimmedReplacement else {
+      throw ValidationError.unchanged
+    }
+    guard trimmedOriginal.utf16.count <= 256 else {
+      throw ValidationError.originalTooLong
+    }
+    guard trimmedReplacement.utf16.count <= 1_024 else {
+      throw ValidationError.replacementTooLong
+    }
+    guard
+      !trimmedOriginal.unicodeScalars.contains(where: {
+        CharacterSet.newlines.contains($0)
+          || CharacterSet.controlCharacters.contains($0)
+      }),
+      !trimmedReplacement.unicodeScalars.contains(where: {
+        CharacterSet.newlines.contains($0)
+          || CharacterSet.controlCharacters.contains($0)
+      })
+    else {
+      throw ValidationError.unsupportedLineBreak
+    }
+
+    self.original = trimmedOriginal.precomposedStringWithCanonicalMapping
+    self.replacement =
+      trimmedReplacement.precomposedStringWithCanonicalMapping
+    let trimmedLanguage = language?.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    self.language = trimmedLanguage?.isEmpty == false ? trimmedLanguage : nil
+  }
 }
 
 public struct RememberedCorrectionRule: Equatable, Identifiable, Sendable {
@@ -180,18 +245,52 @@ public final class CorrectionLearningStore {
     for original: String,
     language: String?
   ) -> RememberedCorrectionPreference? {
-    let key = preferenceKey(original: original, language: language)
-    return state.preferences.first(where: { $0.key == key })?.preference
+    matchingPreferenceEntry(original: original, language: language)?.preference
+  }
+
+  public func addManualMapping(_ mapping: ManualCorrectionMapping) {
+    setPreference(
+      .preferred(mapping.replacement),
+      origin: .manualEntry,
+      for: mapping.original,
+      language: mapping.language
+    )
+  }
+
+  public func manualProposal(
+    for original: String,
+    language: String?
+  ) -> CorrectionProposal? {
+    guard
+      let entry = matchingPreferenceEntry(
+        original: original,
+        language: language
+      ),
+      entry.origin == .manualEntry,
+      case let .preferred(replacement) = entry.preference
+    else {
+      return nil
+    }
+
+    return CorrectionProposal(
+      correction: Correction(
+        original: original,
+        replacement: replacement
+      ),
+      source: .rememberedPreference,
+      language: entry.key.language.isEmpty ? language : entry.key.language
+    )
   }
 
   public func applyingPreference(
     to proposal: CorrectionProposal
   ) -> CorrectionProposal? {
-    let key = preferenceKey(
-      original: proposal.correction.original,
-      language: proposal.language
-    )
-    guard let entry = state.preferences.first(where: { $0.key == key }) else {
+    guard
+      let entry = matchingPreferenceEntry(
+        original: proposal.correction.original,
+        language: proposal.language
+      )
+    else {
       return proposal
     }
 
@@ -203,7 +302,7 @@ public final class CorrectionLearningStore {
         entry.origin != .implicitLocalEdit
           || Self.isSafeImplicitReplacement(replacement)
       else {
-        state.preferences.removeAll(where: { $0.key == key })
+        state.preferences.removeAll(where: { $0.key == entry.key })
         persist()
         return proposal
       }
@@ -531,6 +630,21 @@ public final class CorrectionLearningStore {
       original: original.precomposedStringWithCanonicalMapping,
       language: language ?? ""
     )
+  }
+
+  private func matchingPreferenceEntry(
+    original: String,
+    language: String?
+  ) -> PreferenceEntry? {
+    let exactKey = preferenceKey(original: original, language: language)
+    if let exact = state.preferences.first(where: { $0.key == exactKey }) {
+      return exact
+    }
+    guard language != nil else {
+      return nil
+    }
+    let anyLanguageKey = preferenceKey(original: original, language: nil)
+    return state.preferences.first(where: { $0.key == anyLanguageKey })
   }
 
   private func setPreference(

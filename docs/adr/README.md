@@ -15,3 +15,5 @@
 - [ADR-013: Use stable signing for Accessibility development builds](adr-013-stable-signing-for-accessibility-development.md)
 - [ADR-014: Serialize an idle-first Bear runtime](adr-014-serialize-idle-first-bear-runtime.md)
 - [ADR-015: Keep launch at login out of the initial beta](adr-015-manual-launch-for-initial-beta.md)
+- [ADR-016: Separate controlled-editor and external-editor mutation lanes](adr-016-two-lane-correction-runtime.md)
+- [ADR-017: Use native toolbar panes for Settings](adr-017-native-settings-panes.md)

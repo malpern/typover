@@ -326,8 +326,13 @@ final class TypoverTextView: NSTextView {
     }
 
     onLearnedSuppression?(nil)
+    let language = NSSpellChecker.shared.userPreferredLanguages.first
     guard
       let baseProposal = correctionEngine.proposal(for: completedWord.text)
+        ?? learningStore.manualProposal(
+          for: completedWord.text,
+          language: language
+        )
     else {
       return
     }

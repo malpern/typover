@@ -51,6 +51,27 @@ struct EditorStressTests {
     )
   }
 
+  @Test("A manual phrase mapping applies without a spelling suggestion")
+  func manualMappingAppliesWithoutEngineSuggestion() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.learningStore.addManualMapping(
+      try ManualCorrectionMapping(
+        original: "brb",
+        replacement: "be right back"
+      )
+    )
+
+    fixture.type("brb ")
+
+    #expect(fixture.editor.string == "be right back ")
+    #expect(fixture.appliedSnapshots.count == 1)
+    #expect(
+      fixture.appliedSnapshots.first?.correction.replacement
+        == "be right back"
+    )
+  }
+
   @Test("Each correction keeps an independent annotation and menu action")
   func multipleCorrectionsRemainIndependent() throws {
     let fixture = EditorFixture()

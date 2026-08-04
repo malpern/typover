@@ -2,6 +2,9 @@ import SwiftUI
 import TypoverAccessibility
 
 struct BearCompatibilitySection: View {
+  static let advancedExpandedDefaultsKey =
+    "settings-bear-advanced-expanded"
+
   let report: BearAccessibilityReport?
   let eventReport: BearAccessibilityEventReport?
   let isChecking: Bool
@@ -15,101 +18,120 @@ struct BearCompatibilitySection: View {
   let onObserve: () -> Void
   let onPreviewOverlay: () -> Void
   let onStopOverlayPreview: () -> Void
+  @AppStorage(Self.advancedExpandedDefaultsKey) private var isAdvancedExpanded =
+    false
 
   var body: some View {
-    GroupBox {
-      VStack(alignment: .leading, spacing: 14) {
-        if let report {
-          BearCompatibilityStatus(report: report)
-        } else {
-          Text(
-            "Typover briefly brings Bear forward to check the caret, a small local context, and range geometry. The check never changes a note or keeps its text.",
-            bundle: #bundle,
-            comment:
-              "Explanation of Typover's read-only Bear compatibility check."
-          )
-          .font(.callout)
-          .foregroundStyle(.secondary)
-        }
+    Section {
+      BearAutomaticCorrectionControl(
+        isEnabled: automaticCorrectionEnabled,
+        status: automaticCorrectionStatus,
+        onChanged: onAutomaticCorrectionChanged
+      )
+    } header: {
+      Text(
+        "Automatic Correction",
+        bundle: #bundle,
+        comment: "Heading for automatic correction in Bear."
+      )
+    } footer: {
+      Text(
+        "Typover corrects verified completed words with Apple Spelling and leaves a light-gray squiggle for Change Back.",
+        bundle: #bundle,
+        comment: "Concise explanation for Typover automatic Bear correction."
+      )
+    }
 
-        Divider()
-
-        BearAutomaticCorrectionControl(
-          isEnabled: automaticCorrectionEnabled,
-          status: automaticCorrectionStatus,
-          diagnostics: automaticCorrectionDiagnostics,
-          onChanged: onAutomaticCorrectionChanged
-        )
-
-        HStack {
-          Button(action: onCheck) {
-            if isChecking {
-              ProgressView()
-                .controlSize(.small)
-              Text(
-                "Checking Bear…",
-                bundle: #bundle,
-                comment:
-                  "Label shown while Typover performs its read-only Bear compatibility check."
-              )
-            } else {
-              Text(
-                "Run Read-Only Check",
-                bundle: #bundle,
-                comment:
-                  "Button that starts Typover's read-only Bear compatibility check."
-              )
-            }
-          }
-          .disabled(isChecking || isObserving)
-          .accessibilityIdentifier("typover.settings.bear.run-probe")
-
-          Spacer()
-
-          Label {
+    Section {
+      DisclosureGroup(
+        "Testing and Diagnostics",
+        isExpanded: $isAdvancedExpanded
+      ) {
+        VStack(alignment: .leading, spacing: 14) {
+          if let report {
+            BearCompatibilityStatus(report: report)
+          } else {
             Text(
-              "No note text is shown or saved",
+              "Typover briefly brings Bear forward to check the caret, a small local context, and range geometry. The check never changes a note or keeps its text.",
               bundle: #bundle,
               comment:
-                "Privacy statement beside Typover's Bear compatibility check."
+              "Explanation of Typover's read-only Bear compatibility check."
             )
-          } icon: {
-            Image(systemName: "lock.shield")
+            .font(.callout)
+            .foregroundStyle(.secondary)
           }
-          .font(.caption)
-          .foregroundStyle(.secondary)
-        }
 
-        if report?.status.allowsEventObservation == true {
           Divider()
 
-          BearEventObservationControl(
-            report: eventReport,
-            isObserving: isObserving,
-            onObserve: onObserve
+          BearAutomaticCorrectionDiagnosticsView(
+            diagnostics: automaticCorrectionDiagnostics
+          )
+
+          HStack {
+            Button(action: onCheck) {
+              if isChecking {
+                ProgressView()
+                  .controlSize(.small)
+                Text(
+                  "Checking Bear…",
+                  bundle: #bundle,
+                  comment:
+                  "Label shown while Typover performs its read-only Bear compatibility check."
+                )
+              } else {
+                Text(
+                  "Run Read-Only Check",
+                  bundle: #bundle,
+                  comment:
+                  "Button that starts Typover's read-only Bear compatibility check."
+                )
+              }
+            }
+            .disabled(isChecking || isObserving)
+            .accessibilityIdentifier("typover.settings.bear.run-probe")
+
+            Spacer()
+
+            Label {
+              Text(
+                "No note text is shown or saved",
+                bundle: #bundle,
+                comment:
+                "Privacy statement beside Typover's Bear compatibility check."
+              )
+            } icon: {
+              Image(systemName: "lock.shield")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          }
+
+          if report?.status.allowsEventObservation == true {
+            Divider()
+
+            BearEventObservationControl(
+              report: eventReport,
+              isObserving: isObserving,
+              onObserve: onObserve
+            )
+          }
+
+          Divider()
+
+          BearOverlayPreviewControl(
+            status: overlayPreviewStatus,
+            onPreview: onPreviewOverlay,
+            onStop: onStopOverlayPreview
           )
         }
-
-        Divider()
-
-        BearOverlayPreviewControl(
-          status: overlayPreviewStatus,
-          onPreview: onPreviewOverlay,
-          onStop: onStopOverlayPreview
-        )
+        .accessibilityIdentifier("typover.settings.bear.advanced")
       }
-      .padding(4)
-    } label: {
-      Label {
-        Text(
-          "Bear compatibility",
-          bundle: #bundle,
-          comment:
-            "Heading for Typover's Bear compatibility diagnostics."
-        )
-      } icon: {
-        Image(systemName: "pawprint")
-      }
+    } header: {
+      Text(
+        "Advanced",
+        bundle: #bundle,
+        comment: "Heading for advanced Bear testing tools."
+      )
     }
   }
 }
@@ -117,7 +139,6 @@ struct BearCompatibilitySection: View {
 private struct BearAutomaticCorrectionControl: View {
   let isEnabled: Bool
   let status: BearAutomaticCorrectionStatus
-  let diagnostics: BearAutomaticCorrectionDiagnostics
   let onChanged: @MainActor @Sendable (Bool) -> Void
 
   var body: some View {
@@ -132,78 +153,61 @@ private struct BearAutomaticCorrectionControl: View {
           "Correct spelling while typing in Bear",
           bundle: #bundle,
           comment:
-            "Setting that enables Typover's experimental automatic spelling correction in Bear."
+          "Setting that enables Typover's experimental automatic spelling correction in Bear."
         )
       }
       .accessibilityIdentifier(
         "typover.settings.bear.automatic-correction"
       )
 
-      Text(
-        "Experimental: Typover watches only the focused Bear editor, corrects verified completed words with Apple Spelling, and leaves the light-gray squiggle for Change Back.",
-        bundle: #bundle,
-        comment:
-          "Explanation below Typover's experimental automatic Bear correction setting."
-      )
-      .font(.callout)
-      .foregroundStyle(.secondary)
-      .padding(.leading, 20)
-
       if isEnabled {
         Label(status.message, systemImage: status.systemImage)
           .font(.callout)
           .foregroundStyle(.secondary)
           .padding(.leading, 20)
-
-        Text(
-          "This session: \(diagnostics.correctionsApplied.formatted()) applied, \(diagnostics.correctionsDeferred.formatted()) deferred during rapid typing, \(diagnostics.safeSkips.formatted()) skipped safely, \(diagnostics.refusals.formatted()) refused. No writing is recorded.",
-          bundle: #bundle,
-          comment:
-            "Content-free Bear correction diagnostics. The values are applied corrections, corrections deferred during rapid typing, safe skips, and refusals."
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.leading, 20)
-
-        if let lastOutcome = diagnostics.lastOutcome {
-          Label(lastOutcome.message, systemImage: "info.circle")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.leading, 20)
-        }
-
-        if diagnostics.snapshot.correctionToAnnotationSampleCount > 0 {
-          Text(
-            "Typical correction-to-squiggle time: \(diagnostics.snapshot.medianCorrectionToAnnotationMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
-            bundle: #bundle,
-            comment:
-              "Median elapsed time from a typed completion boundary to a visible Typover annotation."
-          )
-          .font(.caption)
-          .monospacedDigit()
-          .foregroundStyle(.secondary)
-          .padding(.leading, 20)
-        }
-
-        if diagnostics.snapshot.interactionLatencySampleCount > 0 {
-          Text(
-            "Typical menu-to-verified-change time: \(diagnostics.snapshot.medianInteractionLatencyMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
-            bundle: #bundle,
-            comment:
-              "Median elapsed time from choosing a Bear correction menu action until its exact replacement is verified."
-          )
-          .font(.caption)
-          .monospacedDigit()
-          .foregroundStyle(.secondary)
-          .padding(.leading, 20)
-        }
       }
     }
   }
 }
 
-extension BearAutomaticCorrectionDiagnosticOutcome {
-  fileprivate var message: LocalizedStringResource {
+private struct BearAutomaticCorrectionDiagnosticsView: View {
+  let diagnostics: BearAutomaticCorrectionDiagnostics
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(
+        "This session: \(diagnostics.correctionsApplied.formatted()) applied, \(diagnostics.correctionsDeferred.formatted()) deferred, \(diagnostics.safeSkips.formatted()) skipped safely, \(diagnostics.refusals.formatted()) refused.",
+        bundle: #bundle,
+        comment: "Content-free Bear correction diagnostics."
+      )
+
+      if let lastOutcome = diagnostics.lastOutcome {
+        Label(lastOutcome.message, systemImage: "info.circle")
+      }
+
+      if diagnostics.snapshot.correctionToAnnotationSampleCount > 0 {
+        Text(
+          "Typical correction-to-squiggle time: \(diagnostics.snapshot.medianCorrectionToAnnotationMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
+          bundle: #bundle
+        )
+        .monospacedDigit()
+      }
+
+      if diagnostics.snapshot.interactionLatencySampleCount > 0 {
+        Text(
+          "Typical menu-to-verified-change time: \(diagnostics.snapshot.medianInteractionLatencyMilliseconds.formatted(.number.precision(.fractionLength(0)))) ms",
+          bundle: #bundle
+        )
+        .monospacedDigit()
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+  }
+}
+
+private extension BearAutomaticCorrectionDiagnosticOutcome {
+  var message: LocalizedStringResource {
     switch self {
     case .applied:
       "The last eligible correction was applied"
@@ -241,8 +245,8 @@ extension BearAutomaticCorrectionDiagnosticOutcome {
   }
 }
 
-extension BearAutomaticCorrectionStatus {
-  fileprivate var message: LocalizedStringResource {
+private extension BearAutomaticCorrectionStatus {
+  var message: LocalizedStringResource {
     switch self {
     case .disabled:
       "Automatic Bear correction is off"
@@ -254,9 +258,9 @@ extension BearAutomaticCorrectionStatus {
       "Paused while text is selected"
     case .bearVersionUnavailable:
       "Typover could not identify this Bear version"
-    case .unsupportedBearVersion(let installed):
+    case let .unsupportedBearVersion(installed):
       "Bear \(installed) is not supported; this beta supports Bear 2.8.1 and 2.9.1"
-    case .unsupportedMacOSVersion(let installed):
+    case let .unsupportedMacOSVersion(installed):
       "macOS \(installed) is not supported; this beta supports macOS 27.0"
     case .accessibilityPermissionRequired:
       "Allow Typover in Privacy & Security → Accessibility"
@@ -269,21 +273,21 @@ extension BearAutomaticCorrectionStatus {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .observing:
       "checkmark.circle.fill"
     case .accessibilityPermissionRequired:
       "lock.fill"
     case .bearVersionUnavailable, .unsupportedBearVersion,
-      .unsupportedMacOSVersion:
+         .unsupportedMacOSVersion:
       "exclamationmark.triangle.fill"
     case .pausedForSelection:
       "pause.circle"
     case .pausedAfterIndeterminateWrite:
       "exclamationmark.octagon.fill"
     case .disabled, .waitingForBear, .editorUnavailable,
-      .inputMonitoringUnavailable:
+         .inputMonitoringUnavailable:
       "info.circle"
     }
   }
@@ -300,7 +304,7 @@ private struct BearOverlayPreviewControl: View {
         "To test the real interaction, select exactly “teh” in a disposable Bear note. Typover will change only that selection to “the.” Click the light-gray squiggle to change it back or choose another Apple Spelling suggestion.",
         bundle: #bundle,
         comment:
-          "Instructions for the bounded Bear annotation overlay preview."
+        "Instructions for the bounded Bear annotation overlay preview."
       )
       .font(.callout)
       .foregroundStyle(.secondary)
@@ -347,8 +351,8 @@ private struct BearOverlayPreviewControl: View {
   }
 }
 
-extension BearOverlayPreviewStatus {
-  fileprivate var message: LocalizedStringResource? {
+private extension BearOverlayPreviewStatus {
+  var message: LocalizedStringResource? {
     switch self {
     case .idle:
       nil
@@ -366,7 +370,7 @@ extension BearOverlayPreviewStatus {
       "Select exactly three characters in the Bear editor, then try again"
     case .selectionDidNotMatch:
       "The selected text was not “teh”; nothing was changed"
-    case .correctionFailed(let status):
+    case let .correctionFailed(status):
       switch status {
       case .alreadyApplied:
         "The selected word was already corrected"
@@ -382,7 +386,7 @@ extension BearOverlayPreviewStatus {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .active:
       "scribble.variable"
@@ -391,7 +395,7 @@ extension BearOverlayPreviewStatus {
     case .accessibilityPermissionRequired:
       "lock.fill"
     case .idle, .bearUnavailable, .editorUnavailable, .selectExactTypo,
-      .selectionDidNotMatch, .correctionFailed:
+         .selectionDidNotMatch, .correctionFailed:
       "info.circle"
     }
   }
@@ -410,7 +414,7 @@ private struct BearEventObservationControl: View {
             "Move the caret, scroll, or resize Bear now.",
             bundle: #bundle,
             comment:
-              "Instruction shown while Typover observes read-only Bear Accessibility events."
+            "Instruction shown while Typover observes read-only Bear Accessibility events."
           )
         } icon: {
           ProgressView()
@@ -424,7 +428,7 @@ private struct BearEventObservationControl: View {
           "Observe Bear for five seconds, then move the caret, scroll, or resize the window. Typover records only event names and counts.",
           bundle: #bundle,
           comment:
-            "Instructions for Typover's timed Bear Accessibility event observation."
+          "Instructions for Typover's timed Bear Accessibility event observation."
         )
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -437,7 +441,7 @@ private struct BearEventObservationControl: View {
             : "Observe Bear for 5 Seconds",
           bundle: #bundle,
           comment:
-            "Button that starts or describes Typover's timed read-only Bear event observation."
+          "Button that starts or describes Typover's timed read-only Bear event observation."
         )
       }
       .disabled(isObserving)
@@ -456,7 +460,7 @@ private struct BearEventObservationResult: View {
           "\(totalEventCount) events observed",
           bundle: #bundle,
           comment:
-            "Summary of the number of content-free Bear Accessibility events Typover observed."
+          "Summary of the number of content-free Bear Accessibility events Typover observed."
         )
       } icon: {
         Image(
@@ -475,7 +479,7 @@ private struct BearEventObservationResult: View {
           "No events arrived. Run the observation again and interact with the Bear editor while it is in front.",
           bundle: #bundle,
           comment:
-            "Guidance shown when no Bear Accessibility events were observed."
+          "Guidance shown when no Bear Accessibility events were observed."
         )
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -545,14 +549,14 @@ private struct BearCompatibilityStatus: View {
             "\(supportedNotificationCount) of \(report.notificationRegistrations.count)",
             bundle: #bundle,
             comment:
-              "Count of supported Accessibility notification registrations; the first value is supported and the second is tested."
+            "Count of supported Accessibility notification registrations; the first value is supported and the second is tested."
           )
         } label: {
           Text(
             "Event registrations",
             bundle: #bundle,
             comment:
-              "Label for Bear Accessibility event-registration capabilities."
+            "Label for Bear Accessibility event-registration capabilities."
           )
         }
       }
@@ -577,14 +581,14 @@ private struct BearCapabilityRow: View {
           "Available",
           bundle: #bundle,
           comment:
-            "Availability result for a Bear Accessibility capability."
+          "Availability result for a Bear Accessibility capability."
         )
       } else {
         Text(
           "Unavailable",
           bundle: #bundle,
           comment:
-            "Unavailability result for a Bear Accessibility capability."
+          "Unavailability result for a Bear Accessibility capability."
         )
       }
     } label: {
@@ -593,12 +597,12 @@ private struct BearCapabilityRow: View {
   }
 }
 
-extension BearAccessibilityProbeStatus {
-  fileprivate var allowsEventObservation: Bool {
+private extension BearAccessibilityProbeStatus {
+  var allowsEventObservation: Bool {
     self == .ready || self == .editorAvailableButNotFocused
   }
 
-  fileprivate var title: LocalizedStringResource {
+  var title: LocalizedStringResource {
     switch self {
     case .ready:
       "Bear editor found"
@@ -615,7 +619,7 @@ extension BearAccessibilityProbeStatus {
     }
   }
 
-  fileprivate var explanation: LocalizedStringResource {
+  var explanation: LocalizedStringResource {
     switch self {
     case .ready:
       "Typover found Bear’s active editor and completed a content-free capability check."
@@ -632,7 +636,7 @@ extension BearAccessibilityProbeStatus {
     }
   }
 
-  fileprivate var systemImage: String {
+  var systemImage: String {
     switch self {
     case .ready:
       "checkmark.circle.fill"
@@ -647,21 +651,21 @@ extension BearAccessibilityProbeStatus {
     }
   }
 
-  fileprivate var tint: Color {
+  var tint: Color {
     switch self {
     case .ready:
       .green
     case .accessibilityPermissionRequired:
       .orange
     case .bearNotRunning, .focusedEditorUnavailable,
-      .focusedElementIsNotTextArea, .editorAvailableButNotFocused:
+         .focusedElementIsNotTextArea, .editorAvailableButNotFocused:
       .secondary
     }
   }
 }
 
-extension AccessibilityEventObservation {
-  fileprivate var title: LocalizedStringResource {
+private extension AccessibilityEventObservation {
+  var title: LocalizedStringResource {
     switch name {
     case "AXSelectedTextChanged":
       "Selection"

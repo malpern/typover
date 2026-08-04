@@ -1110,9 +1110,7 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     guard
-      let engineProposal = correctionEngine.proposal(
-        for: completion.word.text
-      )
+      let engineProposal = baseProposal(for: completion.word.text)
     else {
       tracePrivate("outcome=noSuggestion word=\(completion.word.text.debugDescription)")
       diagnostics.recordSafeSkip(.noSuggestion)
@@ -1176,7 +1174,7 @@ final class BearAutomaticCorrectionCoordinator {
       deferredCorrections.isEmpty,
       deferredScanStartLocation == nil,
       let authorizedSnapshot = lastSnapshot,
-      let engineProposal = correctionEngine.proposal(for: completion.word),
+      let engineProposal = baseProposal(for: completion.word),
       let proposal = learningStore.applyingPreference(to: engineProposal),
       proposal.correction.original == completion.word,
       let pending = textExpansionLane.begin(
@@ -1216,9 +1214,7 @@ final class BearAutomaticCorrectionCoordinator {
       let textExpansionLane,
       deferredCorrections.isEmpty,
       deferredScanStartLocation == nil,
-      let engineProposal = correctionEngine.proposal(
-        for: receipt.plan.original
-      ),
+      let engineProposal = baseProposal(for: receipt.plan.original),
       let proposal = learningStore.applyingPreference(to: engineProposal),
       let pending = textExpansionLane.beginPreDispatched(
         receipt: receipt,
@@ -1624,7 +1620,7 @@ final class BearAutomaticCorrectionCoordinator {
         !deferredCorrections.contains(where: {
           $0.targetRange == targetRange
         }),
-        let engineProposal = correctionEngine.proposal(for: word.text),
+        let engineProposal = baseProposal(for: word.text),
         let proposal = learningStore.applyingPreference(to: engineProposal),
         proposal.correction.original == word.text
       else {
@@ -1753,7 +1749,7 @@ final class BearAutomaticCorrectionCoordinator {
       pendingInputIntent == .other,
       pendingBoundaryObservedAt == nil,
       scheduledBoundaryObservedAt == nil,
-      let engineProposal = correctionEngine.proposal(for: "teh"),
+      let engineProposal = baseProposal(for: "teh"),
       let proposal = learningStore.applyingPreference(to: engineProposal),
       proposal.correction.original == "teh",
       proposal.correction.replacement == "the"
@@ -1762,6 +1758,14 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     typingInputMonitor.authorizePreDispatch(from: snapshot)
+  }
+
+  private func baseProposal(for word: String) -> CorrectionProposal? {
+    correctionEngine.proposal(for: word)
+      ?? learningStore.manualProposal(
+        for: word,
+        language: NSSpellChecker.shared.userPreferredLanguages.first
+      )
   }
 
   private func installWorkspaceObservers() {

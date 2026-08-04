@@ -3,21 +3,20 @@ import Foundation
 import SwiftUI
 import Testing
 import TypoverAccessibility
-import TypoverCore
-
 @testable import TypoverApp
+import TypoverCore
 
 @MainActor
 struct LearningSettingsViewTests {
-  @Test("Correction counts use singular and plural labels")
-  func correctionCountLabels() {
+  @Test
+  func `Correction counts use singular and plural labels`() {
     #expect(String(localized: correctionCountLabel(0)) == "0 corrections")
     #expect(String(localized: correctionCountLabel(1)) == "1 correction")
     #expect(String(localized: correctionCountLabel(2)) == "2 corrections")
   }
 
-  @Test("Permission model reports the current checker snapshot")
-  func permissionModelRefreshes() {
+  @Test
+  func `Permission model reports the current checker snapshot`() {
     let model = TypoverPermissionModel(
       checker: TestPermissionChecker(
         value: TypoverPermissionSnapshot(
@@ -33,8 +32,8 @@ struct LearningSettingsViewTests {
     #expect(model.snapshot.inputMonitoringAllowed == false)
   }
 
-  @Test("A new Bear preview supersedes only an active interaction")
-  func previewRequestActions() {
+  @Test
+  func `A new Bear preview supersedes only an active interaction`() {
     #expect(BearOverlayPreviewStatus.idle.previewRequestAction == .start)
     #expect(
       BearOverlayPreviewStatus.editorUnavailable.previewRequestAction == .start
@@ -43,8 +42,8 @@ struct LearningSettingsViewTests {
     #expect(BearOverlayPreviewStatus.preparing.previewRequestAction == .ignore)
   }
 
-  @Test("Bear preview reports missing Accessibility permission")
-  func reportsMissingAccessibilityPermission() {
+  @Test
+  func `Bear preview reports missing Accessibility permission`() {
     let report = BearAccessibilityReport(
       status: .accessibilityPermissionRequired,
       accessibilityTrusted: false,
@@ -57,8 +56,8 @@ struct LearningSettingsViewTests {
     )
   }
 
-  @Test("Bear preview distinguishes selection and editor failures")
-  func reportsSelectionAndEditorFailures() {
+  @Test
+  func `Bear preview distinguishes selection and editor failures`() {
     let missingSelection = BearAccessibilityReport(
       status: .ready,
       accessibilityTrusted: true,
@@ -81,8 +80,8 @@ struct LearningSettingsViewTests {
     )
   }
 
-  @Test("Bear preview preserves the exact replacement failure")
-  func reportsReplacementFailure() {
+  @Test
+  func `Bear preview preserves the exact replacement failure`() {
     let report = BearExactRangeReplacementReport(
       status: .replacementWriteFailed,
       targetRange: AccessibilityTextRange(location: 20, length: 3)
@@ -94,8 +93,8 @@ struct LearningSettingsViewTests {
     )
   }
 
-  @Test("Statistics and preferences settings render at their intended size")
-  func rendersSettingsSurface() throws {
+  @Test
+  func `Settings panes render at their intended size`() throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -119,30 +118,80 @@ struct LearningSettingsViewTests {
     let credentialStore = SecretsAppCredentialStore(
       environment: [
         "OPENAI_API_KEY": "test-credential",
-        "ANTHROPIC_API_KEY": "test-credential",
+        "ANTHROPIC_API_KEY": "test-credential"
       ]
     )
 
+    let standardDefaults = UserDefaults.standard
+    let previousPane = standardDefaults.string(
+      forKey: LearningSettingsView.selectedPaneDefaultsKey
+    )
+    let previousBearAdvanced = standardDefaults.object(
+      forKey: BearCompatibilitySection.advancedExpandedDefaultsKey
+    )
+    defer {
+      if let previousPane {
+        standardDefaults.set(
+          previousPane,
+          forKey: LearningSettingsView.selectedPaneDefaultsKey
+        )
+      } else {
+        standardDefaults.removeObject(
+          forKey: LearningSettingsView.selectedPaneDefaultsKey
+        )
+      }
+      if let previousBearAdvanced {
+        standardDefaults.set(
+          previousBearAdvanced,
+          forKey: BearCompatibilitySection.advancedExpandedDefaultsKey
+        )
+      } else {
+        standardDefaults.removeObject(
+          forKey: BearCompatibilitySection.advancedExpandedDefaultsKey
+        )
+      }
+    }
     let snapshotHeight = ProcessInfo.processInfo.environment[
       "TYPOVER_SETTINGS_SNAPSHOT_HEIGHT"
-    ].flatMap(Double.init) ?? 1_080
-    let image = try render(
-      LearningSettingsView(
-        behaviorSettings: behaviorSettings,
-        learningStore: store,
-        credentialStore: credentialStore
+    ].flatMap(Double.init) ?? 540
+    let requestedPane = ProcessInfo.processInfo.environment[
+      "TYPOVER_SETTINGS_PANE"
+    ]
+    let panes = requestedPane.map { [$0] }
+      ?? ["general", "bear", "learning", "privacy"]
+
+    for pane in panes {
+      standardDefaults.set(
+        pane,
+        forKey: LearningSettingsView.selectedPaneDefaultsKey
       )
-      .background(Color(nsColor: .windowBackgroundColor)),
-      size: NSSize(width: 640, height: snapshotHeight)
-    )
+      standardDefaults.set(
+        ProcessInfo.processInfo.environment[
+          "TYPOVER_SETTINGS_BEAR_ADVANCED"
+        ] == "1",
+        forKey: BearCompatibilitySection.advancedExpandedDefaultsKey
+      )
 
-    #expect(image.size.width == 640)
-    #expect(image.size.height == CGFloat(snapshotHeight))
+      let image = try render(
+        LearningSettingsView(
+          behaviorSettings: behaviorSettings,
+          learningStore: store,
+          credentialStore: credentialStore
+        )
+        .background(Color(nsColor: .windowBackgroundColor)),
+        size: NSSize(width: 680, height: snapshotHeight)
+      )
 
-    if let snapshotPath = ProcessInfo.processInfo.environment[
-      "TYPOVER_SETTINGS_SNAPSHOT_PATH"
-    ] {
-      try writePNG(image, to: URL(fileURLWithPath: snapshotPath))
+      #expect(image.size.width == 680)
+      #expect(image.size.height == CGFloat(snapshotHeight))
+
+      if panes.count == 1,
+         let snapshotPath = ProcessInfo.processInfo.environment[
+           "TYPOVER_SETTINGS_SNAPSHOT_PATH"
+         ]
+      {
+        try writePNG(image, to: URL(fileURLWithPath: snapshotPath))
+      }
     }
   }
 
@@ -196,8 +245,8 @@ struct LearningSettingsViewTests {
     try pngData.write(to: url, options: .atomic)
   }
 
-  private func render<Content: View>(
-    _ content: Content,
+  private func render(
+    _ content: some View,
     size: NSSize
   ) throws -> NSImage {
     let hostingController = NSHostingController(rootView: content)
@@ -230,5 +279,7 @@ struct LearningSettingsViewTests {
 private struct TestPermissionChecker: TypoverPermissionChecking {
   let value: TypoverPermissionSnapshot
 
-  func snapshot() -> TypoverPermissionSnapshot { value }
+  func snapshot() -> TypoverPermissionSnapshot {
+    value
+  }
 }
