@@ -9,6 +9,10 @@ another suggestion.
 
 > Typover fixes mistakes as you type—and always lets you go back.
 
+[Product page](https://malpern.github.io/talk-topics/typover/) ·
+[Visual roadmap](https://malpern.github.io/typover/plans/roadmap.html) ·
+[Join the waitlist](https://github.com/malpern/typover/issues/new?template=waitlist.yml)
+
 ## The interaction
 
 1. The writer completes a word or sentence.
