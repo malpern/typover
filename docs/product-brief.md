@@ -20,7 +20,7 @@ A corrected word receives a persistent light-gray squiggle. Selecting it shows:
 
 - the original typed word;
 - other likely corrections;
-- an action to keep the current correction and remove the mark.
+- the source that proposed the correction.
 
 ## Behavioral principles
 
@@ -28,13 +28,17 @@ A corrected word receives a persistent light-gray squiggle. Selecting it shows:
 
 Observe and replace the smallest safe range. Word-boundary corrections may run
 after Space or punctuation. Contextual corrections may reconsider the most
-recently completed sentence, but must apply a range-level diff rather than
-replace the whole sentence or field.
+recently completed sentence and normally apply range-level changes. A separate
+explicit setting may permit one completed sentence to be rewritten for clarity;
+it never permits automatic paragraph, selection, field, or document rewrites.
 
 ### Conservative
 
-Automatic replacement requires high confidence. Lower-confidence findings
-remain suggestions and do not modify text.
+Automatic replacement must pass a small set of explicit safety rules. The
+controlled-editor policy accepts bounded Unicode words whose proposed
+replacement is one edit away, preserves lowercase, Capitalized, and ALL-CAPS
+patterns, and permits internal apostrophes. Mixed-case words and malformed word
+forms remain unchanged.
 
 ### Reversible
 
@@ -49,8 +53,8 @@ Automatic changes remain quietly visible. The mark should communicate
 
 ### Private
 
-The preferred design runs on-device. Any prototype that sends text elsewhere
-must be opt-in and state exactly what text is transmitted.
+The preferred default runs on-device. Any model that sends text elsewhere must
+be explicitly selected and state exactly what text is transmitted.
 
 ## Technical hypotheses
 
@@ -76,3 +80,15 @@ must be opt-in and state exactly what text is transmitted.
 
 None combines automatic incremental correction, a persistent native mark, and
 per-change restoration across macOS.
+
+## Future evaluation: correction confidence
+
+Typover does not assign or display a numeric confidence score in the first
+prototype. Apple’s spelling APIs provide ranked candidates, not a calibrated
+probability, and inventing a score would imply precision we have not measured.
+
+A later benchmark may evaluate confidence scoring or calibration after Typover
+has a representative typo corpus and can measure false-positive rates. Any
+future score must improve the automatic-correction decision over the simple
+binary policy, remain explainable, and be validated separately for each
+correction engine. It is not required for the controlled-editor milestone.

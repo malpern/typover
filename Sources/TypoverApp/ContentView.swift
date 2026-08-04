@@ -1,10 +1,17 @@
 import SwiftUI
+import TypoverCore
 
 struct ContentView: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let learningStore: CorrectionLearningStore
+
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       TypoverHeader()
-      EditorLabSection()
+      EditorLabSection(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore
+      )
       EditorPrinciples()
     }
     .padding(32)
@@ -58,6 +65,11 @@ private struct TypoverHeader: View {
 }
 
 private struct EditorLabSection: View {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let learningStore: CorrectionLearningStore
+
+  @State private var learnedSuppression: String?
+
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
@@ -85,24 +97,46 @@ private struct EditorLabSection: View {
         .foregroundStyle(.secondary)
       }
 
-      EditorLabView()
-        .frame(minHeight: 240)
-        .padding(1)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay {
-          RoundedRectangle(cornerRadius: 14)
-            .stroke(.separator.opacity(0.65))
+      EditorLabView(
+        behaviorSettings: behaviorSettings,
+        learningStore: learningStore,
+        onLearnedSuppression: { original in
+          learnedSuppression = original
         }
+      )
+      .frame(minHeight: 240)
+      .padding(1)
+      .background(Color(nsColor: .textBackgroundColor))
+      .clipShape(RoundedRectangle(cornerRadius: 14))
+      .overlay {
+        RoundedRectangle(cornerRadius: 14)
+          .stroke(.separator.opacity(0.65))
+      }
 
       Text(
-        "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or keep the correction.",
+        "The word changes automatically. Its light-gray squiggle remains clickable so you can change it back or choose another correction.",
         bundle: #bundle,
         comment:
           "Instructions below the Typover editor explaining the reversible correction interaction."
       )
       .font(.callout)
       .foregroundStyle(.secondary)
+
+      if let learnedSuppression {
+        Label {
+          Text(
+            "Typover left “\(learnedSuppression)” unchanged because you previously chose Change Back. Forget that choice in Settings to correct it again.",
+            bundle: #bundle,
+            comment:
+              "Explanation shown when a remembered preference suppresses a spelling correction."
+          )
+        } icon: {
+          Image(systemName: "brain")
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("typover.editor.learned-suppression")
+      }
     }
   }
 }

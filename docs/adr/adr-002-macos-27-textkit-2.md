@@ -14,7 +14,7 @@ At WWDC26, Apple reaffirmed `NSViewRepresentable` as the supported way to embed
 `NSTextView` in a SwiftUI app. Apple also made `NSTextView` conform publicly to
 `NSTextViewportLayoutControllerDelegate` in macOS 27. An `NSTextView` subclass
 can now observe viewport layout directly while retaining the framework text
-view’s editing, selection, accessibility, dictation, and Undo behavior.
+view’s editing, selection, accessibility, text-input, and Undo behavior.
 
 The viewport hooks are especially relevant to Typover. A persistent correction
 annotation must update after edits, wrapping, scrolling, and other layout

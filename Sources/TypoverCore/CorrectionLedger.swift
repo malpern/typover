@@ -2,6 +2,7 @@ public enum CorrectionDisposition: Equatable, Sendable {
   case applied
   case restored
   case kept
+  case superseded
   case invalidated
 }
 

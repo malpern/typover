@@ -1,0 +1,28 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.97255,0.94118,0.87451,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "TypoverForeground.png",
+          "name" : "TypoverForeground"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}

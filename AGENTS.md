@@ -5,7 +5,7 @@ spell correction.
 
 ## Product invariants
 
-- Apply only high-confidence corrections automatically.
+- Apply only corrections that pass the current explicit eligibility policy.
 - Replace the smallest safe text range; never rewrite an entire document.
 - Preserve the original text for every automatic correction.
 - Keep automatic corrections visibly distinguishable until the user resolves

@@ -1,0 +1,279 @@
+import Foundation
+
+public enum BearHIDTestScenario: String, Codable, CaseIterable, Sendable {
+  case repeatedWords = "repeated-words"
+  case punctuation
+}
+
+public struct BearHIDTestPlan: Codable, Equatable, Sendable {
+  public let scenario: BearHIDTestScenario
+  public let intervalsMilliseconds: [Int]
+  public let wordsPerCase: Int
+  public let holdMilliseconds: Int
+  public let startDelayMilliseconds: Int
+  public let settleMilliseconds: Int
+  public let maximumConvergenceMilliseconds: Int
+
+  public init(
+    scenario: BearHIDTestScenario = .repeatedWords,
+    intervalsMilliseconds: [Int] = [160, 100, 60, 40],
+    wordsPerCase: Int = 20,
+    holdMilliseconds: Int = 12,
+    startDelayMilliseconds: Int = 1_500,
+    settleMilliseconds: Int = 1_500,
+    maximumConvergenceMilliseconds: Int = 10_000
+  ) throws {
+    guard !intervalsMilliseconds.isEmpty,
+      intervalsMilliseconds.allSatisfy({ $0 >= 4 }),
+      Set(intervalsMilliseconds).count == intervalsMilliseconds.count
+    else {
+      throw BearHIDTestPlanError.invalidIntervals
+    }
+    guard (1 ... 50).contains(wordsPerCase) else {
+      throw BearHIDTestPlanError.invalidWordCount
+    }
+    guard holdMilliseconds >= 2,
+      intervalsMilliseconds.allSatisfy({ holdMilliseconds < $0 })
+    else {
+      throw BearHIDTestPlanError.invalidHoldDuration
+    }
+    guard (100 ... 60_000).contains(startDelayMilliseconds) else {
+      throw BearHIDTestPlanError.invalidStartDelay
+    }
+    guard (250 ... 10_000).contains(settleMilliseconds) else {
+      throw BearHIDTestPlanError.invalidSettleDelay
+    }
+    guard (settleMilliseconds ... 30_000).contains(
+      maximumConvergenceMilliseconds
+    ) else {
+      throw BearHIDTestPlanError.invalidConvergenceDelay
+    }
+
+    self.scenario = scenario
+    self.intervalsMilliseconds = intervalsMilliseconds
+    self.wordsPerCase = wordsPerCase
+    self.holdMilliseconds = holdMilliseconds
+    self.startDelayMilliseconds = startDelayMilliseconds
+    self.settleMilliseconds = settleMilliseconds
+    self.maximumConvergenceMilliseconds = maximumConvergenceMilliseconds
+  }
+
+  public var cases: [BearHIDTestCase] {
+    intervalsMilliseconds.enumerated().map { index, interval in
+      BearHIDTestCase(
+        scenario: scenario,
+        ordinal: index + 1,
+        intervalMilliseconds: interval,
+        words: wordsPerCase,
+        holdMilliseconds: holdMilliseconds,
+        startDelayMilliseconds: startDelayMilliseconds,
+        settleMilliseconds: settleMilliseconds,
+        maximumConvergenceMilliseconds: maximumConvergenceMilliseconds
+      )
+    }
+  }
+}
+
+public enum BearHIDTestPlanError: Error, Equatable, Sendable {
+  case invalidIntervals
+  case invalidWordCount
+  case invalidHoldDuration
+  case invalidStartDelay
+  case invalidSettleDelay
+  case invalidConvergenceDelay
+}
+
+public struct BearHIDTestCase: Codable, Equatable, Sendable {
+  public let scenario: BearHIDTestScenario
+  public let ordinal: Int
+  public let intervalMilliseconds: Int
+  public let words: Int
+  public let holdMilliseconds: Int
+  public let startDelayMilliseconds: Int
+  public let settleMilliseconds: Int
+  public let maximumConvergenceMilliseconds: Int
+
+  public var typedText: String {
+    correctionSegments.map(\.typed).joined() + "\n"
+  }
+
+  public var fullyCorrectedText: String {
+    correctionSegments.map(\.corrected).joined() + "\n"
+  }
+
+  public var correctionSegments: [(typed: String, corrected: String)] {
+    switch scenario {
+    case .repeatedWords:
+      Array(repeating: (typed: "teh ", corrected: "the "), count: words)
+    case .punctuation:
+      [". ", "? ", "! ", "; ", ": "].map { boundary in
+        (typed: "teh\(boundary)", corrected: "the\(boundary)")
+      }.cycled(prefix: words)
+    }
+  }
+
+  public var expectedUTF16Length: Int {
+    typedText.utf16.count
+  }
+
+  public var executionMilliseconds: Int {
+    expectedUTF16Length * intervalMilliseconds + startDelayMilliseconds
+      + maximumConvergenceMilliseconds
+  }
+
+  public func fixtureArguments(
+    command: String,
+    runID: String,
+    filePath: String? = nil
+  ) -> [String] {
+    switch command {
+    case "compile-text":
+      guard let filePath else { return [] }
+      return [
+        "compile-text", "--run-id", runID,
+        "--text", filePath,
+        "--interval-ms", String(intervalMilliseconds),
+        "--hold-ms", String(holdMilliseconds),
+        "--repeat", "1",
+        "--cycle-gap-ms", "0",
+        "--output", filePath + ".kphid",
+      ]
+    case "load-script":
+      guard let filePath else { return [] }
+      return ["load-script", filePath + ".kphid"]
+    case "arm":
+      return ["arm", runID]
+    case "start":
+      return [
+        "start", runID, "--delay-ms", String(startDelayMilliseconds),
+      ]
+    default:
+      return []
+    }
+  }
+}
+
+public enum BearHIDCaseClassification: String, Codable, Equatable, Sendable {
+  case passed
+  case safeMissesObserved = "safe-misses-observed"
+  case unexpectedText = "unexpected-text"
+  case invalidEvidence = "invalid-evidence"
+}
+
+public struct BearHIDCaseAnalysis: Codable, Equatable, Sendable {
+  public let classification: BearHIDCaseClassification
+  public let expectedWords: Int
+  public let correctedWords: Int
+  public let missedWords: Int
+  public let unexpectedChunks: Int
+  public let hadExpectedTrailingNewline: Bool
+  public let actualText: String
+
+  public init(testCase: BearHIDTestCase, actualText: String?) {
+    guard let actualText,
+      actualText.utf16.count == testCase.expectedUTF16Length
+    else {
+      classification = .invalidEvidence
+      expectedWords = testCase.words
+      correctedWords = 0
+      missedWords = 0
+      unexpectedChunks = 0
+      hadExpectedTrailingNewline = false
+      self.actualText = actualText ?? ""
+      return
+    }
+
+    let body = String(actualText.dropLast())
+    var correctedWords = 0
+    var missedWords = 0
+    var unexpectedChunks = 0
+    let units = Array(body.utf16)
+    var offset = 0
+    for segment in testCase.correctionSegments {
+      let length = segment.typed.utf16.count
+      guard offset + length <= units.count else {
+        unexpectedChunks += 1
+        break
+      }
+      let chunk = String(
+        decoding: units[offset ..< offset + length],
+        as: UTF16.self
+      )
+      if chunk == segment.corrected {
+        correctedWords += 1
+      } else if chunk == segment.typed {
+        missedWords += 1
+      } else {
+        unexpectedChunks += 1
+      }
+      offset += length
+    }
+    if offset != units.count {
+      unexpectedChunks += 1
+    }
+    let trailingNewline = actualText.last == "\n"
+    let classification: BearHIDCaseClassification
+    if !trailingNewline || unexpectedChunks > 0 {
+      classification = .unexpectedText
+    } else if correctedWords == testCase.words {
+      classification = .passed
+    } else if correctedWords + missedWords == testCase.words {
+      classification = .safeMissesObserved
+    } else {
+      classification = .unexpectedText
+    }
+
+    self.classification = classification
+    expectedWords = testCase.words
+    self.correctedWords = correctedWords
+    self.missedWords = missedWords
+    self.unexpectedChunks = unexpectedChunks
+    hadExpectedTrailingNewline = trailingNewline
+    self.actualText = actualText
+  }
+}
+
+private extension Array {
+  func cycled(prefix count: Int) -> [Element] {
+    guard !isEmpty, count > 0 else { return [] }
+    return (0 ..< count).map { self[$0 % self.count] }
+  }
+}
+
+public enum BearHIDTextEvidence {
+  public static func insertedText(
+    baselineCaret: Int,
+    finalCaret: Int,
+    finalLeadingText: String,
+    expectedLength: Int? = nil,
+    maximumLength: Int = 256
+  ) -> String? {
+    let insertedLength = finalCaret - baselineCaret
+    let leadingUnits = Array(finalLeadingText.utf16)
+    if insertedLength >= 0,
+      insertedLength <= maximumLength,
+      leadingUnits.count >= insertedLength
+    {
+      return String(
+        decoding: leadingUnits.suffix(insertedLength),
+        as: UTF16.self
+      )
+    }
+
+    // Bear may replace the focused Accessibility fragment when Return creates
+    // a new editor block. The replacement fragment is prefixed by one object
+    // replacement character and then contains the complete inserted burst.
+    // Accept only that exact, caller-sized shape; analysis still rejects any
+    // missing, extra, or unexpected text inside the recovered suffix.
+    if let expectedLength,
+      expectedLength <= maximumLength,
+      finalCaret == expectedLength + 1,
+      leadingUnits.count >= expectedLength + 1
+    {
+      let candidate = leadingUnits.suffix(expectedLength + 1)
+      guard candidate.first == 0xFFFC else { return nil }
+      return String(decoding: candidate.dropFirst(), as: UTF16.self)
+    }
+    return nil
+  }
+}

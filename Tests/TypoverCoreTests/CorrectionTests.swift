@@ -8,45 +8,27 @@ struct CorrectionTests {
   func detectsChangedText() {
     let correction = Correction(
       original: "teh",
-      replacement: "the",
-      confidence: 0.99
+      replacement: "the"
     )
 
     #expect(correction.changesText)
   }
 
-  @Test("Confidence is constrained to a probability")
-  func clampsConfidence() {
-    let overconfident = Correction(
-      original: "recieve",
-      replacement: "receive",
-      confidence: 1.4
-    )
-    let underconfident = Correction(
-      original: "form",
-      replacement: "from",
-      confidence: -0.2
-    )
-
-    #expect(overconfident.confidence == 1)
-    #expect(underconfident.confidence == 0)
-  }
-
-  @Test("The demo engine only corrects its high-confidence rule")
+  @Test("The demo engine only corrects its narrow rule")
+  @MainActor
   func demoEngineUsesNarrowRule() {
     let engine = DemoCorrectionEngine()
 
-    #expect(engine.correction(for: "teh")?.replacement == "the")
-    #expect(engine.correction(for: "recieve") == nil)
-    #expect(engine.correction(for: "Teh") == nil)
+    #expect(engine.proposal(for: "teh")?.correction.replacement == "the")
+    #expect(engine.proposal(for: "recieve") == nil)
+    #expect(engine.proposal(for: "Teh") == nil)
   }
 
   @Test("The ledger preserves the original correction as its state changes")
   func ledgerTracksDisposition() {
     let correction = Correction(
       original: "teh",
-      replacement: "the",
-      confidence: 0.99
+      replacement: "the"
     )
     var ledger = CorrectionLedger()
 

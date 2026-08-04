@@ -9,17 +9,109 @@ let package = Package(
   ],
   products: [
     .executable(name: "Typover", targets: ["TypoverApp"]),
+    .executable(name: "TypoverEval", targets: ["TypoverEval"]),
+    .executable(
+      name: "TypoverBearHIDHarness",
+      targets: ["TypoverBearHIDHarness"]
+    ),
     .library(name: "TypoverCore", targets: ["TypoverCore"]),
+    .library(name: "TypoverHIDTesting", targets: ["TypoverHIDTesting"]),
+    .library(
+      name: "TypoverAppleIntelligence",
+      targets: ["TypoverAppleIntelligence"]
+    ),
+    .library(
+      name: "TypoverRemoteIntelligence",
+      targets: ["TypoverRemoteIntelligence"]
+    ),
+    .library(
+      name: "TypoverAccessibility",
+      targets: ["TypoverAccessibility"]
+    ),
+    .library(
+      name: "TypoverBearAdapter",
+      targets: ["TypoverBearAdapter"]
+    ),
+    .library(name: "TypoverOverlay", targets: ["TypoverOverlay"]),
+    .library(name: "TypoverAppleSpell", targets: ["TypoverAppleSpell"]),
   ],
   targets: [
     .target(name: "TypoverCore"),
+    .target(name: "TypoverHIDTesting"),
+    .target(name: "TypoverAccessibility"),
+    .target(
+      name: "TypoverBearAdapter",
+      dependencies: ["TypoverAccessibility", "TypoverCore"]
+    ),
+    .target(
+      name: "TypoverOverlay",
+      dependencies: ["TypoverAccessibility", "TypoverBearAdapter"]
+    ),
+    .target(
+      name: "TypoverAppleIntelligence",
+      dependencies: ["TypoverCore"]
+    ),
+    .target(
+      name: "TypoverAppleSpell",
+      dependencies: ["TypoverCore"]
+    ),
+    .target(
+      name: "TypoverRemoteIntelligence",
+      dependencies: ["TypoverCore"]
+    ),
+    .target(
+      name: "TypoverEvaluation",
+      dependencies: ["TypoverCore"],
+      resources: [
+        .process("Resources")
+      ]
+    ),
+    .executableTarget(
+      name: "TypoverEval",
+      dependencies: [
+        "TypoverAppleIntelligence",
+        "TypoverAppleSpell",
+        "TypoverCore",
+        "TypoverEvaluation",
+      ]
+    ),
     .executableTarget(
       name: "TypoverApp",
-      dependencies: ["TypoverCore"]
+      dependencies: [
+        "TypoverAppleIntelligence",
+        "TypoverAppleSpell",
+        "TypoverAccessibility",
+        "TypoverBearAdapter",
+        "TypoverCore",
+        "TypoverOverlay",
+        "TypoverRemoteIntelligence",
+      ],
+      resources: [
+        .process("Resources")
+      ]
+    ),
+    .executableTarget(
+      name: "TypoverBearHIDHarness",
+      dependencies: [
+        "TypoverAccessibility",
+        "TypoverHIDTesting",
+        "TypoverOverlay",
+      ]
     ),
     .testTarget(
       name: "TypoverCoreTests",
-      dependencies: ["TypoverCore"]
+      dependencies: [
+        "TypoverApp",
+        "TypoverAppleIntelligence",
+        "TypoverAppleSpell",
+        "TypoverAccessibility",
+        "TypoverBearAdapter",
+        "TypoverCore",
+        "TypoverEvaluation",
+        "TypoverHIDTesting",
+        "TypoverOverlay",
+        "TypoverRemoteIntelligence",
+      ]
     ),
   ]
 )

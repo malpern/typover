@@ -1,0 +1,943 @@
+{
+  "schemaVersion": 1,
+  "baseline": {
+    "platform": "macOS 27 / NSSpellChecker",
+    "defaultLanguage": "en_US",
+    "notes": "Synthetic words only. Approved cases gate the harness; provisional names, technical vocabulary, and multilingual examples require human review before promotion."
+  },
+  "cases": [
+    {
+      "id": "transpose-teh",
+      "category": "transposition",
+      "word": "teh",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "the" }
+    },
+    {
+      "id": "transpose-hte",
+      "category": "transposition",
+      "word": "hte",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "the" }
+    },
+    {
+      "id": "transpose-adn",
+      "category": "transposition",
+      "word": "adn",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "and" }
+    },
+    {
+      "id": "transpose-taht",
+      "category": "transposition",
+      "word": "taht",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "that" }
+    },
+    {
+      "id": "transpose-waht",
+      "category": "transposition",
+      "word": "waht",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "what" }
+    },
+    {
+      "id": "transpose-jsut",
+      "category": "transposition",
+      "word": "jsut",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "just" }
+    },
+    {
+      "id": "transpose-freind",
+      "category": "transposition",
+      "word": "freind",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "friend" }
+    },
+    {
+      "id": "transpose-recieve",
+      "category": "transposition",
+      "word": "recieve",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "receive" }
+    },
+    {
+      "id": "transpose-becuase",
+      "category": "transposition",
+      "word": "becuase",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "because" }
+    },
+    {
+      "id": "transpose-wierd",
+      "category": "transposition",
+      "word": "wierd",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "weird" }
+    },
+    {
+      "id": "transpose-thier",
+      "category": "transposition",
+      "word": "thier",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "their" }
+    },
+    {
+      "id": "transpose-whcih",
+      "category": "transposition",
+      "word": "whcih",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "which" }
+    },
+    {
+      "id": "transpose-foudn",
+      "category": "transposition",
+      "word": "foudn",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "found" }
+    },
+    {
+      "id": "transpose-tiem",
+      "category": "transposition",
+      "word": "tiem",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "time" }
+    },
+    {
+      "id": "transpose-woudl",
+      "category": "transposition",
+      "word": "woudl",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "would" }
+    },
+    {
+      "id": "transpose-coudl",
+      "category": "transposition",
+      "word": "coudl",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "could" }
+    },
+    {
+      "id": "transpose-shoudl",
+      "category": "transposition",
+      "word": "shoudl",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "should" }
+    },
+    {
+      "id": "insert-speling",
+      "category": "missing-letter",
+      "word": "speling",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "spelling" }
+    },
+    {
+      "id": "insert-begining",
+      "category": "missing-letter",
+      "word": "begining",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "beginning" }
+    },
+    {
+      "id": "insert-tomorow",
+      "category": "missing-letter",
+      "word": "tomorow",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "tomorrow" }
+    },
+    {
+      "id": "insert-sucess",
+      "category": "missing-letter",
+      "word": "sucess",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "success" }
+    },
+    {
+      "id": "insert-realy",
+      "category": "missing-letter",
+      "word": "realy",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "really" }
+    },
+    {
+      "id": "delete-untill",
+      "category": "extra-letter",
+      "word": "untill",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "until" }
+    },
+    {
+      "id": "delete-comming",
+      "category": "extra-letter",
+      "word": "comming",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "coming" }
+    },
+    {
+      "id": "delete-writting",
+      "category": "extra-letter",
+      "word": "writting",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "writing" }
+    },
+    {
+      "id": "delete-neccessary",
+      "category": "extra-letter",
+      "word": "neccessary",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "necessary" }
+    },
+    {
+      "id": "delete-occassion",
+      "category": "extra-letter",
+      "word": "occassion",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "occasion" }
+    },
+    {
+      "id": "insert-embarass",
+      "category": "missing-letter",
+      "word": "embarass",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "embarrass" }
+    },
+    {
+      "id": "substitute-seperate",
+      "category": "substitution",
+      "word": "seperate",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "separate" }
+    },
+    {
+      "id": "insert-goverment",
+      "category": "missing-letter",
+      "word": "goverment",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "government" }
+    },
+    {
+      "id": "insert-accomodate",
+      "category": "missing-letter",
+      "word": "accomodate",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "accommodate" }
+    },
+    {
+      "id": "insert-occurence",
+      "category": "missing-letter",
+      "word": "occurence",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "occurrence" }
+    },
+    {
+      "id": "insert-prefered",
+      "category": "missing-letter",
+      "word": "prefered",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "preferred" }
+    },
+    {
+      "id": "insert-refering",
+      "category": "missing-letter",
+      "word": "refering",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "referring" }
+    },
+    {
+      "id": "insert-transfered",
+      "category": "missing-letter",
+      "word": "transfered",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "transferred" }
+    },
+    {
+      "id": "substitute-definate",
+      "category": "substitution",
+      "word": "definate",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "definite" }
+    },
+    {
+      "id": "delete-arguement",
+      "category": "extra-letter",
+      "word": "arguement",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "argument" }
+    },
+    {
+      "id": "substitute-calender",
+      "category": "substitution",
+      "word": "calender",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "calendar" }
+    },
+    {
+      "id": "apostrophe-dont",
+      "category": "apostrophe",
+      "word": "dont",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "don't" }
+    },
+    {
+      "id": "ambiguity-cant",
+      "category": "valid-word-ambiguity",
+      "word": "cant",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "apostrophe-youre",
+      "category": "apostrophe",
+      "word": "youre",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "you're" }
+    },
+    {
+      "id": "apostrophe-doesnt",
+      "category": "apostrophe",
+      "word": "doesnt",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "doesn't" }
+    },
+    {
+      "id": "apostrophe-isnt",
+      "category": "apostrophe",
+      "word": "isnt",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "isn't" }
+    },
+    {
+      "id": "apostrophe-wasnt",
+      "category": "apostrophe",
+      "word": "wasnt",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "wasn't" }
+    },
+    {
+      "id": "capitalized-teh",
+      "category": "capitalization",
+      "word": "Teh",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "The" }
+    },
+    {
+      "id": "uppercase-teh",
+      "category": "capitalization",
+      "word": "TEH",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "correction", "replacement": "THE" }
+    },
+    {
+      "id": "accent-cafe",
+      "category": "accent",
+      "word": "cafe",
+      "language": "fr_FR",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "correction", "replacement": "café" }
+    },
+    {
+      "id": "accent-espanol",
+      "category": "accent",
+      "word": "espanol",
+      "language": "es_ES",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "correction", "replacement": "español" }
+    },
+    {
+      "id": "accent-jalapeno",
+      "category": "accent",
+      "word": "jalapeno",
+      "language": "es_ES",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "correction", "replacement": "jalapeño" }
+    },
+
+    {
+      "id": "valid-the",
+      "category": "valid-word",
+      "word": "the",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-and",
+      "category": "valid-word",
+      "word": "and",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-that",
+      "category": "valid-word",
+      "word": "that",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-what",
+      "category": "valid-word",
+      "word": "what",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-just",
+      "category": "valid-word",
+      "word": "just",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-friend",
+      "category": "valid-word",
+      "word": "friend",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-receive",
+      "category": "valid-word",
+      "word": "receive",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-because",
+      "category": "valid-word",
+      "word": "because",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-weird",
+      "category": "valid-word",
+      "word": "weird",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-their",
+      "category": "valid-word",
+      "word": "their",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-which",
+      "category": "valid-word",
+      "word": "which",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-found",
+      "category": "valid-word",
+      "word": "found",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-time",
+      "category": "valid-word",
+      "word": "time",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-would",
+      "category": "valid-word",
+      "word": "would",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-could",
+      "category": "valid-word",
+      "word": "could",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-should",
+      "category": "valid-word",
+      "word": "should",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-spelling",
+      "category": "valid-word",
+      "word": "spelling",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-beginning",
+      "category": "valid-word",
+      "word": "beginning",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-tomorrow",
+      "category": "valid-word",
+      "word": "tomorrow",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-success",
+      "category": "valid-word",
+      "word": "success",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-really",
+      "category": "valid-word",
+      "word": "really",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-until",
+      "category": "valid-word",
+      "word": "until",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-coming",
+      "category": "valid-word",
+      "word": "coming",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-writing",
+      "category": "valid-word",
+      "word": "writing",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-necessary",
+      "category": "valid-word",
+      "word": "necessary",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-occasion",
+      "category": "valid-word",
+      "word": "occasion",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-embarrass",
+      "category": "valid-word",
+      "word": "embarrass",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-separate",
+      "category": "valid-word",
+      "word": "separate",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-government",
+      "category": "valid-word",
+      "word": "government",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-dont",
+      "category": "valid-word",
+      "word": "don't",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-cant",
+      "category": "valid-word",
+      "word": "can't",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-youre",
+      "category": "valid-word",
+      "word": "you're",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-doesnt",
+      "category": "valid-word",
+      "word": "doesn't",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-isnt",
+      "category": "valid-word",
+      "word": "isn't",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "valid-contraction-wasnt",
+      "category": "valid-word",
+      "word": "wasn't",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "ambiguity-form",
+      "category": "valid-word-ambiguity",
+      "word": "form",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-wont",
+      "category": "valid-word-ambiguity",
+      "word": "wont",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-resume",
+      "category": "valid-word-ambiguity",
+      "word": "resume",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-desert",
+      "category": "valid-word-ambiguity",
+      "word": "desert",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-affect",
+      "category": "valid-word-ambiguity",
+      "word": "affect",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-effect",
+      "category": "valid-word-ambiguity",
+      "word": "effect",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-complement",
+      "category": "valid-word-ambiguity",
+      "word": "complement",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-compliment",
+      "category": "valid-word-ambiguity",
+      "word": "compliment",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-principal",
+      "category": "valid-word-ambiguity",
+      "word": "principal",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-principle",
+      "category": "valid-word-ambiguity",
+      "word": "principle",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-stationary",
+      "category": "valid-word-ambiguity",
+      "word": "stationary",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "ambiguity-stationery",
+      "category": "valid-word-ambiguity",
+      "word": "stationery",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "mixed-case-iphone",
+      "category": "mixed-case-protection",
+      "word": "iPhone",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-macos",
+      "category": "mixed-case-protection",
+      "word": "macOS",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-textkit",
+      "category": "mixed-case-protection",
+      "word": "TextKit",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-appkit",
+      "category": "mixed-case-protection",
+      "word": "AppKit",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-swiftui",
+      "category": "mixed-case-protection",
+      "word": "SwiftUI",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-nsspellchecker",
+      "category": "mixed-case-protection",
+      "word": "NSSpellChecker",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-github",
+      "category": "mixed-case-protection",
+      "word": "GitHub",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-openai",
+      "category": "mixed-case-protection",
+      "word": "OpenAI",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "mixed-case-typovercore",
+      "category": "mixed-case-protection",
+      "word": "TypoverCore",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "identifier-gpt4",
+      "category": "identifier-protection",
+      "word": "GPT4",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "identifier-utf8",
+      "category": "identifier-protection",
+      "word": "utf8",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "identifier-en-us",
+      "category": "identifier-protection",
+      "word": "en_US",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "identifier-key-path",
+      "category": "identifier-protection",
+      "word": "key-path",
+      "reviewStatus": "approved",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "name-micah",
+      "category": "name",
+      "word": "Micah",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-alpern",
+      "category": "name",
+      "word": "Alpern",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-ritchie",
+      "category": "name",
+      "word": "Ritchie",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-ozer",
+      "category": "name",
+      "word": "Ozer",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-bear",
+      "category": "name",
+      "word": "Bear",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-flarup",
+      "category": "name",
+      "word": "Flarup",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-scot",
+      "category": "name",
+      "word": "Scot",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "name-ali",
+      "category": "name",
+      "word": "Ali",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "technical-kanata",
+      "category": "technical-vocabulary",
+      "word": "kanata",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-plist",
+      "category": "technical-vocabulary",
+      "word": "plist",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-launchd",
+      "category": "technical-vocabulary",
+      "word": "launchd",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-crabbox",
+      "category": "technical-vocabulary",
+      "word": "crabbox",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-tart",
+      "category": "technical-vocabulary",
+      "word": "tart",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-websocket",
+      "category": "technical-vocabulary",
+      "word": "websocket",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-localhost",
+      "category": "technical-vocabulary",
+      "word": "localhost",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "technical-markdown",
+      "category": "technical-vocabulary",
+      "word": "Markdown",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+
+    {
+      "id": "french-cafe",
+      "category": "multilingual-valid",
+      "word": "café",
+      "language": "fr_FR",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "french-resume",
+      "category": "multilingual-valid",
+      "word": "résumé",
+      "language": "fr_FR",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "spanish-espanol",
+      "category": "multilingual-valid",
+      "word": "español",
+      "language": "es_ES",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "spanish-manana",
+      "category": "multilingual-valid",
+      "word": "mañana",
+      "language": "es_ES",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "german-uber",
+      "category": "multilingual-valid",
+      "word": "über",
+      "language": "de_DE",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    },
+    {
+      "id": "german-strasse",
+      "category": "multilingual-valid",
+      "word": "Straße",
+      "language": "de_DE",
+      "reviewStatus": "provisional",
+      "expectation": { "kind": "unchanged" }
+    }
+  ]
+}

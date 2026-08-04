@@ -1,8 +1,10 @@
 # Bear compatibility spike
 
-- Status: Planned
+- Status: Supporting engineering plan; automatic multi-correction tracking
+  implemented
 - Created: 2026-07-25
 - Initial target: Bear 2.8.1 on macOS 27
+- Active sequencing: [Typover roadmap](roadmap.md)
 
 ## Goal
 
@@ -27,7 +29,7 @@ measured explicitly.
 First demonstrate the complete interaction in Typover’s controlled AppKit and
 TextKit editor:
 
-- [x] automatically replace one high-confidence misspelling;
+- [x] automatically replace one narrowly eligible misspelling;
 - [x] preserve the original and replacement in `TypoverCore`;
 - [x] render a persistent light-gray squiggle;
 - [x] select the squiggle and restore the original;
@@ -35,16 +37,27 @@ TextKit editor:
       correction transaction;
 - [x] stress-test annotation alignment and state while scrolling a long
       controlled document.
+- [x] replace the demo rule with Apple’s local spelling engine and ranked
+      alternatives;
+- [x] support cursor-relative correction, capitalization, Unicode accents, and
+      internal apostrophes while leaving surrounding text unchanged;
+- [x] complete the correction corpus and editing-robustness gate in the
+      [controlled-editor roadmap](controlled-editor-roadmap.md).
 
 The controlled editor is the reference implementation. Bear compatibility is
 evaluated against it rather than defining the interaction while platform
 uncertainties remain.
 
+The prerequisite gate is complete. Apple remains Typover's default model
+because it keeps private writing on device and performed competitively in the
+reviewed rewrite benchmark. Phase 1 is intentionally read-only and does not
+invoke any model or depend on a Bear API token.
+
 The first controlled-editor milestone was completed on 2026-07-25 with a
-deterministic `teh` → `the` rule. It remains intentionally narrow. The initial
-long-document scrolling test now passes; next, replace the demo rule with an
-on-device spelling candidate source without weakening the confidence or
-range-safety policy.
+deterministic `teh` → `the` rule. The second milestone replaced that demo rule
+with `NSSpellChecker`, retained a deliberately narrow binary eligibility
+policy, added ranked alternatives and Apple correction feedback, and kept all
+processing on device. The initial long-document scrolling test also passes.
 
 The reference editor now uses a TextKit 2-backed `NSTextView` and the macOS 27
 viewport-layout callback. This is the baseline for the long-document scrolling
@@ -80,11 +93,56 @@ Bear’s x-callback URL API can identify and retrieve the selected note with an
 API token. It may help associate an Accessibility editor with a stable Bear
 note ID, but it is too coarse and expensive for per-word correction.
 
+### Automation and scripting research: 2026-07-25
+
+Bear 2.8's supported external automation surfaces are useful, but none replaces
+the live Accessibility path:
+
+- `bearcli` and Bear's official MCP server expose local note-level search,
+  read, create, append, and edit operations. `bearcli edit` finds exact strings
+  with Bear's in-app search engine; it does not address the active editor by a
+  selected character range or preserve its caret as part of the operation.
+- The CLI has valuable safety behavior for scripting, including rejecting
+  attachment-removing edits unless explicitly forced. Encrypted notes can be
+  listed but not read or modified.
+- x-callback URLs can open the selected note, place the cursor in its editor,
+  return note content, and append, prepend, or replace note-level content. They
+  do not expose the current selection range, text-layout geometry, editor
+  notifications, or a range-level replacement transaction.
+- Bear's Shortcuts actions cover note creation, lookup, search, opening,
+  appending, tagging, exporting, and related note-level operations. The app
+  advertises no action for replacing the active editor selection.
+- The installed Bear 2.8.1 app has no AppleScript scripting dictionary.
+- Bear uses the macOS spelling-and-grammar controls in its Edit menu, which
+  supports the hypothesis that its editor participates in standard macOS text
+  services. This does not provide an extension point for Typover's persistent
+  annotation.
+
+The first Phase 2 fixture run also demonstrated that a `bearcli search-in`
+offset does not identify the same character in Bear's Accessibility editor.
+The guarded transaction rejected the mismatched range before writing. Raw
+Markdown, CLI, and Accessibility offsets must therefore never be mixed.
+
+Decision: use Bear's official CLI only for disposable fixture setup, stable
+note identity, diagnostics, and possible reconciliation. Use the focused
+`AXTextArea` as the sole coordinate system for live correction, caret
+restoration, and annotation geometry. Do not add a Bear API token, Shortcuts
+dependency, MCP connection, or AppleScript bridge to the live typing path.
+
+Primary references:
+
+- [Bear command-line interface](https://bear.app/faq/command-line-interface/)
+- [Bear x-callback URL scheme](https://bear.app/faq/x-callback-url-scheme-documentation/)
+- [Bear 2.8 CLI announcement and search-engine clarification](https://community.bear.app/t/bear-2-8-bearcli-claude-connector-and-mcp-server/19072)
+- [Bear Shortcuts automation overview](https://blog.bear.app/2022/03/automate-your-notes-with-shortcuts-and-bear/)
+- [Bear spelling and grammar controls](https://bear.app/faq/disable-spell-check-and-corrections/)
+
 ## Safety and privacy boundaries
 
 - Use a dedicated disposable Bear note during development.
 - Never run mutation experiments against an existing user note.
-- Keep correction context on-device.
+- Keep all Phase 1 probe context on-device; the probe does not invoke the
+  optional cloud model path.
 - Read only the smallest useful range around the insertion point.
 - Never log note text, selected text, or correction context.
 - Logs may contain application identity, attribute availability, ranges,
@@ -100,15 +158,17 @@ note ID, but it is too coarse and expensive for per-word correction.
 
 ### `TypoverCore`
 
-Owns correction decisions, confidence thresholds, range-level diffs,
-correction records, context fingerprints, and re-anchoring logic. It has no
-dependency on Bear, Accessibility, AppKit, or TextKit.
+Owns correction decisions, binary eligibility rules, range-level diffs, and
+generic correction records and dispositions. It has no dependency on Bear,
+Accessibility, AppKit, or TextKit.
 
 ### `TypoverAccessibility`
 
 Finds the active application and focused editable element, reads a bounded
 context range, reads and writes selection, performs the smallest possible
-replacement, and subscribes to relevant Accessibility notifications.
+replacement, stores Bear-specific content-private context fingerprints,
+re-anchors those ranges, and subscribes to relevant Accessibility
+notifications.
 
 ### `TypoverBearAdapter`
 
@@ -138,6 +198,55 @@ Record:
 
 Do not print or persist the editor’s text.
 
+### Live result: 2026-07-25
+
+The first content-free run against Bear 2.8.1 (14428) on macOS 27 found the
+current window's sole `AXTextArea` by role traversal. The search deliberately
+does not descend through the note-list table, so a large library cannot crowd
+the editor out of a bounded traversal. It does not use a UI-element index.
+
+The run confirmed:
+
+- `AXSelectedText`, `AXSelectedTextRange`, `AXVisibleCharacterRange`, and
+  `AXValue` are writable; `AXNumberOfCharacters` is readable;
+- both string-for-range readers and `AXBoundsForRange` are available;
+- a bounded 42-UTF-16-unit context was read and immediately reduced to its
+  length; the probe emitted no note text in its structured report;
+- caret/selection range, visible range, character count, and range geometry
+  were returned;
+- registration succeeded for selection, value, layout, focused-element, and
+  focused-window notifications.
+
+The note list held keyboard focus during this first run. The report
+distinguishes that state from a focused editor instead of treating the
+window's only text area as focused.
+
+A second content-free run used the dedicated
+`Typover Disposable Lab — 2026-07-25` note with Bear's editor focused. Bear
+accepted registrations for selection, value, layout, focused-element,
+focused-window, moved-window, and resized-window notifications. Six
+navigation-key actions changed only the caret and produced four
+`AXSelectedTextChanged` notifications. The monitor recorded notification names
+and counts only.
+
+`AXValueChanged` was registered but deliberately not triggered: doing so would
+require a text mutation, which belongs to Phase 2. Window, focus, and layout
+registrations are available for later overlay tracking; Phase 1 does not need
+to force every notification merely to prove that caret-relative work can begin.
+
+Decision: **go** for exact selected-range replacement and external overlay
+geometry. The first mutation test must remain in the dedicated disposable note
+and must not fall back to whole-value replacement.
+
+### Bear 2.9.1 revalidation: 2026-07-29
+
+After Bear updated to 2.9.1 (14638), the same content-free probe passed with a
+focused `AXTextArea`, bounded `AXStringForRange` reads, `AXBoundsForRange`,
+writable selection/value attributes, and every required notification. The
+dedicated live geometry harness also completed a guarded exact-range
+replacement and Change Back restoration. Bear 2.9.1 is therefore included in
+Typover's validated-version allowlist alongside 2.8.1.
+
 ### Acceptance criteria
 
 - Typover can reliably locate one focused Bear editor without depending on a
@@ -145,6 +254,8 @@ Do not print or persist the editor’s text.
 - It can read the caret range and a bounded context around it.
 - The probe reports a structured capability result when an attribute is
   missing or unsupported.
+- With the editor focused, caret movement produces a content-free selection
+  notification that Typover can use to invalidate or refresh scoped state.
 
 ## Phase 2: Exact range replacement
 
@@ -172,6 +283,32 @@ Do not fall back to writing the complete `AXValue`.
 - A failed precondition makes no edit.
 - Repeating the transaction is idempotent.
 
+### Live result: 2026-07-25
+
+The first live attempt deliberately supplied a `bearcli search-in` offset. The
+transaction found that `teh` did not occupy that Accessibility range and
+returned `preconditionFailed` without selecting or changing text. A second
+attempt inferred the range from the caret in a tagged fixture, but Bear had
+placed the caret after the bottom tag rather than after the CLI-appended marker;
+that attempt also failed safely without a write.
+
+The successful run used the tag-free
+`Typover Bear Phase 2 — 2026-07-25` disposable note, with the caret immediately
+after `teh `. Typover:
+
+- verified the three-unit target at Accessibility location 145;
+- wrote only `AXSelectedText`;
+- changed exactly `teh` to `the`;
+- restored the zero-length caret to its original location 149;
+- verified the bounded surrounding context and unchanged document length;
+- created a correction record only after those checks passed;
+- treated the repeated transaction as already applied without another write.
+
+Bear's native Command-Z restored `teh`. After Undo, Bear selected the restored
+word at range 145–148 instead of leaving the caret after the following space.
+That behavior is coherent for native Undo but is more disruptive than Typover's
+planned correction-specific Change Back interaction.
+
 ## Phase 3: Undo and restoration
 
 Measure Bear’s native Undo behavior after an Accessibility replacement. In
@@ -189,6 +326,35 @@ an old absolute offset after later typing.
   identified.
 - A correction record transitions through explicit applied, restored,
   superseded, or invalidated states.
+
+### Live result: 2026-07-25
+
+Phase 3 now stores a SHA-256 fingerprint of up to 40 UTF-16 units immediately
+before and after each verified replacement. It retains the correction range
+and note length but does not retain or serialize the surrounding prose.
+
+Change Back searches two bounded Accessibility neighborhoods: the original
+location and the location adjusted by the note's net length change. It restores
+only one candidate whose leading and trailing fingerprints both match. Phase 7
+adds a conservative fallback for continued typing immediately beside the word:
+the expected corrected text must match exactly, one surrounding fingerprint
+must still match, and the candidate must be unique. Changes on both sides or a
+duplicate candidate invalidate the interaction without scanning or rewriting
+the whole note.
+
+Deterministic tests verify restoration after edits on either side, recognition
+of an already restored word, superseding after a manual word change, and
+refusal after stale or duplicated context. Ambiguous and stale anchors perform
+no write. The Bear adapter maps successful, superseded, and invalidated
+outcomes to explicit correction-record dispositions.
+
+The opt-in live transaction ran in the retained tag-free
+`Typover Bear Phase 2 — 2026-07-25` note. It changed the synthetic marker from
+`teh` to `the`, restored it through Typover's independent Change Back path, and
+left the final marker as `teh`. This path did not invoke Bear's Undo command.
+
+Decision: **go** for Phase 4 range geometry. Typover's menu action can now be
+independent of Bear's global Undo stack.
 
 ## Phase 4: Range geometry
 
@@ -209,6 +375,47 @@ Query Bear for the screen bounds of the corrected character range. Test:
   coordinates.
 - Geometry can be refreshed without reading the whole note.
 - Unsupported geometry produces a clear capability failure.
+
+### Live result: 2026-07-25
+
+Phase 4 now exposes a content-free geometry report with explicit available,
+offscreen, stale, ambiguous, superseded, unsupported, failed, and invalid
+states. It reuses Phase 3's bounded anchor resolver, so edits before a
+correction move the geometry range without trusting an old offset. Production
+refresh reads at most two bounded Accessibility neighborhoods rather than the
+whole note.
+
+The first live run returned an identical usable rectangle for three consecutive
+reads of the synthetic corrected word. The expanded matrix used the retained
+`Typover Bear Phase 4 Geometry — 2026-07-25` note, which contains only synthetic
+text and a Typover icon attachment. It verified markers on top, middle, bottom,
+wrapped, heading, list, variable-width, link, inline-code, and attachment-adjacent
+content. Selecting each marker to scroll it onscreen produced stable bounds;
+querying the top marker while the bottom remained visible returned `offscreen`
+without a bounds result.
+
+A second, narrower Bear window exposed an important behavior: a range split by
+wrapping returns one stable union rectangle covering unrelated space between
+the two lines. Typover now detects that case, queries composed-character bounds,
+and returns one fragment per rendered line. The narrow-window heading and
+variable-width markers each resolved to two precise fragments. The same matrix
+passed in separate windows with different origins and widths.
+
+Two levels of Bear zoom changed body-line height from 27 to 33 points and
+heading-line height from about 31 to 39 points. Geometry refreshed correctly at
+the new scale, including wrapped fragments, and Bear was returned to Actual
+Size afterward.
+
+The live fixture test may read its complete synthetic note solely to locate
+known markers. Shipping geometry uses only bounded context. Deterministic tests
+also verify long-note bounded reads, edits before the correction, offscreen and
+partially visible ranges, stale and duplicated anchors, manual supersession,
+unsupported queries, invalid rectangles, wrapped fragmentation, adapter
+gating, and content-free reports.
+
+Decision: **go** for Phase 5. Bear's geometry is sufficient for a guarded
+annotation overlay when Typover uses line fragments and hides every nonavailable
+state.
 
 ## Phase 5: Annotation overlay
 
@@ -232,13 +439,57 @@ Reposition or hide the annotation when Bear:
 - The overlay does not appear in screenshots of other spaces or windows.
 - Typing latency remains imperceptible.
 
+### Live result: 2026-07-25
+
+Phase 5 adds a dedicated `TypoverOverlay` component. It converts each
+Accessibility fragment from top-left screen coordinates into the matching
+AppKit display's coordinate space and renders one narrow light-gray wave per
+fragment. Wrapped corrections therefore never become one underline spanning
+unrelated text.
+
+The windows are borderless, transparent, nonactivating, click-through, omitted
+from the app switcher, and intentionally do not join every Space. Typover only
+orders them onscreen while Bear is the frontmost application. Moving to another
+application hides every panel immediately; returning to Bear recomputes rather
+than reusing an old rectangle.
+
+The tracker subscribes to Bear's text, layout, focus, window-move, and
+window-resize Accessibility notifications. Geometry-changing events hide the
+mark before requesting fresh bounded geometry. A 125-millisecond fallback
+refresh covers missed scroll or layout notifications. Every nonavailable
+geometry result hides all fragments.
+
+The live disposable-note preview changed only an explicitly selected `teh` to
+`the`, drew a 22-by-5-point gray squiggle directly beneath it, and left Bear
+frontmost. The mark disappeared when Finder came forward, returned when Bear
+regained focus, disappeared after the corrected word was manually changed to
+`thy`, and returned when the expected replacement was restored. The harness
+then independently changed the word back to `teh` and restored the original
+selection.
+
+Deterministic tests cover primary and secondary-display conversion, wrapped
+fragments, invalid and excessive fragment rejection, frontmost-app gating,
+every unsafe geometry state, panel focus behavior, pointer passthrough, and the
+absence of `canJoinAllSpaces`. Phase 4's live long-note matrix already proves
+that scrolling returns `offscreen` with no stale bounds; Phase 5's policy hides
+that result. Continuous rapid-scroll and typing-load measurement remains part
+of the Phase 7 robustness matrix rather than the interaction work in Phase 6.
+
+The Settings preview is deliberately bounded: it requires exactly three
+selected characters and the guarded replacement still verifies that they are
+`teh` before any write. It does not enable unattended Bear correction.
+
+Decision: **go** for Phase 6. The external overlay can carry Typover's visual
+language without activating Typover or intercepting Bear's editor. Phase 6 can
+make only the annotation hit target interactive while preserving these window
+and focus rules.
+
 ## Phase 6: Correction interaction
 
 Make the annotation clickable without losing the correction target. Present:
 
 - Change Back to the original;
-- alternative corrections, when available;
-- Keep Correction, which removes the annotation.
+- alternative corrections, when available.
 
 ### Acceptance criteria
 
@@ -247,6 +498,51 @@ Make the annotation clickable without losing the correction target. Present:
 - Choosing an alternative updates the existing correction record.
 - Dismissing the menu leaves the document unchanged.
 - Keyboard and VoiceOver users can reach equivalent actions.
+
+### Implementation result: 2026-07-25
+
+Phase 6 makes only the narrow squiggle strip interactive. Its panel remains
+borderless and nonactivating, cannot become key or main, and still hides when
+Bear is not frontmost. The primary fragment is an Accessibility button labeled
+for the current correction; wrapped secondary fragments remain pointer targets
+without becoming duplicate VoiceOver elements. Control–Option–Command–Return
+opens the same menu while Bear is frontmost.
+
+The native menu contains one explicit Revert action first, followed by at most
+five distinct, single-line Apple Spelling alternatives shown as bare words.
+This matches the controlled editor and avoids repeating “Change to” on every
+row. It deliberately has no “Keep Existing” row because dismissing the menu
+already preserves the current text.
+Unsafe, empty, duplicate, original, and current values are filtered before the
+menu is built.
+
+Both actions use guarded Accessibility transactions rather than a stored
+offset or whole-note write. An alternative resolves the existing
+content-private anchor, verifies the current replacement, changes only that
+range, and returns a fresh anchor while preserving the originally typed word.
+Change Back uses the same independent restoration transaction established in
+Phase 3. Superseded, stale, or ambiguous corrections close the interaction
+without writing.
+
+Live Bear testing exposed a delayed selection update after an
+`AXSelectedText` replacement: Bear first accepted Typover's restored caret,
+then moved it to the edited word. Typover now performs two delayed, bounded
+selection checks. A repair occurs only when the current selection is one of
+Bear's known transient edit-end carets and the anchored text still verifies.
+Any other selection is treated as a newer user action and wins. Deterministic
+tests cover both the repair and the user-moved refusal path, along with native
+menu ordering, panel nonactivation, accessibility exposure, Change Back, and
+alternative re-anchoring.
+
+The opt-in harness exercised the real length-changing alternative path and
+found the delayed-caret behavior. Bear's transient search-results selection is
+not reliable enough to make that fixture an unattended gate yet, so the final
+repeatable live pass moves to the Phase 7 matrix.
+
+Decision: **go** for Phase 7. The interaction layer is implemented without
+weakening the bounded-write, focus, or stale-anchor rules. Phase 7 must complete
+manual keyboard, VoiceOver, dismissal, and cross-version passes against a
+normally selected disposable note.
 
 ## Phase 7: Robustness matrix
 
@@ -266,6 +562,163 @@ Run the full interaction against:
 
 Track correctness, annotation alignment, replacement latency, and reasons for
 every refused correction.
+
+### Stable live fixture result: 2026-07-26
+
+The opt-in overlay test no longer depends on selecting a note through Bear's
+search results. Before touching Accessibility, it asks Bear's local CLI for
+metadata matching the exact disposable-note title, requires exactly one exact
+title match, and opens that note's stable ID directly in editing mode. Missing,
+fuzzy, duplicate, malformed, and failed-open results all stop the test before
+any note text is changed. The CLI query requests only note ID and title; live
+text ranges remain exclusively in Bear's Accessibility coordinate space.
+
+After opening the fixture, the harness waits up to five seconds for Bear to
+launch, focus the note, and expose the synthetic marker through its focused
+Accessibility editor. This removes the transient search-selection dependency
+while preserving the existing bounded-write and cleanup behavior. Five
+deterministic launcher tests cover exact resolution and every fail-closed path.
+
+The scenario-by-scenario evidence ledger is maintained in
+[the Phase 7 matrix](../testing/bear-phase-7-matrix.md). The remaining live and
+cross-version rows must pass before the matrix can be called complete.
+
+### Permissioned app-host result: 2026-07-26
+
+The installed, stable-signed app now exposes the same guarded preview through a
+native **Preview Selected Bear Typo** app-menu command backed by a shared
+coordinator. This avoids coupling live verification to the Settings window
+without creating a second correction path.
+
+The live short-note correction passed. An adjacent synthetic typing tail stayed
+outside the correction, the session remained tracked, switching to the Phase 4
+note hid the annotation, and returning to the uniquely verifying Phase 2 note
+retained the session. The correction panel now exposes an Accessibility
+floating window and one logical correction button. Computer Use opened that
+button's native menu and verified that Revert changed only `the` back to `teh`
+while preserving an adjacent synthetic typing tail.
+
+The accessible press path is deliberately asynchronous so AppKit menu tracking
+does not hold the Accessibility request open. The menu session retains its
+action target until the menu closes and uses a stable Objective-C selector;
+focused tests cover the window hierarchy and actual AppKit action dispatch.
+Full spoken VoiceOver navigation remains pending.
+
+VoiceOver-on coexistence has now been checked in the permissioned app: with the
+screen reader running, Typover still corrected only the selected synthetic word
+and kept Bear active. Computer Use cannot issue global VoiceOver commands or
+operate its Window Chooser, so the spoken journey remains an explicit manual
+test rather than an inferred pass. VoiceOver was restored to its original off
+state after the fixture was returned to `teh`.
+
+A Typover relaunch in temporary Dark appearance also passed functionally. No
+stale annotation returned after quit, and a fresh post-relaunch correction
+changed only the exact marker. The Mac was returned to its original Auto
+appearance. Human review of dark annotation and menu contrast remains pending.
+
+Multiple-window interaction now passes in the installed app. A correction made
+in the Phase 2 note's main Bear window hid when the separate Phase 4 geometry
+window became active, did not appear over or change that editor, and resumed
+only when the original window returned.
+
+Bear relaunch testing exposed a different stale-session defect: the old
+annotation hid after Bear quit, but the shared coordinator remained active and
+ignored the next preview command. The overlay controller now treats termination
+of Bear itself as terminal while preserving the interaction when an unrelated
+app terminates. The fixed installed app logged completion on Bear quit and,
+without restarting Typover, performed a fresh correction after Bear relaunched
+and the disposable note was reopened. Focused lifecycle tests and the full
+193-test, 23-suite run pass.
+
+Repeated and edited-anchor interaction now passes in the installed app. In a
+temporary `teh teh` line, only the selected occurrence changed. A correction
+remained visually anchored after bounded text was inserted immediately before
+or after it, while changing both context sides hid the interaction and made no
+write. Bear can miss a value-change notification in this synthetic sequence,
+so an explicit new preview now supersedes an existing active preview instead of
+being ignored. Duplicate requests while a preview is still preparing remain
+blocked. The deployed recovery path accepted a fresh correction without a
+Typover restart, and the disposable fixture was restored.
+
+Manual supersession exposed and then verified a lifecycle fix. A stale or
+ambiguous geometry result after an actual Bear value-change now ends the old
+preview session and notifies the shared coordinator. A stale result caused only
+by focus or note switching stays hidden and resumable. After deployment, the
+fixture was manually restored and a second correction started successfully.
+
+### Continued-typing result: 2026-07-25
+
+The deterministic Bear transaction and geometry suites now cover immediate
+typing after a correction, multiple rapid insertions, alternative selection,
+Change Back, one changed context side, two changed sides, and duplicated
+one-sided matches. Typing on one side keeps a unique expected correction
+anchored; alternative and Change Back actions preserve all newly typed text.
+Changing both surrounding sides or creating a second qualifying occurrence
+hides the annotation and performs no write.
+
+The opt-in live overlay harness now performs the same sequence against Bear:
+apply `teh` to `the`, insert a unique continuation immediately afterward,
+verify the overlay, choose a length-changing alternative, and Change Back while
+checking that the continuation remains untouched. The current command-line
+test host could not read Bear's editor through Accessibility. The harness now
+opens one exact disposable fixture by stable Bear note ID rather than
+inheriting a transient search-results selection, but the interaction must still
+be rerun from the permissioned Typover app before this row is complete.
+
+The first manual preview attempt exposed a development-signing failure rather
+than a Bear range failure. Replacing and ad-hoc signing the executable changed
+Typover's designated requirement, invalidating its earlier Accessibility
+approval. Development packaging now uses a stable Apple Development identity,
+and the preview checks permission before switching applications. Permission,
+focus, selection, and write failures now produce distinct visible messages.
+The stable-signed build requires one new approval before the live matrix can
+resume.
+
+## Phase 8: Automatic in-editor correction
+
+Phase 7 proves that a single guarded transaction remains safe across real Bear
+editing and lifecycle changes. Phase 8 makes that transaction automatic. With
+Typover running in the background, normal Bear typing should trigger eligible
+word or sentence corrections without text selection or a preview command, then
+show the same persistent light-gray squiggle and reversible menu.
+
+The automatic observer must stay narrower than the transaction it drives. It
+may inspect only the focused Bear editor and bounded text near a completed
+target. It must pause for paste, marked-text composition, active selections,
+Undo/Redo, bulk changes, unsupported focus, ambiguous context, or any target
+that changed while a proposal was being prepared. Apple remains the local
+default; a network model runs only after an explicit provider choice.
+
+The manual **Preview Selected Bear Typo** command remains a diagnostic harness,
+not the shipping interaction. Phase 8 succeeds only when a writer can type
+naturally, receive a safe automatic correction, continue writing without a
+caret or focus jump, and use the gray squiggle to Change Back or choose another
+correction.
+
+The first opt-in implementation slice is now in the app. It combines a
+content-free boundary-keystroke classification with two bounded Bear snapshots,
+then accepts only a single-character insertion whose surrounding text, caret,
+focus, and document-length changes all agree. The snapshot is capped at 96
+UTF-16 units before the caret and 24 after it and is discarded after use.
+Multi-character paste, bulk edits, active selections, unsupported focus, and
+ambiguous or changed context refuse without writing. Apple Spelling remains the
+only engine in this first slice. Observer attachment now retries through Bear's
+brief focused-editor transition instead of silently remaining detached.
+
+The same verified Bear transaction draws the gray squiggle. Up to 24 recent,
+still-valid Bear corrections are tracked as independent overlay sessions. Each
+word keeps its own Revert and alternative actions; completing, invalidating, or
+changing one session leaves the others intact. The oldest session is retired
+when the bound is reached. A single keyboard shortcut targets the newest
+session, while pointer and Accessibility actions remain attached to each
+individual mark. Successful Change Back and alternative actions report into
+Typover's local preference and statistics store.
+
+The preference remains disabled by default while marked-text composition,
+Undo/Redo behavior, long-note performance, and the installed multi-annotation
+path are still being validated. Composition-changing transitions now fail
+closed, and Command-Z or Shift-Command-Z explicitly disarms a pending boundary;
+both still require permissioned live-app verification.
 
 ## Bear CLI fallback evaluation
 

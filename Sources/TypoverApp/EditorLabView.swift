@@ -1,10 +1,21 @@
 import AppKit
+import OSLog
 import SwiftUI
+import TypoverAppleIntelligence
+import TypoverAppleSpell
 import TypoverCore
+import TypoverRemoteIntelligence
 
 struct EditorLabView: NSViewRepresentable {
+  let behaviorSettings: CorrectionBehaviorSettings
+  let learningStore: CorrectionLearningStore
+  let onLearnedSuppression: (String?) -> Void
+
   func makeNSView(context: Context) -> NSScrollView {
     let textView = TypoverTextView(usingTextLayoutManager: true)
+    textView.useBehaviorSettings(behaviorSettings)
+    textView.useLearningStore(learningStore)
+    textView.onLearnedSuppression = onLearnedSuppression
     textView.allowsUndo = true
     textView.autoresizingMask = [.width]
     textView.backgroundColor = NSColor.clear
@@ -54,7 +65,10 @@ struct EditorLabView: NSViewRepresentable {
     return scrollView
   }
 
-  func updateNSView(_ scrollView: NSScrollView, context: Context) {}
+  func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    (scrollView.documentView as? TypoverTextView)?.onLearnedSuppression =
+      onLearnedSuppression
+  }
 }
 
 extension NSAttributedString.Key {
@@ -64,14 +78,165 @@ extension NSAttributedString.Key {
 }
 
 @MainActor
-private final class TypoverTextView: NSTextView {
-  private let correctionEngine: any CorrectionEngine = DemoCorrectionEngine()
-  private let automaticConfidenceThreshold = 0.98
+final class TypoverTextView: NSTextView {
+  private static let transactionLogger = Logger(
+    subsystem: "com.malpern.typover",
+    category: "ControlledEditorTransaction"
+  )
 
+  private enum LearningEffect {
+    case none
+    case removePreference
+    case suppress
+    case prefer(String, outcome: CorrectionOutcome?)
+  }
+
+  private struct PendingManualCorrection {
+    let correctionID: Correction.ID
+    var range: NSRange
+    var replacement: String
+  }
+
+  private struct PendingUserEdit {
+    let replacement: String
+  }
+
+  private struct PendingContextualRequest {
+    var range: NSRange
+    let text: String
+    var wasInvalidated = false
+  }
+
+  private final class AlternativeSelection: NSObject {
+    let correctionID: Correction.ID
+    let replacement: String
+
+    init(correctionID: Correction.ID, replacement: String) {
+      self.correctionID = correctionID
+      self.replacement = replacement
+    }
+  }
+
+  private var correctionEngine: any CorrectionEngine = AppleSpellCheckerEngine()
+  private var contextualCorrectionEngineOverride: (any ContextualCorrectionEngine)?
+  private let appleContextualCorrectionEngine =
+    AppleContextualCorrectionEngine()
+  private let credentialStore = SecretsAppCredentialStore()
+  private lazy var openAIContextualCorrectionEngine =
+    RemoteContextualCorrectionEngine(
+      model: .openAI,
+      credentialProvider: credentialStore
+    )
+  private lazy var anthropicContextualCorrectionEngine =
+    RemoteContextualCorrectionEngine(
+      model: .anthropic,
+      credentialProvider: credentialStore
+    )
+  private var behaviorSettings = CorrectionBehaviorSettings()
+  private var learningStore = CorrectionLearningStore()
+
+  private var contextualCorrectionTasks: [UUID: Task<Void, Never>] = [:]
+  private var pendingContextualRequests: [UUID: PendingContextualRequest] = [:]
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
+  private var isPerformingPaste = false
   private var ledger = CorrectionLedger()
+  private var pendingManualCorrections: [Correction.ID: PendingManualCorrection] =
+    [:]
+  private var proposalsByID: [Correction.ID: CorrectionProposal] = [:]
+  private var pendingUserEdit: PendingUserEdit?
+  private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
+  var onLearnedSuppression: ((String?) -> Void)?
+  private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
+  private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
+
+  isolated deinit {
+    for task in contextualCorrectionTasks.values {
+      task.cancel()
+    }
+  }
+
+  struct CorrectionSnapshot: Equatable {
+    let correction: Correction
+    let disposition: CorrectionDisposition
+    let annotatedRanges: [NSRange]
+  }
+
+  var correctionSnapshots: [CorrectionSnapshot] {
+    correctionsByID.values.compactMap { correction in
+      guard let record = ledger.record(for: correction.id) else {
+        return nil
+      }
+      return CorrectionSnapshot(
+        correction: correction,
+        disposition: record.disposition,
+        annotatedRanges: annotatedRanges(for: correction.id)
+      )
+    }
+    .sorted { $0.correction.createdAt < $1.correction.createdAt }
+  }
+
+  func configureForTesting(
+    correctionEngine: any CorrectionEngine,
+    contextualCorrectionEngine: any ContextualCorrectionEngine =
+      DisabledContextualCorrectionEngine(),
+    behaviorSettings: CorrectionBehaviorSettings? = nil,
+    learningStore: CorrectionLearningStore,
+    undoManager: UndoManager
+  ) {
+    self.correctionEngine = correctionEngine
+    self.contextualCorrectionEngineOverride = contextualCorrectionEngine
+    if let behaviorSettings {
+      self.behaviorSettings = behaviorSettings
+    }
+    self.learningStore = learningStore
+    testingUndoManager = undoManager
+  }
+
+  func useBehaviorSettings(
+    _ behaviorSettings: CorrectionBehaviorSettings
+  ) {
+    self.behaviorSettings = behaviorSettings
+  }
+
+  func useLearningStore(_ learningStore: CorrectionLearningStore) {
+    self.learningStore = learningStore
+  }
+
+  override var undoManager: UndoManager? {
+    testingUndoManager ?? super.undoManager
+  }
+
+  override func shouldChangeText(
+    in affectedCharRange: NSRange,
+    replacementString: String?
+  ) -> Bool {
+    let shouldChange = super.shouldChangeText(
+      in: affectedCharRange,
+      replacementString: replacementString
+    )
+    guard shouldChange, !isPerformingCorrection else {
+      return shouldChange
+    }
+
+    pendingUserEdit = PendingUserEdit(
+      replacement: replacementString ?? ""
+    )
+    adjustPendingContextualRequests(
+      forReplacing: affectedCharRange,
+      withUTF16Length: (replacementString ?? "").utf16.count
+    )
+    updatePendingManualCorrections(
+      for: affectedCharRange,
+      replacementString: replacementString ?? ""
+    )
+    captureManualReplacement(
+      in: affectedCharRange,
+      replacementString: replacementString ?? ""
+    )
+    return true
+  }
 
   override func didChangeText() {
     super.didChangeText()
@@ -80,8 +245,39 @@ private final class TypoverTextView: NSTextView {
       return
     }
 
+    let completedUserEdit = pendingUserEdit
+    pendingUserEdit = nil
     reconcileAnnotations()
+    guard !isPerformingPaste else {
+      recordDiagnostic(.pasteSkipped)
+      return
+    }
     applyCorrectionBeforeTypedBoundary()
+    if let completedUserEdit {
+      scheduleContextualCorrection(after: completedUserEdit)
+    }
+  }
+
+  override func paste(_ sender: Any?) {
+    isPerformingPaste = true
+    defer { isPerformingPaste = false }
+    super.paste(sender)
+  }
+
+  func insertPastedTextForTesting(_ text: String) {
+    performPaste {
+      insertText(text, replacementRange: selectedRange())
+    }
+  }
+
+  func applyPendingCorrectionForTesting() {
+    applyCorrectionBeforeTypedBoundary()
+  }
+
+  func waitForContextualCorrectionForTesting() async {
+    while let task = contextualCorrectionTasks.values.first {
+      await task.value
+    }
   }
 
   override func draw(_ dirtyRect: NSRect) {
@@ -125,63 +321,256 @@ private final class TypoverTextView: NSTextView {
     let caret = selectedRange().location
     guard
       selectedRange().length == 0,
-      caret > 0,
       let textStorage,
-      let boundary = textStorage.string.utf16CodeUnit(at: caret - 1),
-      CharacterSet.whitespacesAndNewlines.contains(boundary)
+      !hasMarkedText(),
+      let completedWord = CompletedWordDetector.immediatelyBeforeCaret(
+        in: textStorage.string,
+        caretUTF16Offset: caret
+      )
     else {
       return
     }
 
-    let wordEnd = caret - 1
-    let prefix = (textStorage.string as NSString).substring(to: wordEnd)
-    let separatorRange = (prefix as NSString).rangeOfCharacter(
-      from: CharacterSet.letters.inverted,
-      options: .backwards
-    )
-    let wordStart =
-      separatorRange.location == NSNotFound
-      ? 0
-      : NSMaxRange(separatorRange)
-    let wordRange = NSRange(
-      location: wordStart,
-      length: wordEnd - wordStart
-    )
-
-    guard wordRange.length > 0 else {
-      return
-    }
-
-    let word = (textStorage.string as NSString).substring(with: wordRange)
+    onLearnedSuppression?(nil)
+    let language = NSSpellChecker.shared.userPreferredLanguages.first
     guard
-      let correction = correctionEngine.correction(for: word),
-      correction.changesText,
-      correction.confidence >= automaticConfidenceThreshold
+      let baseProposal = correctionEngine.proposal(for: completedWord.text)
+        ?? learningStore.manualProposal(
+          for: completedWord.text,
+          language: language
+        )
     else {
       return
     }
+    guard let proposal = learningStore.applyingPreference(to: baseProposal)
+    else {
+      if learningStore.preference(
+        for: baseProposal.correction.original,
+        language: baseProposal.language
+      ) == .suppressed {
+        onLearnedSuppression?(baseProposal.correction.original)
+      }
+      return
+    }
+    guard proposal.correction.changesText else {
+      return
+    }
 
+    let correction = proposal.correction
     correctionsByID[correction.id] = correction
+    proposalsByID[correction.id] = proposal
     ledger.record(correction)
-    replaceCorrectionText(
-      correction: correction,
-      range: wordRange,
+    let appliedLearningEffect: LearningEffect =
+      proposal.source == .rememberedPreference
+      ? .prefer(correction.replacement, outcome: nil)
+      : .removePreference
+    let didApply = replaceCorrectionText(
+      correctionAfter: correction,
+      correctionForReverse: correction,
+      range: completedWord.range,
       expectedText: correction.original,
       replacementText: correction.replacement,
       annotateReplacement: true,
       dispositionAfter: .applied,
       undoAnnotatesReplacement: false,
       undoDisposition: .restored,
+      learningEffectAfter: appliedLearningEffect,
+      reverseLearningEffect: .suppress,
       actionName: String(
         localized: "Correct Spelling",
         bundle: #bundle,
         comment: "Undo menu action name for an automatic Typover correction."
       )
     )
+    if didApply {
+      learningStore.recordApplied(proposal)
+    }
   }
 
+  private func scheduleContextualCorrection(
+    after userEdit: PendingUserEdit
+  ) {
+    guard
+      CompletedSentenceDetector.isSentenceTerminator(userEdit.replacement),
+      selectedRange().length == 0,
+      !hasMarkedText(),
+      let textStorage,
+      let sentence = CompletedSentenceDetector.immediatelyBeforeCaret(
+        in: textStorage.string,
+        caretUTF16Offset: selectedRange().location
+      )
+    else {
+      return
+    }
+
+    let engine =
+      contextualCorrectionEngineOverride
+      ?? contextualCorrectionEngine(for: behaviorSettings.contextualModel)
+    let language = NSSpellChecker.shared.userPreferredLanguages.first
+    let scope = behaviorSettings.contextualScope
+    let allowsSentenceRewrite =
+      scope == .comprehensive
+      && behaviorSettings.allowsSentenceRewrites
+    let requestID = UUID()
+    pendingContextualRequests[requestID] = PendingContextualRequest(
+      range: sentence.range,
+      text: sentence.text
+    )
+    contextualCorrectionTasks[requestID] = Task { [weak self] in
+      defer {
+        self?.contextualCorrectionTasks[requestID] = nil
+      }
+      guard
+        await engine.availability(for: language) == .available,
+        !Task.isCancelled
+      else {
+        self?.pendingContextualRequests[requestID] = nil
+        return
+      }
+
+      do {
+        let result = try await engine.proposal(
+          for: ContextualCorrectionRequest(
+            sentence: sentence.text,
+            language: language,
+            scope: scope,
+            allowsSentenceRewrite: allowsSentenceRewrite
+          )
+        )
+        guard !Task.isCancelled, let result else {
+          self?.pendingContextualRequests[requestID] = nil
+          return
+        }
+        self?.applyContextualResult(
+          result,
+          requestID: requestID,
+          language: language
+        )
+      } catch is CancellationError {
+        self?.pendingContextualRequests[requestID] = nil
+        return
+      } catch {
+        self?.pendingContextualRequests[requestID] = nil
+        self?.recordDiagnostic(.contextualModelFailure)
+      }
+    }
+  }
+
+  private func applyContextualResult(
+    _ result: ContextualCorrectionResult,
+    requestID: UUID,
+    language: String?
+  ) {
+    guard
+      let pending = pendingContextualRequests.removeValue(
+        forKey: requestID
+      )
+    else {
+      return
+    }
+    let capturedSentence = CompletedSentence(
+      range: pending.range,
+      text: pending.text
+    )
+    guard let textStorage else {
+      return
+    }
+    // A model can return long after the terminator that started the request.
+    // Never mutate text storage while an input method owns marked text, even
+    // when the captured sentence itself is still unchanged.
+    guard !hasMarkedText() else {
+      recordDiagnostic(
+        .contextualCompositionActive,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard !pending.wasInvalidated else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard NSMaxRange(capturedSentence.range) <= textStorage.length else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard
+      (textStorage.string as NSString).substring(
+        with: capturedSentence.range
+      ) == capturedSentence.text
+    else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard
+      let resolvedCorrections = ContextualCorrectionResolver.resolve(
+        result,
+        in: capturedSentence,
+        language: language
+      )
+    else {
+      recordDiagnostic(
+        .contextualProposalRejected,
+        range: capturedSentence.range
+      )
+      return
+    }
+
+    let actionName = String(
+      localized: "Correct in Context",
+      bundle: #bundle,
+      comment:
+        "Undo menu action name for one or more contextual Typover corrections."
+    )
+    let shouldGroupUndo = resolvedCorrections.count > 1
+    if shouldGroupUndo {
+      undoManager?.beginUndoGrouping()
+    }
+    defer {
+      if shouldGroupUndo {
+        undoManager?.endUndoGrouping()
+        undoManager?.setActionName(actionName)
+      }
+    }
+
+    for resolved in resolvedCorrections.sorted(by: {
+      $0.range.location > $1.range.location
+    }) {
+      let proposal = resolved.proposal
+      let correction = proposal.correction
+      correctionsByID[correction.id] = correction
+      proposalsByID[correction.id] = proposal
+      ledger.record(correction)
+      let didApply = replaceCorrectionText(
+        correctionAfter: correction,
+        correctionForReverse: correction,
+        range: resolved.range,
+        expectedText: correction.original,
+        replacementText: correction.replacement,
+        annotateReplacement: true,
+        dispositionAfter: .applied,
+        undoAnnotatesReplacement: false,
+        undoDisposition: .restored,
+        actionName: actionName
+      )
+      if didApply {
+        learningStore.recordApplied(proposal)
+      }
+    }
+  }
+
+  @discardableResult
   private func replaceCorrectionText(
-    correction: Correction,
+    correctionAfter: Correction,
+    correctionForReverse: Correction,
     range: NSRange,
     expectedText: String,
     replacementText: String,
@@ -189,17 +578,57 @@ private final class TypoverTextView: NSTextView {
     dispositionAfter: CorrectionDisposition,
     undoAnnotatesReplacement: Bool,
     undoDisposition: CorrectionDisposition,
+    learningEffectAfter: LearningEffect = .none,
+    reverseLearningEffect: LearningEffect = .none,
     actionName: String
-  ) {
-    guard
-      let textStorage,
-      NSMaxRange(range) <= textStorage.length,
-      (textStorage.string as NSString).substring(with: range) == expectedText,
-      shouldChangeText(in: range, replacementString: replacementText)
-    else {
-      ledger.transition(correction.id, to: .invalidated)
-      return
+  ) -> Bool {
+    guard let textStorage else {
+      return false
     }
+    guard NSMaxRange(range) <= textStorage.length else {
+      recordDiagnostic(
+        .staleRange,
+        correctionID: correctionAfter.id,
+        range: range
+      )
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
+    }
+    guard
+      (textStorage.string as NSString).substring(with: range) == expectedText
+    else {
+      recordDiagnostic(
+        .staleText,
+        correctionID: correctionAfter.id,
+        range: range
+      )
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
+    }
+
+    let clock = ContinuousClock()
+    let transactionStart = clock.now
+    isPerformingCorrection = true
+    undoManager?.disableUndoRegistration()
+    guard shouldChangeText(in: range, replacementString: replacementText) else {
+      undoManager?.enableUndoRegistration()
+      isPerformingCorrection = false
+      recordDiagnostic(
+        .editRejected,
+        correctionID: correctionAfter.id,
+        range: range
+      )
+      ledger.transition(correctionAfter.id, to: .invalidated)
+      return false
+    }
+
+    // `shouldChangeText` intentionally ignores Typover-owned edits. Rebase
+    // every other in-flight contextual request explicitly before this exact
+    // replacement changes document coordinates.
+    adjustPendingContextualRequests(
+      forReplacing: range,
+      withUTF16Length: replacementText.utf16.count
+    )
 
     let selectionBeforeChange = selectedRange()
     let replacementRange = NSRange(
@@ -207,13 +636,12 @@ private final class TypoverTextView: NSTextView {
       length: replacementText.utf16.count
     )
 
-    isPerformingCorrection = true
     textStorage.beginEditing()
     textStorage.replaceCharacters(in: range, with: replacementText)
     if annotateReplacement {
       textStorage.addAttribute(
         .typoverCorrectionID,
-        value: correction.id.uuidString,
+        value: correctionAfter.id.uuidString,
         range: replacementRange
       )
     } else {
@@ -231,24 +659,64 @@ private final class TypoverTextView: NSTextView {
       )
     )
     didChangeText()
+    undoManager?.enableUndoRegistration()
     isPerformingCorrection = false
+    recordTransactionSample(
+      correctionID: correctionAfter.id,
+      elapsed: transactionStart.duration(to: clock.now)
+    )
 
-    ledger.transition(correction.id, to: dispositionAfter)
+    correctionsByID[correctionAfter.id] = correctionAfter
+    ledger.record(correctionAfter)
+    ledger.transition(correctionAfter.id, to: dispositionAfter)
+    applyLearningEffect(
+      learningEffectAfter,
+      correctionID: correctionAfter.id
+    )
 
     undoManager?.registerUndo(withTarget: self) { target in
+      let currentRange =
+        annotateReplacement
+        ? target.annotatedRanges(for: correctionAfter.id).first
+          ?? replacementRange
+        : replacementRange
       target.replaceCorrectionText(
-        correction: correction,
-        range: replacementRange,
+        correctionAfter: correctionForReverse,
+        correctionForReverse: correctionAfter,
+        range: currentRange,
         expectedText: replacementText,
         replacementText: expectedText,
         annotateReplacement: undoAnnotatesReplacement,
         dispositionAfter: undoDisposition,
         undoAnnotatesReplacement: annotateReplacement,
         undoDisposition: dispositionAfter,
+        learningEffectAfter: reverseLearningEffect,
+        reverseLearningEffect: learningEffectAfter,
         actionName: actionName
       )
     }
     undoManager?.setActionName(actionName)
+    return true
+  }
+
+  private func adjustPendingContextualRequests(
+    forReplacing replacedRange: NSRange,
+    withUTF16Length replacementLength: Int
+  ) {
+    let delta = replacementLength - replacedRange.length
+    let replacedEnd = NSMaxRange(replacedRange)
+    for requestID in Array(pendingContextualRequests.keys) {
+      guard var request = pendingContextualRequests[requestID] else {
+        continue
+      }
+      let requestEnd = NSMaxRange(request.range)
+      if replacedEnd <= request.range.location {
+        request.range.location += delta
+      } else if replacedRange.location < requestEnd {
+        request.wasInvalidated = true
+      }
+      pendingContextualRequests[requestID] = request
+    }
   }
 
   private func reconcileAnnotations() {
@@ -262,6 +730,7 @@ private final class TypoverTextView: NSTextView {
       }
 
       let ranges = annotatedRanges(for: id)
+      let manualReplacement = pendingManualCorrections[id]?.replacement
       let annotationIsValid =
         ranges.count == 1
         && (textStorage.string as NSString).substring(with: ranges[0])
@@ -274,7 +743,114 @@ private final class TypoverTextView: NSTextView {
       for range in ranges {
         textStorage.removeAttribute(.typoverCorrectionID, range: range)
       }
+      recordDiagnostic(
+        .annotationInvalidated,
+        correctionID: id,
+        range: ranges.first
+      )
       ledger.transition(id, to: .invalidated)
+      if let proposal = proposalsByID[id] {
+        recordEngineResponse(.edited, for: proposal)
+        if pendingManualCorrections[id] == nil {
+          // A missing pending edit means the annotation was invalidated by a
+          // broader or otherwise untracked document mutation. Count the
+          // override, but do not infer a reusable replacement from whatever
+          // text happens to retain the annotation attribute.
+          recordManualEdit(
+            manualReplacement,
+            for: proposal
+          )
+        }
+      }
+    }
+  }
+
+  private func captureManualReplacement(
+    in affectedRange: NSRange,
+    replacementString: String
+  ) {
+    guard let textStorage else {
+      return
+    }
+
+    for (id, _) in correctionsByID {
+      guard
+        ledger.record(for: id)?.disposition == .applied,
+        let annotationRange = annotatedRanges(for: id).first,
+        affectedRange.location >= annotationRange.location,
+        NSMaxRange(affectedRange) <= NSMaxRange(annotationRange)
+      else {
+        continue
+      }
+
+      let currentText = (textStorage.string as NSString).substring(
+        with: annotationRange
+      )
+      let localRange = NSRange(
+        location: affectedRange.location - annotationRange.location,
+        length: affectedRange.length
+      )
+      let replacement =
+        (currentText as NSString).replacingCharacters(
+          in: localRange,
+          with: replacementString
+        )
+      pendingManualCorrections[id] = PendingManualCorrection(
+        correctionID: id,
+        range: NSRange(
+          location: annotationRange.location,
+          length: replacement.utf16.count
+        ),
+        replacement: replacement
+      )
+    }
+  }
+
+  private func updatePendingManualCorrections(
+    for affectedRange: NSRange,
+    replacementString: String
+  ) {
+    for id in Array(pendingManualCorrections.keys) {
+      guard var pending = pendingManualCorrections[id] else {
+        continue
+      }
+
+      let editContinuesReplacement =
+        affectedRange.location >= pending.range.location
+        && NSMaxRange(affectedRange) <= NSMaxRange(pending.range)
+        && isWordEdit(replacementString)
+      guard editContinuesReplacement else {
+        finalizePendingManualCorrection(id)
+        continue
+      }
+
+      let localRange = NSRange(
+        location: affectedRange.location - pending.range.location,
+        length: affectedRange.length
+      )
+      pending.replacement =
+        (pending.replacement as NSString).replacingCharacters(
+          in: localRange,
+          with: replacementString
+        )
+      pending.range.length = pending.replacement.utf16.count
+      pendingManualCorrections[id] = pending
+    }
+  }
+
+  private func finalizePendingManualCorrection(_ id: Correction.ID) {
+    guard
+      let pending = pendingManualCorrections.removeValue(forKey: id),
+      let proposal = proposalsByID[pending.correctionID]
+    else {
+      return
+    }
+    recordManualEdit(pending.replacement, for: proposal)
+  }
+
+  private func isWordEdit(_ replacement: String) -> Bool {
+    replacement.allSatisfy { character in
+      character.isLetter || character == "'" || character == "’"
     }
   }
 
@@ -319,16 +895,31 @@ private final class TypoverTextView: NSTextView {
 
   private func showCorrectionMenu(for id: Correction.ID, event: NSEvent) {
     guard
+      let menu = correctionMenu(for: id),
+      let firstItem = menu.items.first
+    else {
+      return
+    }
+
+    menu.popUp(
+      positioning: firstItem,
+      at: convert(event.locationInWindow, from: nil),
+      in: self
+    )
+  }
+
+  func correctionMenu(for id: Correction.ID) -> NSMenu? {
+    guard
       let correction = correctionsByID[id],
       ledger.record(for: id)?.disposition == .applied
     else {
-      return
+      return nil
     }
 
     let menu = NSMenu()
     let changeBackItem = NSMenuItem(
       title: String(
-        localized: "Change Back to “\(correction.original)”",
+        localized: "Revert to “\(correction.original)”",
         bundle: #bundle,
         comment:
           "Menu action that restores the original word. The variable is the original typed word."
@@ -340,51 +931,59 @@ private final class TypoverTextView: NSTextView {
     changeBackItem.target = self
     menu.addItem(changeBackItem)
 
-    let keepItem = NSMenuItem(
-      title: String(
-        localized: "Keep Correction",
-        bundle: #bundle,
-        comment: "Menu action that accepts an automatic correction and removes its annotation."
-      ),
-      action: #selector(keepCorrection(_:)),
-      keyEquivalent: ""
-    )
-    keepItem.representedObject = id.uuidString
-    keepItem.target = self
-    menu.addItem(keepItem)
+    let replacements =
+      ([proposalsByID[id]?.correction.replacement].compactMap { $0 }
+      + (proposalsByID[id]?.alternatives ?? []))
+      .filter { $0 != correction.replacement }
+
+    if !replacements.isEmpty {
+      menu.addItem(.separator())
+      for replacement in replacements {
+        let alternativeItem = NSMenuItem(
+          title: replacement,
+          action: #selector(useAlternative(_:)),
+          keyEquivalent: ""
+        )
+        alternativeItem.representedObject = AlternativeSelection(
+          correctionID: id,
+          replacement: replacement
+        )
+        alternativeItem.target = self
+        menu.addItem(alternativeItem)
+      }
+    }
 
     menu.addItem(.separator())
-    let alternativesItem = NSMenuItem(
-      title: String(
-        localized: "Alternative Corrections Coming Later",
-        bundle: #bundle,
-        comment: "Disabled placeholder describing a future correction-menu capability."
-      ),
+    let sourceItem = NSMenuItem(
+      title: sourceTitle(for: proposalsByID[id]?.source),
       action: nil,
       keyEquivalent: ""
     )
-    alternativesItem.isEnabled = false
-    menu.addItem(alternativesItem)
-
-    menu.popUp(
-      positioning: changeBackItem,
-      at: convert(event.locationInWindow, from: nil),
-      in: self
-    )
+    sourceItem.isEnabled = false
+    menu.addItem(sourceItem)
+    return menu
   }
 
   @objc
   private func changeBack(_ sender: NSMenuItem) {
+    guard let id = correctionID(from: sender) else {
+      return
+    }
+    changeBack(correctionID: id)
+  }
+
+  @discardableResult
+  func changeBack(correctionID id: Correction.ID) -> Bool {
     guard
-      let id = correctionID(from: sender),
       let correction = correctionsByID[id],
       let range = annotatedRanges(for: id).first
     else {
-      return
+      return false
     }
 
-    replaceCorrectionText(
-      correction: correction,
+    let didReplace = replaceCorrectionText(
+      correctionAfter: correction,
+      correctionForReverse: correction,
       range: range,
       expectedText: correction.replacement,
       replacementText: correction.original,
@@ -392,27 +991,242 @@ private final class TypoverTextView: NSTextView {
       dispositionAfter: .restored,
       undoAnnotatesReplacement: true,
       undoDisposition: .applied,
+      learningEffectAfter: .suppress,
+      reverseLearningEffect: restorationEffect(
+        for: correction,
+        proposal: proposalsByID[id]
+      ),
       actionName: String(
         localized: "Change Back",
         bundle: #bundle,
         comment: "Undo menu action name after restoring an automatically corrected word."
       )
     )
+    if didReplace, let proposal = proposalsByID[id] {
+      recordEngineResponse(.reverted, for: proposal)
+    }
+    return didReplace
   }
 
   @objc
-  private func keepCorrection(_ sender: NSMenuItem) {
+  private func useAlternative(_ sender: NSMenuItem) {
+    guard let selection = sender.representedObject as? AlternativeSelection else {
+      return
+    }
+    useAlternative(
+      correctionID: selection.correctionID,
+      replacement: selection.replacement
+    )
+  }
+
+  @discardableResult
+  func useAlternative(
+    correctionID: Correction.ID,
+    replacement: String
+  ) -> Bool {
     guard
-      let id = correctionID(from: sender),
-      let textStorage
+      let correction = correctionsByID[correctionID],
+      let range = annotatedRanges(for: correctionID).first
+    else {
+      return false
+    }
+    let alternative = Correction(
+      id: correction.id,
+      original: correction.original,
+      replacement: replacement,
+      createdAt: correction.createdAt
+    )
+    let didReplace = replaceCorrectionText(
+      correctionAfter: alternative,
+      correctionForReverse: correction,
+      range: range,
+      expectedText: correction.replacement,
+      replacementText: alternative.replacement,
+      annotateReplacement: true,
+      dispositionAfter: .applied,
+      undoAnnotatesReplacement: true,
+      undoDisposition: .applied,
+      learningEffectAfter: .prefer(
+        alternative.replacement,
+        outcome: .alternativeChosen
+      ),
+      reverseLearningEffect: restorationEffect(
+        for: correction,
+        proposal: proposalsByID[correction.id]
+      ),
+      actionName: String(
+        localized: "Change Correction",
+        bundle: #bundle,
+        comment: "Undo menu action name after choosing a different spelling correction."
+      )
+    )
+    if didReplace, let proposal = proposalsByID[correction.id] {
+      recordEngineResponse(.edited, for: proposal)
+    }
+    return didReplace
+  }
+
+  private func applyLearningEffect(
+    _ effect: LearningEffect,
+    correctionID: Correction.ID
+  ) {
+    guard
+      let proposal = proposalsByID[correctionID]
     else {
       return
     }
 
-    for range in annotatedRanges(for: id) {
-      textStorage.removeAttribute(.typoverCorrectionID, range: range)
+    switch effect {
+    case .none:
+      return
+    case .removePreference:
+      guard !isContextualSource(proposal.source) else {
+        return
+      }
+      learningStore.removePreference(
+        for: proposal.correction.original,
+        language: proposal.language
+      )
+    case .suppress:
+      if isContextualSource(proposal.source) {
+        learningStore.recordOutcome(.reverted, for: proposal)
+      } else {
+        learningStore.recordReverted(proposal)
+      }
+    case .prefer(let replacement, let outcome):
+      if isContextualSource(proposal.source) {
+        if let outcome {
+          learningStore.recordOutcome(outcome, for: proposal)
+        }
+      } else {
+        learningStore.recordPreferred(
+          replacement,
+          for: proposal,
+          outcome: outcome
+        )
+      }
     }
-    ledger.transition(id, to: .kept)
+  }
+
+  private func restorationEffect(
+    for correction: Correction,
+    proposal: CorrectionProposal?
+  ) -> LearningEffect {
+    guard let proposal else {
+      return .none
+    }
+
+    if proposal.source == .rememberedPreference
+      || correction.replacement != proposal.correction.replacement
+    {
+      return .prefer(correction.replacement, outcome: nil)
+    }
+    return .removePreference
+  }
+
+  private func recordManualEdit(
+    _ replacement: String?,
+    for proposal: CorrectionProposal
+  ) {
+    if isContextualSource(proposal.source) {
+      learningStore.recordOutcome(.manuallyEdited, for: proposal)
+    } else {
+      learningStore.recordManualEdit(replacement, for: proposal)
+    }
+  }
+
+  private func recordEngineResponse(
+    _ response: CorrectionUserResponse,
+    for proposal: CorrectionProposal
+  ) {
+    guard !isContextualSource(proposal.source) else {
+      return
+    }
+    correctionEngine.record(response, for: proposal)
+  }
+
+  private func sourceTitle(
+    for source: CorrectionSource?
+  ) -> String {
+    switch source {
+    case .appleIntelligence:
+      return String(
+        localized: "Apple Intelligence",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying Apple's local contextual model."
+      )
+    case .appleIntelligenceRewrite:
+      return String(
+        localized: "Apple Rewrite",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying an opt-in local sentence rewrite."
+      )
+    case .openAI:
+      return String(
+        localized: "OpenAI",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying the selected OpenAI contextual model."
+      )
+    case .openAIRewrite:
+      return String(
+        localized: "OpenAI Rewrite",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a sentence rewrite from OpenAI."
+      )
+    case .anthropic:
+      return String(
+        localized: "Anthropic",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying the selected Anthropic contextual model."
+      )
+    case .anthropicRewrite:
+      return String(
+        localized: "Anthropic Rewrite",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a sentence rewrite from Anthropic."
+      )
+    case .rememberedPreference:
+      return String(
+        localized: "Remembered Preference",
+        bundle: #bundle,
+        comment:
+          "Disabled correction-menu label identifying a locally remembered correction preference."
+      )
+    case .appleSpelling, .demo, nil:
+      return String(
+        localized: "Apple Spelling",
+        bundle: #bundle,
+        comment: "Disabled correction-menu label identifying the local spelling source."
+      )
+    }
+  }
+
+  private func isContextualSource(_ source: CorrectionSource) -> Bool {
+    source == .appleIntelligence
+      || source == .appleIntelligenceRewrite
+      || source == .openAI
+      || source == .openAIRewrite
+      || source == .anthropic
+      || source == .anthropicRewrite
+  }
+
+  private func contextualCorrectionEngine(
+    for model: ContextualCorrectionModel
+  ) -> any ContextualCorrectionEngine {
+    switch model {
+    case .apple:
+      appleContextualCorrectionEngine
+    case .openAI:
+      openAIContextualCorrectionEngine
+    case .anthropic:
+      anthropicContextualCorrectionEngine
+    }
   }
 
   private func correctionID(from menuItem: NSMenuItem) -> Correction.ID? {
@@ -420,6 +1234,60 @@ private final class TypoverTextView: NSTextView {
       return nil
     }
     return Correction.ID(uuidString: rawID)
+  }
+
+  private func performPaste(_ edit: () -> Void) {
+    isPerformingPaste = true
+    defer { isPerformingPaste = false }
+    edit()
+  }
+
+  private func recordDiagnostic(
+    _ kind: CorrectionDiagnosticKind,
+    correctionID: Correction.ID? = nil,
+    range: NSRange? = nil
+  ) {
+    correctionDiagnostics.append(
+      CorrectionDiagnostic(
+        kind: kind,
+        correctionID: correctionID,
+        range: range,
+        documentUTF16Length: textStorage?.length ?? 0
+      )
+    )
+    let maximumDiagnostics = 200
+    if correctionDiagnostics.count > maximumDiagnostics {
+      correctionDiagnostics.removeFirst(
+        correctionDiagnostics.count - maximumDiagnostics
+      )
+    }
+  }
+
+  private func recordTransactionSample(
+    correctionID: Correction.ID,
+    elapsed: Duration
+  ) {
+    let documentUTF16Length = textStorage?.length ?? 0
+    correctionTransactionSamples.append(
+      CorrectionTransactionSample(
+        correctionID: correctionID,
+        elapsed: elapsed,
+        documentUTF16Length: documentUTF16Length
+      )
+    )
+    let components = elapsed.components
+    let milliseconds =
+      Double(components.seconds) * 1_000
+      + Double(components.attoseconds) / 1_000_000_000_000_000
+    Self.transactionLogger.debug(
+      "Correction transaction completed in \(milliseconds, privacy: .public) ms; document UTF-16 length \(documentUTF16Length, privacy: .public)"
+    )
+    let maximumSamples = 200
+    if correctionTransactionSamples.count > maximumSamples {
+      correctionTransactionSamples.removeFirst(
+        correctionTransactionSamples.count - maximumSamples
+      )
+    }
   }
 
   private func textSegmentRects(for characterRange: NSRange) -> [NSRect] {
@@ -500,19 +1368,5 @@ private final class TypoverTextView: NSTextView {
 
     NSColor.tertiaryLabelColor.withAlphaComponent(0.72).setStroke()
     path.stroke()
-  }
-}
-
-extension String {
-  fileprivate func utf16CodeUnit(at offset: Int) -> Unicode.Scalar? {
-    guard
-      offset >= 0,
-      offset < utf16.count
-    else {
-      return nil
-    }
-
-    let index = utf16.index(utf16.startIndex, offsetBy: offset)
-    return Unicode.Scalar(utf16[index])
   }
 }
