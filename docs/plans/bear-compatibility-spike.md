@@ -720,6 +720,45 @@ path are still being validated. Composition-changing transitions now fail
 closed, and Command-Z or Shift-Command-Z explicitly disarms a pending boundary;
 both still require permissioned live-app verification.
 
+## Phase 9: Brief contextual overlay spike
+
+The controlled editor now defines the preferred interaction: a correction mark
+appears for four seconds, fades, and returns with the other corrections in its
+sentence during deliberate review. Bear must not copy that implementation
+blindly. Its annotations are independent nonactivating panels, and hidden
+panels cannot safely act as hover targets.
+
+Spike these reveal strategies without changing the first-beta default:
+
+1. **Cached sentence fragments** — compute bounded Accessibility ranges and
+   screen rectangles after correction or idle, then use one shared global mouse
+   monitor to reveal corrections in the matching sentence.
+2. **Visual line bands** — reveal corrections on the hovered rendered line when
+   exact wrapped-sentence fragments cannot be retained reliably.
+3. **Bounded proximity** — reveal corrections within a measured horizontal and
+   vertical radius only as a fallback experiment, not as the reference UX.
+
+Do not place transparent panels over Bear; they could intercept selection and
+clicks. Do not issue Accessibility reads on every mouse movement. Cache only
+ranges and geometry, throttle the shared monitor, and invalidate on scroll,
+edit, focus, window, display, or geometry change.
+
+The spike must record:
+
+- wrapped sentences, multiple corrections, scrolling, edits, full screen, and
+  multiple displays;
+- 100-millisecond dwell, 250-millisecond exit grace, menu pinning, and the
+  Always Visible fallback;
+- CPU and Accessibility-call rates at idle and during pointer movement;
+- whether every visible mark remains aligned and clickable while Bear stays
+  frontmost; and
+- a clear decision between exact sentence regions, line bands, bounded
+  proximity, or retaining persistent Bear marks.
+
+Until that matrix passes, Bear keeps its existing persistent overlay behavior
+and marketing claims describe brief contextual marks as the owned-editor
+experience only.
+
 ## Bear CLI fallback evaluation
 
 Separately test Bear’s official CLI in the disposable note:

@@ -20,8 +20,10 @@ another suggestion.
 3. A correction that passes Typover’s explicit safety rules replaces the
    smallest possible character range. An explicitly enabled sentence rewrite
    is the bounded exception.
-4. The corrected text retains a subtle, persistent mark.
-5. Clicking the mark offers the original text and alternative corrections.
+4. The corrected text receives a subtle mark for four seconds. The mark then
+   fades and returns when the writer reviews that sentence.
+5. Clicking a visible mark offers the original text and alternative
+   corrections. Settings can keep every unresolved mark visible instead.
 
 Typover must not replace an entire text field or document. Whole-field
 replacement disrupts selection, formatting, Undo, collaboration, and long-form
@@ -59,9 +61,11 @@ Apple Intelligence is the default contextual model. An advanced model picker
 can instead use GPT-5.6 Terra or Claude Sonnet 5 after an API key is configured
 through Add Secret. Cloud selection is explicit and sends only the newly
 completed sentence to that provider; it is never an automatic fallback.
-Type a typo followed by Space or sentence punctuation, then click its
-light-gray squiggle to change it back or choose another spelling. Corrections
-follow the active caret even when editing an earlier part of the document.
+Type a typo followed by Space or sentence punctuation. Its light-gray squiggle
+appears briefly, then returns when the pointer or a deliberately moved caret
+reviews that sentence. Click the mark to change it back or choose another
+spelling. Corrections follow the active caret even when editing an earlier part
+of the document.
 
 ```bash
 swift build

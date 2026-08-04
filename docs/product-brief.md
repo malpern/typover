@@ -16,7 +16,9 @@ long-form writing and makes individual changes hard to trust or reverse.
 Typover automatically applies only the most likely corrections and preserves
 visible, reversible provenance for each one.
 
-A corrected word receives a persistent light-gray squiggle. Selecting it shows:
+A corrected word receives a light-gray squiggle for four seconds. The mark then
+fades to reduce visual noise and returns when the pointer or a deliberately
+moved insertion point reviews that sentence. Selecting it shows:
 
 - the original typed word;
 - other likely corrections;
@@ -46,10 +48,13 @@ Every automatic replacement records the original text, replacement, source
 range, surrounding context, and time. A writer can restore the original without
 searching an undo history.
 
-### Visible
+### Accountable without clutter
 
-Automatic changes remain quietly visible. The mark should communicate
-“Typover changed this” without resembling an unresolved error.
+Automatic changes remain discoverable and individually reversible without
+permanently decorating finished writing. The mark should communicate “Typover
+changed this” at the moment of correction and return during review without
+resembling an unresolved error. An Always Visible preference provides a stable
+accessibility and personal-choice fallback.
 
 ### Private
 
@@ -78,8 +83,8 @@ be explicitly selected and state exactly what text is transmitted.
 - Cotabby: system-wide completion with optional correction at a word boundary.
 - Global AutoCorrect: commercial background correction across applications.
 
-None combines automatic incremental correction, a persistent native mark, and
-per-change restoration across macOS.
+None combines automatic incremental correction, a contextually retriggered
+native mark, and per-change restoration across macOS.
 
 ## Future evaluation: correction confidence
 

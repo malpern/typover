@@ -2,8 +2,8 @@
 
 - Status: Active
 - Updated: 2026-08-04
-- Current focus: Final permissioned Bear qualification, claim audit, and
-  public-beta publication decision
+- Current focus: Validate brief contextual marks in the owned editor, spike a
+  reliable Bear approximation, then resume final Bear qualification
 
 ## Goal
 
@@ -18,7 +18,8 @@ Every milestone preserves the same invariants:
 
 - replace the smallest verified text range, never an entire field or document;
 - retain the original for every automatic correction;
-- leave a quiet light-gray squiggle until the correction is resolved;
+- retain a retriggerable light-gray correction mark until the correction is
+  resolved, even when the default presentation fades between review moments;
 - make Change Back and alternatives immediate;
 - fail without writing when focus, text, selection, or geometry is ambiguous;
 - keep Apple processing on device by default;
@@ -39,6 +40,7 @@ Status meanings:
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
 | Controlled AppKit editor | **Exact candidate accepted with one pointer rerun open** | Notarized 0.1.0 passes uninterrupted three-word correction, three annotations, contextual correction, earlier-caret correction, About provenance, Settings Accessibility, 338 debug tests, and an optimized boundary gate | Re-open pointer-only Change Back on the final candidate and verify its one-step Undo |
+| Brief contextual marks | **In progress — owned editor implemented** | Four-second visibility, 150 ms fade, sentence-local hover and caret review, menu pinning, Always Visible preference, deterministic locality tests, and an interactive marketing prototype | Visually tune the owned editor, then complete the Bear geometry and performance spike before choosing Bear behavior |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **In progress — user-presence gate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, and post-pause product decision | Grant final-candidate Input Monitoring, then run fresh physical Bear qualification and soak |
 | Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
@@ -50,6 +52,8 @@ Status meanings:
 ## Completed foundations
 
 - [x] Build the controlled-editor reference implementation.
+- [x] Implement brief contextual correction marks in the controlled editor
+  without discarding correction history or reversibility.
 - [x] Keep local word correction inside the native boundary edit, preserve
   selections when contextual results return behind the caret, refuse results
   during IME composition, and retain consecutive contextual requests instead

@@ -8,12 +8,14 @@ import TypoverRemoteIntelligence
 
 struct EditorLabView: NSViewRepresentable {
   let behaviorSettings: CorrectionBehaviorSettings
+  let correctionMarkVisibility: CorrectionMarkVisibility
   let learningStore: CorrectionLearningStore
   let onLearnedSuppression: (String?) -> Void
 
   func makeNSView(context: Context) -> NSScrollView {
     let textView = TypoverTextView(usingTextLayoutManager: true)
     textView.useBehaviorSettings(behaviorSettings)
+    textView.useCorrectionMarkVisibility(correctionMarkVisibility)
     textView.useLearningStore(learningStore)
     textView.onLearnedSuppression = onLearnedSuppression
     textView.allowsUndo = true
@@ -66,8 +68,12 @@ struct EditorLabView: NSViewRepresentable {
   }
 
   func updateNSView(_ scrollView: NSScrollView, context: Context) {
-    (scrollView.documentView as? TypoverTextView)?.onLearnedSuppression =
-      onLearnedSuppression
+    guard let textView = scrollView.documentView as? TypoverTextView else {
+      return
+    }
+    textView.useBehaviorSettings(behaviorSettings)
+    textView.useCorrectionMarkVisibility(correctionMarkVisibility)
+    textView.onLearnedSuppression = onLearnedSuppression
   }
 }
 
@@ -79,6 +85,15 @@ extension NSAttributedString.Key {
 
 @MainActor
 final class TypoverTextView: NSTextView {
+  private static let recentMarkDuration: TimeInterval = 4
+  private static let markFadeDuration: TimeInterval = 0.15
+  private static let hoverRevealDelay = Duration.milliseconds(100)
+  private static let hoverExitDelay = Duration.milliseconds(250)
+  private static let sentenceHorizontalPadding: CGFloat = 12
+  private static let sentenceVerticalPadding: CGFloat = 6
+  private static let caretNavigationKeyCodes: Set<UInt16> = [
+    115, 116, 119, 121, 123, 124, 125, 126,
+  ]
   private static let contextualLogger = Logger(
     subsystem: "com.malpern.typover",
     category: "ControlledEditorContextual"
@@ -137,6 +152,8 @@ final class TypoverTextView: NSTextView {
       credentialProvider: credentialStore
     )
   private var behaviorSettings = CorrectionBehaviorSettings()
+  private var observedMarkVisibility =
+    CorrectionMarkVisibility.briefAndContextual
   private var learningStore = CorrectionLearningStore()
 
   private var contextualCorrectionTasks: [UUID: Task<Void, Never>] = [:]
@@ -151,6 +168,15 @@ final class TypoverTextView: NSTextView {
   private var pendingUserEdit: PendingUserEdit?
   private var testingUndoManager: UndoManager?
   private var viewportRange: NSTextRange?
+  private var recentMarkDeadlines: [Correction.ID: Date] = [:]
+  private var hoveredSentenceRange: NSRange?
+  private var hoverCandidateSentenceRange: NSRange?
+  private var caretReviewSentenceRange: NSRange?
+  private var menuPinnedCorrectionID: Correction.ID?
+  private var correctionTrackingArea: NSTrackingArea?
+  private var hoverRevealTask: Task<Void, Never>?
+  private var hoverExitTask: Task<Void, Never>?
+  private var visibilityRefreshTask: Task<Void, Never>?
   var onLearnedSuppression: ((String?) -> Void)?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
   private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
@@ -159,6 +185,9 @@ final class TypoverTextView: NSTextView {
     for task in contextualCorrectionTasks.values {
       task.cancel()
     }
+    hoverRevealTask?.cancel()
+    hoverExitTask?.cancel()
+    visibilityRefreshTask?.cancel()
   }
 
   struct CorrectionSnapshot: Equatable {
@@ -193,6 +222,7 @@ final class TypoverTextView: NSTextView {
     self.contextualCorrectionEngineOverride = contextualCorrectionEngine
     if let behaviorSettings {
       self.behaviorSettings = behaviorSettings
+      observedMarkVisibility = behaviorSettings.correctionMarkVisibility
     }
     self.learningStore = learningStore
     testingUndoManager = undoManager
@@ -202,6 +232,25 @@ final class TypoverTextView: NSTextView {
     _ behaviorSettings: CorrectionBehaviorSettings
   ) {
     self.behaviorSettings = behaviorSettings
+  }
+
+  func useCorrectionMarkVisibility(
+    _ markVisibility: CorrectionMarkVisibility
+  ) {
+    guard markVisibility != observedMarkVisibility else {
+      return
+    }
+
+    observedMarkVisibility = markVisibility
+    if markVisibility == .briefAndContextual {
+      let deadline = Date().addingTimeInterval(Self.recentMarkDuration)
+      for id in correctionsByID.keys
+      where ledger.record(for: id)?.disposition == .applied {
+        recentMarkDeadlines[id] = deadline
+      }
+    }
+    needsDisplay = true
+    rescheduleVisibilityRefresh()
   }
 
   func useLearningStore(_ learningStore: CorrectionLearningStore) {
@@ -249,6 +298,11 @@ final class TypoverTextView: NSTextView {
       return
     }
 
+    if caretReviewSentenceRange != nil {
+      caretReviewSentenceRange = nil
+      needsDisplay = true
+    }
+
     let completedUserEdit = pendingUserEdit
     pendingUserEdit = nil
     reconcileAnnotations()
@@ -294,8 +348,14 @@ final class TypoverTextView: NSTextView {
   override func draw(_ dirtyRect: NSRect) {
     super.draw(dirtyRect)
 
+    let now = Date()
+
     for (id, _) in correctionsByID {
-      guard ledger.record(for: id)?.disposition == .applied else {
+      let alpha = correctionMarkAlpha(for: id, at: now)
+      guard
+        ledger.record(for: id)?.disposition == .applied,
+        alpha > 0
+      else {
         continue
       }
 
@@ -304,7 +364,8 @@ final class TypoverTextView: NSTextView {
         where dirtyRect.intersects(rect.insetBy(dx: -2, dy: -3)) {
           drawSquiggle(
             from: NSPoint(x: rect.minX, y: rect.maxY + 1),
-            toX: rect.maxX
+            toX: rect.maxX,
+            alpha: alpha
           )
         }
       }
@@ -319,13 +380,60 @@ final class TypoverTextView: NSTextView {
     needsDisplay = true
   }
 
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    window?.acceptsMouseMovedEvents = true
+  }
+
+  override func updateTrackingAreas() {
+    if let correctionTrackingArea {
+      removeTrackingArea(correctionTrackingArea)
+    }
+    let trackingArea = NSTrackingArea(
+      rect: .zero,
+      options: [
+        .activeInKeyWindow,
+        .inVisibleRect,
+        .mouseEnteredAndExited,
+        .mouseMoved,
+      ],
+      owner: self,
+      userInfo: nil
+    )
+    addTrackingArea(trackingArea)
+    correctionTrackingArea = trackingArea
+    super.updateTrackingAreas()
+  }
+
+  override func mouseMoved(with event: NSEvent) {
+    super.mouseMoved(with: event)
+    let point = convert(event.locationInWindow, from: nil)
+    updateHoveredSentence(to: sentenceHoverRange(at: point))
+  }
+
+  override func mouseExited(with event: NSEvent) {
+    super.mouseExited(with: event)
+    updateHoveredSentence(to: nil)
+  }
+
   override func mouseDown(with event: NSEvent) {
     guard let correctionID = correctionID(at: event) else {
       super.mouseDown(with: event)
+      revealCorrectionsAtCaret()
       return
     }
 
     showCorrectionMenu(for: correctionID, event: event)
+  }
+
+  override func keyDown(with event: NSEvent) {
+    let revealsReviewedSentence = Self.caretNavigationKeyCodes.contains(
+      event.keyCode
+    )
+    super.keyDown(with: event)
+    if revealsReviewedSentence {
+      revealCorrectionsAtCaret()
+    }
   }
 
   private func applyCorrectionBeforeTypedBoundary() {
@@ -719,6 +827,11 @@ final class TypoverTextView: NSTextView {
     correctionsByID[correctionAfter.id] = correctionAfter
     ledger.record(correctionAfter)
     ledger.transition(correctionAfter.id, to: dispositionAfter)
+    if dispositionAfter == .applied, annotateReplacement {
+      markCorrectionRecentlyVisible(correctionAfter.id)
+    } else if dispositionAfter != .applied {
+      recentMarkDeadlines[correctionAfter.id] = nil
+    }
     applyLearningEffect(
       learningEffectAfter,
       correctionID: correctionAfter.id
@@ -799,6 +912,7 @@ final class TypoverTextView: NSTextView {
         range: ranges.first
       )
       ledger.transition(id, to: .invalidated)
+      recentMarkDeadlines[id] = nil
       if let proposal = proposalsByID[id] {
         recordEngineResponse(.edited, for: proposal)
         if pendingManualCorrections[id] == nil {
@@ -923,9 +1037,13 @@ final class TypoverTextView: NSTextView {
 
   private func correctionID(at event: NSEvent) -> Correction.ID? {
     let viewPoint = convert(event.locationInWindow, from: nil)
+    let now = Date()
 
     for (id, _) in correctionsByID {
-      guard ledger.record(for: id)?.disposition == .applied else {
+      guard
+        ledger.record(for: id)?.disposition == .applied,
+        correctionMarkAlpha(for: id, at: now) > 0
+      else {
         continue
       }
 
@@ -951,6 +1069,12 @@ final class TypoverTextView: NSTextView {
       return
     }
 
+    menuPinnedCorrectionID = id
+    needsDisplay = true
+    defer {
+      menuPinnedCorrectionID = nil
+      needsDisplay = true
+    }
     menu.popUp(
       positioning: firstItem,
       at: convert(event.locationInWindow, from: nil),
@@ -1384,9 +1508,192 @@ final class TypoverTextView: NSTextView {
     return rects
   }
 
+  private func markCorrectionRecentlyVisible(_ id: Correction.ID) {
+    recentMarkDeadlines[id] = Date().addingTimeInterval(
+      Self.recentMarkDuration
+    )
+    needsDisplay = true
+    rescheduleVisibilityRefresh()
+  }
+
+  private func correctionMarkAlpha(
+    for id: Correction.ID,
+    at now: Date
+  ) -> CGFloat {
+    guard ledger.record(for: id)?.disposition == .applied else {
+      return 0
+    }
+    if behaviorSettings.correctionMarkVisibility == .alwaysVisible
+      || menuPinnedCorrectionID == id
+      || correction(id, isIn: hoveredSentenceRange)
+      || correction(id, isIn: caretReviewSentenceRange)
+    {
+      return 1
+    }
+    guard let deadline = recentMarkDeadlines[id] else {
+      return 0
+    }
+    let remaining = deadline.timeIntervalSince(now)
+    guard remaining > 0 else {
+      return 0
+    }
+    return min(1, remaining / Self.markFadeDuration)
+  }
+
+  private func correction(
+    _ id: Correction.ID,
+    isIn sentenceRange: NSRange?
+  ) -> Bool {
+    guard let sentenceRange else {
+      return false
+    }
+    return annotatedRanges(for: id).contains {
+      NSIntersectionRange($0, sentenceRange).length > 0
+    }
+  }
+
+  private func rescheduleVisibilityRefresh() {
+    visibilityRefreshTask?.cancel()
+    guard behaviorSettings.correctionMarkVisibility == .briefAndContextual
+    else {
+      return
+    }
+
+    let now = Date()
+    recentMarkDeadlines = recentMarkDeadlines.filter { $0.value > now }
+    guard let nextDeadline = recentMarkDeadlines.values.min() else {
+      return
+    }
+    let remaining = nextDeadline.timeIntervalSince(now)
+    let delay =
+      remaining > Self.markFadeDuration
+      ? remaining - Self.markFadeDuration
+      : min(1.0 / 60.0, remaining)
+    visibilityRefreshTask = Task { @MainActor [weak self] in
+      do {
+        try await Task.sleep(for: .seconds(max(delay, 0.001)))
+      } catch {
+        return
+      }
+      guard let self else { return }
+      self.needsDisplay = true
+      self.rescheduleVisibilityRefresh()
+    }
+  }
+
+  private func updateHoveredSentence(to sentenceRange: NSRange?) {
+    hoverExitTask?.cancel()
+    guard let sentenceRange else {
+      hoverCandidateSentenceRange = nil
+      hoverRevealTask?.cancel()
+      guard hoveredSentenceRange != nil else { return }
+      hoverExitTask = Task { @MainActor [weak self] in
+        do {
+          try await Task.sleep(for: Self.hoverExitDelay)
+        } catch {
+          return
+        }
+        guard let self, self.hoverCandidateSentenceRange == nil else {
+          return
+        }
+        self.hoveredSentenceRange = nil
+        self.needsDisplay = true
+      }
+      return
+    }
+
+    if sentenceRange == hoveredSentenceRange {
+      hoverCandidateSentenceRange = sentenceRange
+      return
+    }
+    guard sentenceRange != hoverCandidateSentenceRange else {
+      return
+    }
+    hoverCandidateSentenceRange = sentenceRange
+    hoverRevealTask?.cancel()
+    hoverRevealTask = Task { @MainActor [weak self] in
+      do {
+        try await Task.sleep(for: Self.hoverRevealDelay)
+      } catch {
+        return
+      }
+      guard
+        let self,
+        self.hoverCandidateSentenceRange == sentenceRange
+      else {
+        return
+      }
+      self.hoveredSentenceRange = sentenceRange
+      self.needsDisplay = true
+    }
+  }
+
+  private func sentenceHoverRange(at point: NSPoint) -> NSRange? {
+    guard textStorage?.length ?? 0 > 0 else {
+      return nil
+    }
+    let characterIndex = characterIndexForInsertion(at: point)
+    guard let sentenceRange = sentenceRange(
+      containingUTF16Offset: characterIndex
+    ) else {
+      return nil
+    }
+    let containsPoint = textSegmentRects(for: sentenceRange).contains {
+      $0.insetBy(
+        dx: -Self.sentenceHorizontalPadding,
+        dy: -Self.sentenceVerticalPadding
+      ).contains(point)
+    }
+    return containsPoint ? sentenceRange : nil
+  }
+
+  private func sentenceRange(
+    containingUTF16Offset offset: Int
+  ) -> NSRange? {
+    guard let textStorage else { return nil }
+    return CompletedSentenceDetector.sentenceRange(
+      containingUTF16Offset: offset,
+      in: textStorage.string
+    )
+  }
+
+  private func revealCorrectionsAtCaret() {
+    let selection = selectedRange()
+    guard selection.length == 0 else {
+      caretReviewSentenceRange = nil
+      needsDisplay = true
+      return
+    }
+    caretReviewSentenceRange = sentenceRange(
+      containingUTF16Offset: selection.location
+    )
+    needsDisplay = true
+  }
+
+  func expireRecentCorrectionMarksForTesting() {
+    recentMarkDeadlines = recentMarkDeadlines.mapValues { _ in .distantPast }
+    visibilityRefreshTask?.cancel()
+    needsDisplay = true
+  }
+
+  func revealCorrectionsForTesting(atUTF16Offset offset: Int) {
+    caretReviewSentenceRange = sentenceRange(
+      containingUTF16Offset: offset
+    )
+    needsDisplay = true
+  }
+
+  func visibleCorrectionIDsForTesting() -> Set<Correction.ID> {
+    let now = Date()
+    return Set(correctionsByID.keys.filter {
+      correctionMarkAlpha(for: $0, at: now) > 0
+    })
+  }
+
   private func drawSquiggle(
     from start: NSPoint,
-    toX endX: CGFloat
+    toX endX: CGFloat,
+    alpha: CGFloat
   ) {
     guard endX > start.x else {
       return
@@ -1416,7 +1723,7 @@ final class TypoverTextView: NSTextView {
       x = nextX
     }
 
-    NSColor.tertiaryLabelColor.withAlphaComponent(0.72).setStroke()
+    NSColor.tertiaryLabelColor.withAlphaComponent(0.72 * alpha).setStroke()
     path.stroke()
   }
 }

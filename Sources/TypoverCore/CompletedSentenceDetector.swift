@@ -130,12 +130,101 @@ public enum CompletedSentenceDetector {
       }
   }
 
+  /// Returns the sentence-like range a writer is reviewing. This uses the
+  /// same explicit punctuation boundaries as contextual correction so the
+  /// visual correction marks and correction engine agree about locality.
+  public static func sentenceRange(
+    containingUTF16Offset offset: Int,
+    in text: String
+  ) -> NSRange? {
+    let text = text as NSString
+    guard text.length > 0, offset >= 0, offset <= text.length else {
+      return nil
+    }
+
+    var probe = min(offset, text.length - 1)
+    if isLeadingSeparator(
+      text.substring(
+        with: text.rangeOfComposedCharacterSequence(at: probe)
+      )
+    ) {
+      var forward = probe
+      while forward < text.length {
+        let range = text.rangeOfComposedCharacterSequence(at: forward)
+        guard isLeadingSeparator(text.substring(with: range)) else {
+          probe = range.location
+          break
+        }
+        forward = NSMaxRange(range)
+      }
+      if forward == text.length {
+        var backward = probe
+        while backward > 0 {
+          let range = text.rangeOfComposedCharacterSequence(at: backward - 1)
+          if !isLeadingSeparator(text.substring(with: range)) {
+            probe = range.location
+            break
+          }
+          backward = range.location
+        }
+      }
+    }
+
+    let probeRange = text.rangeOfComposedCharacterSequence(at: probe)
+    var sentenceStart = probeRange.location
+    while sentenceStart > 0 {
+      let range = text.rangeOfComposedCharacterSequence(at: sentenceStart - 1)
+      if isSentenceBoundary(text.substring(with: range)) {
+        break
+      }
+      sentenceStart = range.location
+    }
+    while sentenceStart < probeRange.location {
+      let range = text.rangeOfComposedCharacterSequence(at: sentenceStart)
+      guard isLeadingSeparator(text.substring(with: range)) else {
+        break
+      }
+      sentenceStart = NSMaxRange(range)
+    }
+
+    var sentenceEnd = NSMaxRange(probeRange)
+    if !isSentenceTerminator(text.substring(with: probeRange)) {
+      while sentenceEnd < text.length {
+        let range = text.rangeOfComposedCharacterSequence(at: sentenceEnd)
+        let character = text.substring(with: range)
+        if isLineBoundary(character) {
+          break
+        }
+        sentenceEnd = NSMaxRange(range)
+        if isSentenceTerminator(character) {
+          break
+        }
+      }
+    }
+
+    let range = NSRange(
+      location: sentenceStart,
+      length: sentenceEnd - sentenceStart
+    )
+    return range.length > 0 ? range : nil
+  }
+
   private static func isLeadingSeparator(_ text: String) -> Bool {
     text.unicodeScalars.allSatisfy { scalar in
       CharacterSet.whitespacesAndNewlines.contains(scalar)
         || scalar == "\""
         || scalar == "“"
         || scalar == "”"
+    }
+  }
+
+  private static func isSentenceBoundary(_ text: String) -> Bool {
+    isSentenceTerminator(text) || isLineBoundary(text)
+  }
+
+  private static func isLineBoundary(_ text: String) -> Bool {
+    text.unicodeScalars.allSatisfy {
+      CharacterSet.newlines.contains($0)
     }
   }
 

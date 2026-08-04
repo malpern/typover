@@ -156,7 +156,7 @@
     <header class="hero">
       <span class="eyebrow">Roadmap · Updated August 4, 2026</span>
       <h1>Corrections you can trust—and take back.</h1>
-      <p class="lede">Typover's owned editor is at release-candidate quality. The Bear beta is down to permissioned physical qualification, claim review, and a deliberate public launch.</p>
+      <p class="lede">Typover's owned editor is now testing a calmer correction language: marks appear briefly, then return when a sentence is reviewed. Bear gets a separate evidence-driven spike before the beta behavior changes.</p>
       <div class="hero-meta">
         <span class="badge">Notarized 0.1.0</span>
         <span class="badge">MIT licensed</span>
@@ -171,7 +171,7 @@
         <p>Only observed results count. A clean signature is not a UI pass, and a safe skip is not a correction.</p>
       </div>
       <div class="metrics">
-        <article class="metric"><strong>338</strong><span>tests passing across 30 suites</span></article>
+        <article class="metric"><strong>344</strong><span>tests passing across 30 suites</span></article>
         <article class="metric"><strong>0.1.0</strong><span>Apple-notarized candidate</span></article>
         <article class="metric"><strong>4/4</strong><span>signed update and rollback transitions</span></article>
         <article class="metric"><strong>11m</strong><span>flat clean-Mac candidate soak</span></article>
@@ -186,8 +186,13 @@
       <div class="cards">
         <article class="card" style="--progress: 96%">
           <div class="card-head"><h3>Controlled AppKit editor</h3><span class="badge">Accepted</span></div>
-          <p>Immediate word correction, local contextual intelligence, earlier-caret editing, learning, multiple squiggles, and exact build provenance all pass on the notarized candidate.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>One pointer-only Change Back rerun</span><strong>96%</strong></div>
+          <p>Immediate word correction, local contextual intelligence, earlier-caret editing, learning, and independent correction history pass. Brief contextual marks are implemented on top of that baseline.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Visual interaction tuning remains</span><strong>96%</strong></div>
+        </article>
+        <article class="card" style="--progress: 72%">
+          <div class="card-head"><h3>Brief contextual marks</h3><span class="badge pending">Validating</span></div>
+          <p>Marks show for four seconds, fade in 150 ms, and return together inside a padded sentence corridor after a short dwell. Explicit caret review, menu pinning, deterministic tests, and an Always Visible preference are implemented.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Owned-editor visual pass, then Bear spike</span><strong>72%</strong></div>
         </article>
         <article class="card" style="--progress: 90%">
           <div class="card-head"><h3>Bear word correction</h3><span class="badge pending">Permission gate</span></div>
@@ -214,11 +219,12 @@
       </div>
       <div class="runway">
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Clean candidate</h3><p><code>0.1.0 (20260804072103)</code> · source <code>e38f535</code> · receipt, stapling, Gatekeeper, and optimized regression pass.</p></div><span class="badge">Done</span></article>
-        <article class="gate done"><span class="gate-number">✓</span><div><h3>Owned-editor acceptance</h3><p>Three live corrections, three squiggles, contextual repair, earlier-caret repair, About identity, and Settings Accessibility verified.</p></div><span class="badge">Done</span></article>
+        <article class="gate done"><span class="gate-number">✓</span><div><h3>Owned-editor baseline</h3><p>Three live corrections, three squiggles, contextual repair, earlier-caret repair, About identity, and Settings Accessibility verified on the prior candidate.</p></div><span class="badge">Done</span></article>
+        <article class="gate"><span class="gate-number">4</span><div><h3>Contextual-mark interaction pass</h3><p>Assess the real editor and interactive marketing hero, tune timing and geometry, then compare sentence fragments, line bands, and bounded proximity in Bear.</p></div><span class="badge pending">Now</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Second-Mac lifecycle</h3><p>Clean install, fresh launch, notarized 0.0.9 → 0.1.0 update, rollback, and final restore preserve state.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Soak &amp; uninstall</h3><p>An 11-minute final-candidate soak stayed flat; app-only and full-data removal passed with recoverable evidence and no TCC modification.</p></div><span class="badge">Done</span></article>
-        <article class="gate"><span class="gate-number">4</span><div><h3>Permissioned Bear qualification</h3><p>Touch ID is required to add the notarized app to Input Monitoring, then the exact candidate gets a fresh ESP32 row.</p></div><span class="badge pending">User presence</span></article>
-        <article class="gate"><span class="gate-number">5</span><div><h3>Claim audit</h3><p>Reconcile privacy, support, and compatibility wording with the final permissioned run.</p></div><span class="badge pending">Next</span></article>
+        <article class="gate"><span class="gate-number">5</span><div><h3>Permissioned Bear qualification</h3><p>Touch ID is required to add the notarized app to Input Monitoring, then the exact candidate gets a fresh ESP32 row.</p></div><span class="badge pending">User presence</span></article>
+        <article class="gate"><span class="gate-number">6</span><div><h3>Claim audit</h3><p>Reconcile privacy, support, and compatibility wording with the final permissioned run.</p></div><span class="badge pending">Next</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Public repository</h3><p>The MIT-licensed source, visual roadmap, private vulnerability reporting, and privacy-conscious waitlist are live. The notarized binary remains held for qualification.</p></div><span class="badge">Done</span></article>
       </div>
     </section>
@@ -226,7 +232,7 @@
     <section aria-labelledby="boundaries-heading">
       <div class="section-title"><h2 id="boundaries-heading">What will not be compromised</h2></div>
       <div class="notes">
-        <article class="note"><h3>Shipping contract</h3><ul><li>Replace the smallest verified range—never a field or document.</li><li>Keep every correction visible and independently reversible.</li><li>Refuse a write when focus, selection, text, timing, or geometry is ambiguous.</li><li>Keep Apple processing local by default and cloud use explicit.</li></ul></article>
+        <article class="note"><h3>Shipping contract</h3><ul><li>Replace the smallest verified range—never a field or document.</li><li>Keep every correction accountable, retriggerable, and independently reversible.</li><li>Refuse a write when focus, selection, text, timing, or geometry is ambiguous.</li><li>Keep Apple processing local by default and cloud use explicit.</li></ul></article>
         <article class="note"><h3>First-beta boundary</h3><p>Bear is word-level and post-pause. The event-tap fast lane is measured research, not a hidden promise. Contextual Bear edits and system-wide compatibility are later milestones.</p></article>
       </div>
     </section>

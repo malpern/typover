@@ -18,3 +18,4 @@
 - [ADR-016: Separate controlled-editor and external-editor mutation lanes](adr-016-two-lane-correction-runtime.md)
 - [ADR-017: Use native toolbar panes for Settings](adr-017-native-settings-panes.md)
 - [ADR-018: Keep Bear's fast lane experimental for the first beta](adr-018-keep-bear-fast-lane-experimental.md)
+- [ADR-019: Use brief contextual correction marks in the owned editor](adr-019-brief-contextual-correction-marks.md)
