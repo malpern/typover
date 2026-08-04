@@ -38,6 +38,15 @@ struct ContextualCorrectionTests {
   @Test("The detector requires sentence punctuation at the caret")
   func requiresSentenceBoundary() {
     #expect(!CompletedSentenceDetector.isSentenceTerminator(""))
+    for nonTerminator in ["a", "Z", " ", "1", ",", ";", ":", "-"] {
+      #expect(
+        !CompletedSentenceDetector.isSentenceTerminator(nonTerminator),
+        "Unexpected sentence terminator: \(nonTerminator)"
+      )
+    }
+    for terminator in [".", "!", "?", "…", "?!"] {
+      #expect(CompletedSentenceDetector.isSentenceTerminator(terminator))
+    }
     #expect(
       CompletedSentenceDetector.immediatelyBeforeCaret(
         in: "Their going home ",

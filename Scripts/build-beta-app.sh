@@ -37,6 +37,11 @@ if [[ "$notarize" == "--notarize" && "$source_dirty" == "true" ]]; then
 fi
 
 cd "$repository_root"
+# The distributed binary is optimized, and sentence-boundary classification is
+# safety-critical for contextual correction admission. Exercise that exact
+# configuration before signing so debug-only success cannot qualify a beta.
+swift test --configuration "$configuration" \
+  --filter ContextualCorrectionTests.requiresSentenceBoundary
 swift build --configuration "$configuration" --product Typover
 binary_directory="$(swift build --configuration "$configuration" --show-bin-path)"
 
