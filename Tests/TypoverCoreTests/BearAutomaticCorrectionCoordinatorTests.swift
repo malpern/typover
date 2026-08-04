@@ -252,6 +252,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.applicator.requests.count == 1
       }
     )
+    #expect(
+      await waitUntil {
+        fixture.inputMonitor.authorizedSnapshots.last.flatMap { $0 } != nil
+      }
+    )
     let authorizationAfterRebaseline = try #require(
       fixture.inputMonitor.authorizedSnapshots.last
     )
