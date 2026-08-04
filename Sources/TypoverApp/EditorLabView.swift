@@ -719,11 +719,7 @@ final class TypoverTextView: NSTextView {
       }
 
       let ranges = annotatedRanges(for: id)
-      let manualReplacement =
-        pendingManualCorrections[id]?.replacement
-        ?? (ranges.count == 1
-          ? (textStorage.string as NSString).substring(with: ranges[0])
-          : nil)
+      let manualReplacement = pendingManualCorrections[id]?.replacement
       let annotationIsValid =
         ranges.count == 1
         && (textStorage.string as NSString).substring(with: ranges[0])
@@ -745,6 +741,10 @@ final class TypoverTextView: NSTextView {
       if let proposal = proposalsByID[id] {
         recordEngineResponse(.edited, for: proposal)
         if pendingManualCorrections[id] == nil {
+          // A missing pending edit means the annotation was invalidated by a
+          // broader or otherwise untracked document mutation. Count the
+          // override, but do not infer a reusable replacement from whatever
+          // text happens to retain the annotation attribute.
           recordManualEdit(
             manualReplacement,
             for: proposal

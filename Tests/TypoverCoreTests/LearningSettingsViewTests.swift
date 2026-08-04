@@ -123,6 +123,9 @@ struct LearningSettingsViewTests {
       ]
     )
 
+    let snapshotHeight = ProcessInfo.processInfo.environment[
+      "TYPOVER_SETTINGS_SNAPSHOT_HEIGHT"
+    ].flatMap(Double.init) ?? 1_080
     let image = try render(
       LearningSettingsView(
         behaviorSettings: behaviorSettings,
@@ -130,11 +133,11 @@ struct LearningSettingsViewTests {
         credentialStore: credentialStore
       )
       .background(Color(nsColor: .windowBackgroundColor)),
-      size: NSSize(width: 640, height: 1_080)
+      size: NSSize(width: 640, height: snapshotHeight)
     )
 
     #expect(image.size.width == 640)
-    #expect(image.size.height == 1_080)
+    #expect(image.size.height == CGFloat(snapshotHeight))
 
     if let snapshotPath = ProcessInfo.processInfo.environment[
       "TYPOVER_SETTINGS_SNAPSHOT_PATH"

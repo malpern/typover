@@ -59,6 +59,11 @@ The complete behavior contract is in
 
 - [x] Remember a chosen alternative for the same typo and language.
 - [x] Remember an identifiable direct manual edit as the next replacement.
+- [x] Record preference provenance and learn implicit edits only when the editor
+      observed a bounded edit inside the marked correction. Ambiguous document
+      mutations remain override statistics without becoming reusable rules.
+- [x] Preserve accents, apostrophes, capitalization, and punctuation in local
+      edits while allowing deliberate explicit choices to expand to phrases.
 - [x] Treat Change Back as a local suppression preference.
 - [x] Apply remembered preferences before the next eligible replacement.
 - [x] Keep menu-driven preference changes consistent with Undo and Redo.
@@ -66,6 +71,8 @@ The complete behavior contract is in
 - [x] Count applied, reverted, alternative, manual-edit, overridden, and
       unresolved corrections without storing document text in statistics.
 - [x] Add a user-facing statistics and preference-management surface.
+- [x] Explain implicit-learning safety in Settings and label each remembered
+      rule by its origin.
 
 ## Completed milestone: evaluation and editing robustness
 

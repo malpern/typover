@@ -6,6 +6,13 @@ public enum RememberedCorrectionPreference: Codable, Equatable, Sendable {
   case suppressed
 }
 
+public enum RememberedCorrectionOrigin: String, Codable, Equatable, Sendable {
+  case explicitChoice
+  case implicitLocalEdit
+  case changedBack
+  case legacy
+}
+
 public struct RememberedCorrectionRule: Equatable, Identifiable, Sendable {
   public struct ID: Equatable, Hashable, Sendable {
     public let original: String
@@ -21,17 +28,20 @@ public struct RememberedCorrectionRule: Equatable, Identifiable, Sendable {
   public let original: String
   public let language: String?
   public let preference: RememberedCorrectionPreference
+  public let origin: RememberedCorrectionOrigin
   public let updatedAt: Date
 
   public init(
     original: String,
     language: String?,
     preference: RememberedCorrectionPreference,
+    origin: RememberedCorrectionOrigin,
     updatedAt: Date
   ) {
     self.original = original
     self.language = language
     self.preference = preference
+    self.origin = origin
     self.updatedAt = updatedAt
     self.id = ID(
       original: original,
@@ -126,6 +136,7 @@ public final class CorrectionLearningStore {
   private struct PreferenceEntry: Codable, Equatable {
     let key: PreferenceKey
     var preference: RememberedCorrectionPreference
+    var origin: RememberedCorrectionOrigin?
     var updatedAt: Date
   }
 
@@ -156,8 +167,13 @@ public final class CorrectionLearningStore {
   ) {
     self.fileURL = fileURL
     self.fileManager = fileManager
-    self.state =
+    let loadedState =
       (try? Self.loadState(from: fileURL)) ?? PersistedState()
+    let migratedState = Self.migratingLegacyPreferences(in: loadedState)
+    self.state = migratedState
+    if migratedState != loadedState {
+      persist()
+    }
   }
 
   public func preference(
@@ -171,13 +187,26 @@ public final class CorrectionLearningStore {
   public func applyingPreference(
     to proposal: CorrectionProposal
   ) -> CorrectionProposal? {
-    switch preference(
-      for: proposal.correction.original,
+    let key = preferenceKey(
+      original: proposal.correction.original,
       language: proposal.language
-    ) {
+    )
+    guard let entry = state.preferences.first(where: { $0.key == key }) else {
+      return proposal
+    }
+
+    switch entry.preference {
     case .suppressed:
       return nil
     case .preferred(let replacement):
+      guard
+        entry.origin != .implicitLocalEdit
+          || Self.isSafeImplicitReplacement(replacement)
+      else {
+        state.preferences.removeAll(where: { $0.key == key })
+        persist()
+        return proposal
+      }
       var seen = Set([proposal.correction.original, replacement])
       let alternatives =
         ([proposal.correction.replacement] + proposal.alternatives)
@@ -195,8 +224,6 @@ public final class CorrectionLearningStore {
         language: proposal.language,
         lookupDuration: proposal.lookupDuration
       )
-    case nil:
-      return proposal
     }
   }
 
@@ -237,6 +264,7 @@ public final class CorrectionLearningStore {
   public func recordReverted(_ proposal: CorrectionProposal) {
     setPreference(
       .suppressed,
+      origin: .changedBack,
       for: proposal.correction.original,
       language: proposal.language
     )
@@ -250,6 +278,7 @@ public final class CorrectionLearningStore {
   ) {
     setPreference(
       .preferred(replacement),
+      origin: .explicitChoice,
       for: proposal.correction.original,
       language: proposal.language
     )
@@ -266,12 +295,14 @@ public final class CorrectionLearningStore {
       if replacement == proposal.correction.original {
         setPreference(
           .suppressed,
+          origin: .implicitLocalEdit,
           for: proposal.correction.original,
           language: proposal.language
         )
-      } else {
+      } else if Self.isSafeImplicitReplacement(replacement) {
         setPreference(
           .preferred(replacement),
+          origin: .implicitLocalEdit,
           for: proposal.correction.original,
           language: proposal.language
         )
@@ -299,6 +330,7 @@ public final class CorrectionLearningStore {
           original: entry.key.original,
           language: entry.key.language.isEmpty ? nil : entry.key.language,
           preference: entry.preference,
+          origin: entry.origin ?? .legacy,
           updatedAt: entry.updatedAt
         )
       }
@@ -434,6 +466,44 @@ public final class CorrectionLearningStore {
     return try JSONDecoder().decode(PersistedState.self, from: data)
   }
 
+  private static func migratingLegacyPreferences(
+    in state: PersistedState
+  ) -> PersistedState {
+    var migrated = state
+    migrated.preferences = state.preferences.compactMap { entry in
+      guard entry.origin == nil else {
+        return entry
+      }
+
+      var migratedEntry = entry
+      switch entry.preference {
+      case .suppressed:
+        migratedEntry.origin = .changedBack
+      case .preferred(let replacement):
+        guard isSafeImplicitReplacement(replacement) else {
+          return nil
+        }
+        migratedEntry.origin = .legacy
+      }
+      return migratedEntry
+    }
+    return migrated
+  }
+
+  private static func isSafeImplicitReplacement(_ replacement: String) -> Bool {
+    guard
+      !replacement.isEmpty,
+      replacement.utf16.count <= 64
+    else {
+      return false
+    }
+
+    return replacement.unicodeScalars.allSatisfy { scalar in
+      !CharacterSet.whitespacesAndNewlines.contains(scalar)
+        && !CharacterSet.controlCharacters.contains(scalar)
+    }
+  }
+
   private static func milliseconds(_ duration: Duration) -> Double {
     let components = duration.components
     return Double(components.seconds) * 1_000
@@ -465,18 +535,21 @@ public final class CorrectionLearningStore {
 
   private func setPreference(
     _ preference: RememberedCorrectionPreference,
+    origin: RememberedCorrectionOrigin,
     for original: String,
     language: String?
   ) {
     let key = preferenceKey(original: original, language: language)
     if let index = state.preferences.firstIndex(where: { $0.key == key }) {
       state.preferences[index].preference = preference
+      state.preferences[index].origin = origin
       state.preferences[index].updatedAt = Date()
     } else {
       state.preferences.append(
         PreferenceEntry(
           key: key,
           preference: preference,
+          origin: origin,
           updatedAt: Date()
         )
       )

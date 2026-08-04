@@ -141,8 +141,8 @@ word and spelling language:
 
 - choosing an alternative makes that replacement the preferred correction next
   time;
-- directly editing an annotated correction makes the resulting word preferred
-  when Typover can identify it;
+- directly editing an annotated correction makes the resulting token preferred
+  only when Typover observed the edit inside that marked range;
 - Change Back suppresses automatic correction of that exact original word;
 - Undo and Redo of menu-driven correction changes restore the corresponding
   preference state.
@@ -156,9 +156,15 @@ window. Removing one choice affects the shared editor immediately. The writer
 can reset statistics independently or clear all local learning after a
 confirmation.
 
-If a direct edit removes the entire annotation before Typover can identify the
-new word, the interaction still counts as a manual override but does not create
-an uncertain word mapping.
+Settings identifies whether a remembered rule came from a chosen correction, a
+local edit, Change Back, or an earlier Typover version. Accents, apostrophes,
+capitalization, and punctuation can remain part of an implicit local edit.
+Explicitly chosen rules may intentionally expand to a phrase.
+
+If an edit removes the entire annotation before Typover can identify a local
+replacement—or if a broader document mutation only leaves the annotation on
+unrelated text—the interaction still counts as a manual override but does not
+create an uncertain mapping.
 
 ## Local statistics
 

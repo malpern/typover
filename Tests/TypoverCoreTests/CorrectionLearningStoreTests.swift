@@ -67,6 +67,65 @@ struct CorrectionLearningStoreTests {
       )
     )
     #expect(nextProposal.correction.replacement == "tech")
+    #expect(store.rememberedRules.first?.origin == .implicitLocalEdit)
+  }
+
+  @Test("Implicit local edits preserve accents, apostrophes, and punctuation")
+  func remembersRichLocalEdits() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let examples = [
+      ("dont", "don’t"),
+      ("resume", "résumé"),
+      ("teh", "the,"),
+    ]
+
+    for (original, replacement) in examples {
+      let proposal = makeProposal(original: original, replacement: replacement)
+      store.recordApplied(proposal)
+      store.recordManualEdit(replacement, for: proposal)
+
+      let remembered = try #require(
+        store.applyingPreference(
+          to: makeProposal(original: original, replacement: original)
+        )
+      )
+      #expect(remembered.correction.replacement == replacement)
+    }
+  }
+
+  @Test("An ambiguous document edit counts as an override but is not learned")
+  func doesNotRememberAmbiguousDocumentEdit() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordApplied(proposal)
+    store.recordManualEdit("Start Finish remains.", for: proposal)
+
+    #expect(store.rememberedRules.isEmpty)
+    #expect(store.statistics().manuallyEdited == 1)
+    #expect(store.statistics().overriddenCorrections == 1)
+    let nextProposal = try #require(store.applyingPreference(to: proposal))
+    #expect(nextProposal.correction.replacement == "the")
+    #expect(nextProposal.source == .appleSpelling)
+  }
+
+  @Test("An explicit choice may intentionally expand to a phrase")
+  func remembersExplicitPhraseChoice() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "addr", replacement: "address")
+
+    store.recordPreferred("123 Main Street", for: proposal)
+
+    let remembered = try #require(store.applyingPreference(to: proposal))
+    #expect(remembered.correction.replacement == "123 Main Street")
+    #expect(remembered.source == .rememberedPreference)
+    #expect(store.rememberedRules.first?.origin == .explicitChoice)
   }
 
   @Test("Statistics count unique corrected words and override outcomes")
@@ -169,6 +228,41 @@ struct CorrectionLearningStoreTests {
     #expect(store.statisticsBySource().isEmpty)
   }
 
+  @Test("An unsafe legacy preference is removed during migration")
+  func removesUnsafeLegacyPreference() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    try FileManager.default.createDirectory(
+      at: fixture.directory,
+      withIntermediateDirectories: true
+    )
+    let legacyState = LegacyPersistedState(
+      preferences: [
+        LegacyPreferenceEntry(
+          key: LegacyPreferenceKey(original: "teh", language: "en_US"),
+          preference: .preferred("Start Finish remains."),
+          updatedAt: Date()
+        )
+      ],
+      activities: []
+    )
+    try JSONEncoder().encode(legacyState).write(
+      to: fixture.fileURL,
+      options: .atomic
+    )
+
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+
+    #expect(store.rememberedRules.isEmpty)
+    let proposal = try #require(
+      store.applyingPreference(
+        to: makeProposal(original: "teh", replacement: "the")
+      )
+    )
+    #expect(proposal.correction.replacement == "the")
+    #expect(proposal.source == .appleSpelling)
+  }
+
   @Test("Preferences and statistics survive a store relaunch")
   func persistsLearning() throws {
     let fixture = makeFixture()
@@ -225,9 +319,11 @@ struct CorrectionLearningStoreTests {
     #expect(rules.count == 2)
     #expect(rules[0].original == "wrod")
     #expect(rules[0].preference == .suppressed)
+    #expect(rules[0].origin == .changedBack)
     #expect(rules[1].id.original == "teh")
     #expect(rules[1].id.language == "en_US")
     #expect(rules[1].preference == .preferred("the"))
+    #expect(rules[1].origin == .explicitChoice)
   }
 
   @Test("A remembered rule can be removed by its stable identifier")
@@ -310,11 +406,20 @@ struct CorrectionLearningStoreTests {
 }
 
 private struct LegacyPersistedState: Codable {
-  let preferences: [LegacyPreference]
+  let preferences: [LegacyPreferenceEntry]
   let activities: [LegacyActivity]
 }
 
-private struct LegacyPreference: Codable {}
+private struct LegacyPreferenceKey: Codable {
+  let original: String
+  let language: String
+}
+
+private struct LegacyPreferenceEntry: Codable {
+  let key: LegacyPreferenceKey
+  let preference: RememberedCorrectionPreference
+  let updatedAt: Date
+}
 
 private struct LegacyActivity: Codable {
   let correctionID: UUID

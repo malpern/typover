@@ -1018,6 +1018,15 @@ private struct RememberedRulesSection: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      Text(
+        "Typover remembers a manual change only when it can tie that edit to the marked correction. Larger or ambiguous edits count as overrides but are not reused.",
+        bundle: #bundle,
+        comment:
+          "Safety explanation for Typover's local correction preference learning."
+      )
+      .font(.callout)
+      .foregroundStyle(.secondary)
+
       GroupBox {
         VStack(spacing: 0) {
           if rules.isEmpty {
@@ -1046,9 +1055,9 @@ private struct RememberedRulesSection: View {
       } label: {
         Label {
           Text(
-            "Remembered choices",
+            "Remembered corrections",
             bundle: #bundle,
-            comment: "Heading for Typover's remembered correction choices."
+            comment: "Heading for Typover's remembered correction preferences."
           )
         } icon: {
           Image(systemName: "brain")
@@ -1147,11 +1156,21 @@ private struct RememberedRuleRow: View {
           }
         }
 
-        if let language = rule.language {
-          Text(locale.localizedString(forIdentifier: language) ?? language)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        HStack(spacing: 5) {
+          Text(rule.origin.title)
+
+          if let language = rule.language {
+            Text(
+              "·",
+              bundle: #bundle,
+              comment: "Separator between remembered-rule metadata."
+            )
+              .accessibilityHidden(true)
+            Text(locale.localizedString(forIdentifier: language) ?? language)
+          }
         }
+        .font(.caption)
+        .foregroundStyle(.secondary)
       }
 
       Spacer()
@@ -1197,13 +1216,28 @@ private struct RememberedRulesEmptyState: View {
       }
     } description: {
       Text(
-        "Changing a correction or changing it back will create a choice here.",
+        "Choosing another correction, changing it back, or directly editing the marked word can create a remembered correction here.",
         bundle: #bundle,
         comment:
           "Empty-state explanation of how Typover learns correction preferences."
       )
     }
     .frame(maxWidth: .infinity, minHeight: 120)
+  }
+}
+
+extension RememberedCorrectionOrigin {
+  fileprivate var title: LocalizedStringResource {
+    switch self {
+    case .explicitChoice:
+      "Chosen correction"
+    case .implicitLocalEdit:
+      "Learned from a local edit"
+    case .changedBack:
+      "Changed back"
+    case .legacy:
+      "Remembered by an earlier version"
+    }
   }
 }
 

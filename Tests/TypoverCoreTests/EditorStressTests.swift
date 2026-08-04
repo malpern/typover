@@ -87,6 +87,26 @@ struct EditorStressTests {
     )
   }
 
+  @Test("An untracked document mutation cannot become a remembered rule")
+  func ambiguousDocumentMutationIsNotLearned() {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh ")
+
+    fixture.editor.textStorage?.replaceCharacters(
+      in: NSRange(location: 0, length: 3),
+      with: "Start Finish remains."
+    )
+    fixture.editor.didChangeText()
+
+    #expect(fixture.learningStore.rememberedRules.isEmpty)
+    #expect(fixture.learningStore.statistics().manuallyEdited == 1)
+
+    fixture.moveCaret(to: fixture.editor.string.utf16.count)
+    fixture.type("teh ")
+    #expect(fixture.editor.string == "Start Finish remains. the ")
+  }
+
   @Test("A proposal is rejected when its source text changes during lookup")
   func rejectsStaleProposal() {
     let fixture = EditorFixture()

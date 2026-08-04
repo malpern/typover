@@ -19,7 +19,15 @@ Typover will maintain a local correction-learning store.
 
 - A chosen alternative becomes the preferred replacement for the same exact
   original token and spelling language.
-- An identifiable direct edit becomes the preferred replacement.
+- An identifiable direct edit becomes the preferred replacement only when the
+  editor observed that edit inside the marked correction range.
+- Broader or otherwise ambiguous document mutations count as manual overrides
+  but do not create a reusable preference.
+- Remembered preferences retain their provenance: an explicit choice, an
+  implicit local edit, Change Back, or a migrated earlier-version choice.
+- Explicit choices may intentionally contain a phrase. Implicit local edits
+  must remain a bounded single token; accents, apostrophes, capitalization, and
+  punctuation are preserved.
 - Change Back suppresses the same exact token and language.
 - Remembered choices override the Apple candidate but still use the normal
   exact-range, annotation, and restoration transaction.
@@ -67,6 +75,8 @@ interrupt typing.
 - Exact-token and exact-language matching intentionally learns slowly.
 - Direct edits that destroy the complete annotation may be counted without
   yielding a reliable replacement mapping.
+- Learning must distinguish a direct local edit from text that merely inherited
+  an annotation attribute during a broader document mutation.
 - A user-facing way to inspect, remove, and reset preferences and statistics is
   still required.
 

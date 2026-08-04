@@ -773,6 +773,9 @@ cross-version results, and repeatable local benchmarks.
    boundary-transaction latency while typing continuously and visually checks
    multiple squiggles, moved-caret contextual completion, composition refusal,
    Change Back, and one-step Undo.
+   The learning-safety regression is complete: ambiguous document mutations no
+   longer compile into reusable rules, explicit phrase choices remain valid,
+   legacy unsafe mappings are removed, and Settings displays rule provenance.
 4. Keep the current idle-first AX lane as the Bear production behavior while
    the active-tap candidate is under qualification.
 5. Build and notarize the final beta candidate, then run the clean-machine
