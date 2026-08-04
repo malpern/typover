@@ -97,15 +97,15 @@ owns TCC permission records; Typover must not edit the TCC database.
 ## Release notes and support
 
 Use [`docs/releases/README.md`](../releases/README.md) for every distributed
-candidate. The current GitHub repository is private, so its Issues tab is not a
-usable beta support channel for ordinary testers. Before inviting testers,
-choose and publish either a monitored support email address or a public issue
-tracker, including instructions for exporting content-free diagnostics.
+candidate. Public beta support uses the repository's GitHub Issues tracker and
+the report contract in
+[`docs/public-beta-claims.md`](../public-beta-claims.md). The repository must be
+public before inviting ordinary testers; a private repository does not make
+Issues available to them.
 
 ## Public-distribution blockers
 
-- Select and add the project license.
-- Select the beta support channel.
+- Make the MIT-licensed repository public before inviting testers.
 - Produce and validate a notarized clean-revision artifact.
 - Pass the clean install, permission revocation, update, rollback, and uninstall
   matrix above.

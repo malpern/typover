@@ -17,3 +17,4 @@
 - [ADR-015: Keep launch at login out of the initial beta](adr-015-manual-launch-for-initial-beta.md)
 - [ADR-016: Separate controlled-editor and external-editor mutation lanes](adr-016-two-lane-correction-runtime.md)
 - [ADR-017: Use native toolbar panes for Settings](adr-017-native-settings-panes.md)
+- [ADR-018: Keep Bear's fast lane experimental for the first beta](adr-018-keep-bear-fast-lane-experimental.md)

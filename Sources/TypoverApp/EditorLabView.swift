@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftUI
 import TypoverAppleIntelligence
 import TypoverAppleSpell
@@ -78,6 +79,11 @@ extension NSAttributedString.Key {
 
 @MainActor
 final class TypoverTextView: NSTextView {
+  private static let transactionLogger = Logger(
+    subsystem: "com.malpern.typover",
+    category: "ControlledEditorTransaction"
+  )
+
   private enum LearningEffect {
     case none
     case removePreference
@@ -1261,12 +1267,20 @@ final class TypoverTextView: NSTextView {
     correctionID: Correction.ID,
     elapsed: Duration
   ) {
+    let documentUTF16Length = textStorage?.length ?? 0
     correctionTransactionSamples.append(
       CorrectionTransactionSample(
         correctionID: correctionID,
         elapsed: elapsed,
-        documentUTF16Length: textStorage?.length ?? 0
+        documentUTF16Length: documentUTF16Length
       )
+    )
+    let components = elapsed.components
+    let milliseconds =
+      Double(components.seconds) * 1_000
+      + Double(components.attoseconds) / 1_000_000_000_000_000
+    Self.transactionLogger.debug(
+      "Correction transaction completed in \(milliseconds, privacy: .public) ms; document UTF-16 length \(documentUTF16Length, privacy: .public)"
     )
     let maximumSamples = 200
     if correctionTransactionSamples.count > maximumSamples {

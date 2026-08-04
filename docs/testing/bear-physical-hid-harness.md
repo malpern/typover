@@ -371,3 +371,22 @@ The harness proves physical input delivery, final Bear text, and matching
 Typover writes. It does not count visible overlay panels or exercise Change
 Back; those remain separate automated collection tests and an installed manual
 interaction row.
+
+## First-beta fast-lane policy regression: 2026-08-03
+
+Four fresh physical rows closed the burst-policy decision without expanding
+the public beta claim:
+
+| Run | Scenario | Result | Evidence |
+|---|---|---|---|
+| `typover-hid-2026-08-04T06-34-56Z` | Strict pre-dispatch, 100 ms, five Space-completed words | 5/5 corrected | Five pre-dispatch emissions; 33.9–40.9 ms application latency; five retained overlays |
+| `typover-hid-2026-08-04T06-36-36Z` | Mouse invalidation, fresh authorization, strict 100 ms | 5/5 corrected | Focus and fixture evidence complete; all five corrections used pre-dispatch |
+| `typover-hid-2026-08-04T06-37-13Z` | Fast-to-fallback handoff, 60 ms | 4/5 corrected | One exact safe `teh` miss; no unexpected text, tap disablement, or late fixture report |
+| `typover-hid-2026-08-04T06-38-04Z` | Punctuation, 100 ms | 0/5 corrected | All five exact inputs preserved; punctuation is outside the qualified fast-path envelope |
+
+All rows passed quiet-host admission, retained Bear focus, and captured complete
+load and ESP32 trace evidence. ADR-018 therefore keeps the event-tap path behind
+its environment gate for the first beta. The beta continues to use the
+serialized 220 millisecond idle-first AX lane; the research fast-path claim is
+limited to lowercase ASCII words completed with Space at 100 milliseconds per
+key or slower.

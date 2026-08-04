@@ -38,11 +38,11 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **In progress — reference behavior complete** | Immediate in-transaction Apple Spelling, independently tracked contextual requests, local and optional cloud models, rewrites, learning, statistics, Undo/Redo, composition refusal, and multiple corrections | Installed active-typing latency and interaction acceptance |
-| Bear lower-latency spike | **Active-tap candidate physically proven at normal typing rates — burst policy pending** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, 17 ordering tests, 45 coordinator tests, 329-test full gate, strict 5/5 rows at 160/100 ms, and strict 5/5 at 100 ms under combined load | Decide the supported burst envelope from repeat 60/40 ms mixed-lane results; remains disabled by default |
+| Controlled AppKit editor | **Accepted in an installed development build** | Immediate in-transaction Apple Spelling, independently tracked contextual requests, local and optional cloud models, rewrites, learning, statistics, Undo/Redo, composition refusal, multiple corrections, sub-millisecond measured local transactions, and installed continued-typing/Change Back/moved-caret acceptance | Repeat the focused interaction rows against the exact notarized candidate |
+| Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **In progress — functionally complete** | 14/16 work items; automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, accessibility, diagnostics, physical load coverage, and post-pause product decision | Final-candidate qualification and second-machine soak |
 | Milestone 2: Beta shell | **In progress** | 7/8 work items; onboarding, permissions, status, privacy, About provenance, and artifact-verification tooling | Notarized candidate plus clean-machine install and permission acceptance |
-| Public-beta operations | **In progress** | Local release-operations contract and package-verification path | Update, rollback, uninstall, license, support channel, release notes, and final public claims |
+| Public-beta operations | **In progress** | Local release-operations contract, package-verification path, MIT license, GitHub Issues support decision, and reviewed public claim wording | Update, rollback, uninstall, exact release notes, public repository visibility, and artifact-to-claim verification |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, and build a compatibility probe |
 | Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
@@ -75,6 +75,9 @@ Status meanings:
   idle-first AX lane as the safe Bear control/fallback and pursue a separate,
   disabled-by-default text-expander-style experiment. Do not hold Typover's
   own editor to Bear's mutation limitations.
+- [x] Decide the active-tap burst policy. ADR-018 keeps the first beta on the
+  idle-first lane and limits the disabled research claim to lowercase ASCII
+  words completed with Space at 100 milliseconds per key or slower.
 - [ ] Build and notarize the final candidate from a clean revision.
 - [ ] Run the clean-machine install and permission checklist.
 - [ ] Qualify that exact candidate with fresh Bear and Typover processes,
@@ -83,8 +86,10 @@ Status meanings:
 ### Required before a public beta
 
 - [ ] Validate update, rollback, and uninstall behavior on the candidate.
-- [ ] Select a license and support channel.
-- [ ] Finalize release notes and rollback instructions.
+- [x] Select a license and support channel: MIT license and public GitHub
+  Issues, with a content-free report contract.
+- [x] Finalize release-note and rollback instructions; instantiate them with
+  the exact candidate metadata after notarization.
 - [ ] Verify that the published privacy, compatibility, and support claims
   match the shipped artifact.
 
@@ -123,7 +128,7 @@ unsupported input, mouse interaction, tap disablement, proposal mismatch, or
 startup failure deauthorize the path. An emitted write that cannot be matched
 opens the existing mutation circuit without learning, statistics, or a
 squiggle. Deterministic gates pass: 17 ordering tests, 45 coordinator tests, a
-clean build, and the full 329-test suite. Physical qualification now proves
+    clean build, and the full 338-test suite. Physical qualification now proves
 the active path at 160/100 ms and 100 ms under combined load; repeat 60/40 ms
 rows establish a safe but variable mixed-lane burst envelope rather than an
 active-only guarantee.
@@ -204,8 +209,18 @@ under combined CPU, WindowServer, and Accessibility contention. All five words
 used pre-dispatch, the tap never disabled, callbacks took 0.034–0.091
 milliseconds, application latency stayed at 34–39 milliseconds, all five
 overlays remained, and sampled CPU idle fell as low as 23.5 percent. The
-candidate remains disabled by default while the burst product policy and final
-installed interaction acceptance are decided.
+candidate remains disabled by default under ADR-018.
+
+Fresh release-regression rows on 2026-08-03 closed the product-policy slice.
+`typover-hid-2026-08-04T06-34-56Z` passed a strict 100 millisecond row 5/5 with
+five pre-dispatch emissions. After an explicit mouse click invalidated the
+authorization, `typover-hid-2026-08-04T06-36-36Z` recovered a fresh baseline
+and again passed 5/5. `typover-hid-2026-08-04T06-37-13Z` exercised the 60
+millisecond handoff and safely produced 4/5 with one exact `teh` miss and no
+unexpected text. The punctuation row
+`typover-hid-2026-08-04T06-38-04Z` safely preserved all five inputs, confirming
+that punctuation is not part of the qualified fast-path envelope. Every row
+kept focus, complete fixture evidence, and zero late reports.
 
 ## Detailed current state
 
@@ -215,14 +230,15 @@ Careful and Comprehensive correction scopes, optional sentence rewriting,
 multiple independently reversible corrections, preference learning,
 statistics, Undo and Redo, and long-document annotation behavior.
 
-An installed UI acceptance check on 2026-08-03 entered two consecutive `teh `
-tokens through individual key events and continued with another character. Both
-words changed immediately to `the`, both light-gray squiggles remained visible,
-and Change Back on the first restored only that word while the second correction
-and trailing input remained intact. The test-created learned suppression was
-removed afterward. This passes the focused active-typing and independent-action
-interaction check; the broader latency, composition, moved-caret contextual,
-and one-step Undo matrix remains open.
+The installed acceptance pass in
+[`controlled-editor-acceptance.md`](../testing/controlled-editor-acceptance.md)
+now covers uninterrupted multi-word correction, independent light-gray
+squiggles, Change Back, one-step Undo, contextual correction, and an earlier
+caret inside surrounding text. Content-free instrumentation measured three
+local correction transactions at 0.350–0.461 milliseconds. The focused
+32-test stress suite separately covers marked-text composition refusal and the
+other deterministic safety edges. The same visible rows still need repetition
+against the exact notarized candidate.
 
 Bear now supports guarded exact-range replacement, independent Change Back,
 ranked alternatives, bounded context re-anchoring, wrapped-range geometry, a
@@ -612,9 +628,9 @@ is offered as a public beta.
   defines numeric versions/builds, exact source provenance, manual update,
   rollback, uninstall footprint, and a release-note template.
 - [ ] Test update and uninstall behavior on a clean Mac.
-- [ ] Select the beta support channel. The repository is private, so a support
-  email or public issue tracker requires an owner decision.
-- [ ] Select and document the license.
+- [x] Select GitHub Issues as the beta support channel; make the repository
+  public before inviting ordinary testers.
+- [x] Select and document the MIT license.
 - [ ] Produce the intended public distribution artifact and verify its signing,
   notarization, installation, update, and removal behavior.
 - [ ] Confirm that public privacy, support, and compatibility claims match the
@@ -761,26 +777,17 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Decide the active-tap burst product policy from the current evidence: support
-   the strict active path through 100 milliseconds per character and treat
-   60/40 millisecond bursts as safe mixed-lane recovery, or require a larger
-   repeat matrix before expanding that envelope. Keep the candidate disabled
-   by default until that decision and the installed interaction acceptance.
-2. Add release regression rows for Return/mouse invalidation followed by a
-   fresh correction and for explicit fast-to-fallback lane handoff. Preserve
-   schema-6 active-only qualification separately from mixed-lane resilience.
-3. Run an installed controlled-editor acceptance pass that measures local
-   boundary-transaction latency while typing continuously and visually checks
-   multiple squiggles, moved-caret contextual completion, composition refusal,
-   Change Back, and one-step Undo.
-   The learning-safety regression is complete: ambiguous document mutations no
-   longer compile into reusable rules, explicit phrase choices remain valid,
-   legacy unsafe mappings are removed, and Settings displays rule provenance.
-4. Keep the current idle-first AX lane as the Bear production behavior while
-   the active-tap candidate is under qualification.
-5. Build and notarize the final beta candidate, then run the clean-machine
+1. Build and notarize the final beta candidate from the accepted clean
+   revision.
+2. Repeat the focused controlled-editor acceptance rows against that exact
+   candidate.
+3. Keep the current idle-first AX lane as the Bear beta behavior; the active
+   lane remains a disabled research experiment under ADR-018.
+4. Run the clean-machine
    install, permission, fresh-process, release-memory, and second-machine soak
    checklist against that exact artifact.
+5. Qualify in-place update, rollback, app-only removal, and full local-data
+   removal; then bind exact artifact metadata into the release notes.
 
 Do not routinely repeat the full 20-word, severe-load, circuit-breaker, or IME
 rows. They are release regression coverage and should be rerun only when the

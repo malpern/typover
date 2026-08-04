@@ -138,6 +138,10 @@ corrections independently annotated and reversible.
 The controlled editor’s correction rules are captured in
 [docs/correction-behavior.md](docs/correction-behavior.md).
 
+The exact first-beta compatibility, privacy, support, and known-limitation
+wording is maintained in
+[docs/public-beta-claims.md](docs/public-beta-claims.md).
+
 ## Status
 
 Controlled-editor interaction prototype with Apple spelling candidates,
@@ -171,4 +175,4 @@ permissioned live checks; their deterministic safety coverage passes.
 
 ## License
 
-Not yet selected.
+Typover is available under the [MIT License](LICENSE).
