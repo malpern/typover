@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a Typover correction, interaction, or compatibility problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping test Typover. Use disposable example text. Do not paste a private Bear note, API key, credential, or diagnostic trace that includes writing.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did this happen?
+      options:
+        - Typover controlled editor
+        - Bear
+        - Settings or onboarding
+        - Install, update, rollback, or removal
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Typover version, build, and source
+      description: Copy all three values from About Typover.
+      placeholder: 0.1.0 · 20260804072103 · e38f535ee2
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: macOS 27.0
+    validations:
+      required: true
+  - type: input
+    id: bear
+    attributes:
+      label: Bear version
+      description: Required only for a Bear report.
+      placeholder: Bear 2.9.1
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction using disposable text
+      description: Include exact typing order, pauses, focus changes, and the smallest safe sample.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and observed result
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I used disposable text and did not include credentials or private note content.
+          required: true
+        - label: Any attached diagnostic export is content-free.
+          required: true

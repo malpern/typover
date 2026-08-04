@@ -2,6 +2,8 @@
 
 - [Typover roadmap](roadmap.md) — canonical active plan; Milestone 1 is the Bear
   word-correction beta.
+- [Visual roadmap](roadmap.html) — polished at-a-glance progress dashboard and
+  release runway.
 - [Controlled-editor milestone record](controlled-editor-roadmap.md) — completed
   reference-editor, model, evaluation, and Bear implementation history.
 - [Bear compatibility spike](bear-compatibility-spike.md) — detailed research,

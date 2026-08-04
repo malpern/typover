@@ -1,7 +1,7 @@
 # Beta release operations
 
-- Status: Local lifecycle contract implemented; clean-machine evidence pending
-- Updated: 2026-08-02
+- Status: Signed lifecycle matrix and uninstall passed; permissioned UI pending
+- Updated: 2026-08-04
 
 This document defines how the manually launched Typover beta is identified,
 updated, rolled back, removed, and supported. It does not authorize publishing
@@ -46,9 +46,11 @@ update is an explicit replacement:
 6. Confirm its permission state, Bear status, and one controlled-editor
    correction before enabling Bear automation.
 
-The stable bundle identifier and Developer ID requirement are intended to
-preserve macOS permission identity, but clean-machine and in-place update tests
-must prove this before the beta instructions make that promise.
+The stable bundle identifier and Developer ID requirement preserve the app's
+identity across replacement. The second-machine update/rollback matrix proved
+that application preferences and the learning file survive. Permission
+retention still needs a permissioned UI pass; the lifecycle result alone does
+not make that stronger promise.
 
 ## Rollback policy
 
@@ -88,11 +90,11 @@ owns TCC permission records; Typover must not edit the TCC database.
 
 | Row | Current evidence | Required result |
 |---|---|---|
-| Fresh install | Local clean-preferences presentation passed | Notarized artifact opens through Gatekeeper on a clean macOS 27 account |
-| In-place update | Pending | One running copy, permissions and local data preserved, Bear reattaches safely |
-| Rollback | Pending | Previous artifact launches and reads compatible data without stale observers |
-| App-only removal | Bundle contract automated; installed removal pending | No process, overlay, helper, daemon, XPC service, or login item remains |
-| Full local-data removal | In-app trace and learning controls implemented | Documented files/defaults are absent after explicit user-directed cleanup |
+| Fresh install | **Passed on second Mac**: checksum, signature, stapling, Gatekeeper, `/Applications` install, and one fresh GUI process | Complete the visible first-run permission flow on an unlocked session |
+| In-place update | **Passed**: notarized 0.0.9 to 0.1.0 left one process and preserved model, scope, rewrite, Bear enablement, and learning checksum | Confirm TCC grants and Bear observation survive on the permissioned Mac |
+| Rollback | **Passed**: 0.1.0 to notarized 0.0.9 and back to 0.1.0 preserved the same state | Confirm no stale Bear observer in the permissioned UI pass |
+| App-only removal | **Passed on second Mac** after an 11-minute final-candidate soak: app and process were absent while preferences and learning remained intact | No process, overlay, helper, daemon, XPC service, or login item remains |
+| Full local-data removal | **Passed on second Mac** using a recoverable state folder: the preferences domain, Application Support directory, app, process, and Typover launch-item footprint were absent | Documented files/defaults are absent after explicit user-directed cleanup |
 
 ## Release notes and support
 
@@ -106,8 +108,9 @@ Issues available to them.
 ## Public-distribution blockers
 
 - Make the MIT-licensed repository public before inviting testers.
-- Produce and validate a notarized clean-revision artifact.
-- Pass the clean install, permission revocation, update, rollback, and uninstall
-  matrix above.
+- Candidate `0.1.0 (20260804072103)` from clean revision `e38f535` is accepted,
+  stapled, Gatekeeper-approved, and receipt-verified.
+- Finish local and second-machine permission UI, revocation, and Bear
+  reattachment rows above. The second-machine soak and uninstall rows pass.
 - Review the public privacy and compatibility statements against the shipped
   build.

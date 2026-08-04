@@ -144,34 +144,26 @@ wording is maintained in
 
 ## Status
 
-Controlled-editor interaction prototype with Apple spelling candidates,
-bounded user-selectable contextual sentence analysis, user-selectable
-correction scope, optional sentence rewriting, ranked spelling alternatives,
-Change Back, and Undo. Apple Intelligence remains the default; OpenAI and
-Anthropic are explicit cloud options. Explicit
-spelling alternatives, manual edits, and Change Back choices are learned
-locally, and aggregate correction outcomes are retained without document text.
-Contextual overrides are measured but do not create unsafe global rules for
-otherwise valid words. Bear observation and exact-range replacement now exist
-as explicit test transactions. Change Back re-anchors from bounded,
-content-private context fingerprints and refuses stale or ambiguous targets;
-visible Bear corrections now produce guarded screen-space fragments and a
-narrow interactive AppKit squiggle while offscreen, background, or stale
-corrections produce no visible overlay. The concise Bear menu offers Revert
-followed by verified alternatives, with no inert “Keep Existing” row. A
-guarded delayed caret repair handles Bear's asynchronous selection update
-without overriding a newer user selection. A conservative one-sided anchor
-keeps the menu available during continued typing without allowing newly typed
-text into the replacement range. The Phase 7 live harness now opens one exact
-disposable note by stable Bear note ID instead of inheriting search-result
-selection state. Settings and the native **Preview Selected Bear Typo** app-menu
-command share one guarded preview coordinator. The permissioned app has passed
-baseline correction, adjacent continued typing, note switching, safe return,
-manual supersession, a fresh second correction, and accessible Revert while
-preserving newly typed adjacent text. Automatic Bear correction now passes the
-first ordinary `teh` plus Space live check. Installed multi-correction,
-composition, Undo/Redo behavior, and the remaining robustness matrix still need
-permissioned live checks; their deterministic safety coverage passes.
+The controlled editor is the zero-compromise reference experience: immediate
+Apple Spelling, local contextual Apple Intelligence, optional explicit cloud
+models, multiple independently reversible corrections, Change Back,
+alternatives, learning, statistics, and Undo/Redo.
+
+Bear integration uses exact bounded Accessibility reads and writes, a guarded
+idle-first correction lane, and nonactivating light-gray overlay controls. It
+supports Bear 2.8.1 and 2.9.1 on macOS 27.0 and fails closed outside that tested
+contract. The lower-latency event-tap path remains research-only.
+
+Notarized candidate `0.1.0 (20260804072103)` is tied to clean source
+`e38f535ee2715ff52a8247a9e19e7b882996e13e`. Its signature, stapled ticket,
+Gatekeeper result, archive receipt, clean installation, update, and rollback
+have passed. The binary is not published yet: final Input Monitoring approval,
+exact-candidate Bear physical qualification, pointer-only Change Back, and
+authenticated permission/revocation evidence remain release gates. The
+second-Mac app-only and full-data uninstall checks pass. See the
+[visual roadmap](docs/plans/roadmap.html),
+[detailed roadmap](docs/plans/roadmap.md), and
+[candidate notes](docs/releases/0.1.0-20260804072103.md).
 
 ## License
 

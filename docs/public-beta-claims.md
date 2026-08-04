@@ -1,7 +1,7 @@
 # Public beta claims
 
-- Status: Approved wording for the first beta
-- Updated: 2026-08-03
+- Status: Approved wording; exact candidate audit pending permissioned Bear row
+- Updated: 2026-08-04
 
 ## Compatibility
 
@@ -42,9 +42,28 @@ diagnostic export when available. Writers should not paste private note content
 into an issue.
 
 Security or privacy reports that require non-public disclosure must not be
-filed with ordinary reproduction text in a public issue. Until a dedicated
-private security contact is published, testers should provide only a minimal
-content-free description and request a private follow-up channel.
+filed with ordinary reproduction text in a public issue. Testers should use
+GitHub's private **Report a vulnerability** form described in `SECURITY.md`.
+
+## Candidate audit
+
+Candidate `0.1.0 (20260804072103)` matches the claims that can be verified
+without granting system permissions:
+
+- the bundle requires macOS 27.0 and identifies clean source `e38f535`;
+- Apple Spelling and Apple Intelligence are the defaults shown in Settings;
+- the OpenAI and Anthropic choices remain explicit;
+- the app contains no launch agent, daemon, privileged helper, XPC service,
+  login item, telemetry uploader, or updater;
+- its notarized update and rollback preserve local preferences and learning;
+  and
+- the lower-latency Bear event-tap lane is not exposed as the default product
+  path.
+
+The Bear compatibility, post-pause behavior, permission-state recovery, and
+bounded diagnostic claims need one final run with the exact candidate after
+the notarized app receives Input Monitoring approval. Until that row passes,
+the wording is approved but the artifact is not beta-ready.
 
 ## Known limitations
 

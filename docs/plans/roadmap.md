@@ -1,9 +1,9 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-03
-- Current focus: Parallel zero-compromise editor hardening and bounded Bear
-  lower-latency mutation spike
+- Updated: 2026-08-04
+- Current focus: Final permissioned Bear qualification, claim audit, and
+  public-beta publication decision
 
 ## Goal
 
@@ -38,11 +38,11 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **Accepted in an installed development build** | Immediate in-transaction Apple Spelling, independently tracked contextual requests, local and optional cloud models, rewrites, learning, statistics, Undo/Redo, composition refusal, multiple corrections, sub-millisecond measured local transactions, and installed continued-typing/Change Back/moved-caret acceptance | Repeat the focused interaction rows against the exact notarized candidate |
+| Controlled AppKit editor | **Exact candidate accepted with one pointer rerun open** | Notarized 0.1.0 passes uninterrupted three-word correction, three annotations, contextual correction, earlier-caret correction, About provenance, Settings Accessibility, 338 debug tests, and an optimized boundary gate | Re-open pointer-only Change Back on the final candidate and verify its one-step Undo |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
-| Milestone 1: Bear word correction | **In progress — functionally complete** | 14/16 work items; automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, accessibility, diagnostics, physical load coverage, and post-pause product decision | Final-candidate qualification and second-machine soak |
-| Milestone 2: Beta shell | **In progress** | 7/8 work items; onboarding, permissions, status, privacy, About provenance, and artifact-verification tooling | Notarized candidate plus clean-machine install and permission acceptance |
-| Public-beta operations | **In progress** | Local release-operations contract, package-verification path, MIT license, GitHub Issues support decision, and reviewed public claim wording | Update, rollback, uninstall, exact release notes, public repository visibility, and artifact-to-claim verification |
+| Milestone 1: Bear word correction | **In progress — user-presence gate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, and post-pause product decision | Grant final-candidate Input Monitoring, then run fresh physical Bear qualification and soak |
+| Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
+| Public-beta operations | **In progress — lifecycle closed** | MIT license, GitHub Issues decision, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification and public repository visibility |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, and build a compatibility probe |
 | Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
@@ -78,20 +78,28 @@ Status meanings:
 - [x] Decide the active-tap burst policy. ADR-018 keeps the first beta on the
   idle-first lane and limits the disabled research claim to lowercase ASCII
   words completed with Space at 100 milliseconds per key or slower.
-- [ ] Build and notarize the final candidate from a clean revision.
-- [ ] Run the clean-machine install and permission checklist.
-- [ ] Qualify that exact candidate with fresh Bear and Typover processes,
-  release-config memory retirement, and a bounded second-machine soak.
+- [x] Build and notarize candidate `0.1.0 (20260804072103)` from clean
+  revision `e38f535ee2715ff52a8247a9e19e7b882996e13e`; verify its receipt,
+  checksum, stapled ticket, Gatekeeper result, and optimized regression gate.
+- [ ] Finish the clean-machine permission checklist. Artifact verification,
+  installation, and fresh GUI launch pass on the second Mac; visible permission
+  grant/revocation needs an unlocked authenticated session.
+- [ ] Qualify that exact candidate with fresh Bear and Typover processes and
+  release-config memory retirement. The bounded second-machine soak passed.
 
 ### Required before a public beta
 
-- [ ] Validate update, rollback, and uninstall behavior on the candidate.
+- [x] Close the lifecycle matrix. Notarized update and rollback pass across
+  0.0.9 and 0.1.0 with one process and preserved preferences/learning. An
+  11-minute clean-Mac soak stayed at 0% CPU with flat RSS, app-only removal
+  preserved local state, and explicit full-data removal left no app, process,
+  preference domain, Application Support directory, or Typover launch item.
 - [x] Select a license and support channel: MIT license and public GitHub
   Issues, with a content-free report contract.
 - [x] Finalize release-note and rollback instructions; instantiate them with
   the exact candidate metadata after notarization.
 - [ ] Verify that the published privacy, compatibility, and support claims
-  match the shipped artifact.
+  match the shipped artifact after the permissioned Bear row.
 
 Future contextual correction, additional applications, and larger model
 benchmarks are explicitly **not** blockers for the first word-level Bear beta.
@@ -233,12 +241,16 @@ statistics, Undo and Redo, and long-document annotation behavior.
 The installed acceptance pass in
 [`controlled-editor-acceptance.md`](../testing/controlled-editor-acceptance.md)
 now covers uninterrupted multi-word correction, independent light-gray
-squiggles, Change Back, one-step Undo, contextual correction, and an earlier
-caret inside surrounding text. Content-free instrumentation measured three
-local correction transactions at 0.350–0.461 milliseconds. The focused
-32-test stress suite separately covers marked-text composition refusal and the
-other deterministic safety edges. The same visible rows still need repetition
-against the exact notarized candidate.
+squiggles, contextual correction, and an earlier caret inside surrounding text
+on exact notarized candidate `0.1.0 (20260804072103)`. About reports the exact
+build and source, and Settings exposes the intended automation identifiers.
+The pass found a release-only sentence-boundary misclassification that debug
+tests had missed; revision `e38f535` fixes it and makes an optimized regression
+test a pre-signing gate. Content-free instrumentation previously measured three
+local correction transactions at 0.350–0.461 milliseconds. The full suite now
+passes 338 tests in 30 suites. Pointer-only Change Back plus its one-step Undo
+remain the final exact-candidate editor rerun because the automation driver's
+coordinate click could not target the restored Space.
 
 Bear now supports guarded exact-range replacement, independent Change Back,
 ranked alternatives, bounded context re-anchoring, wrapped-range geometry, a
@@ -468,10 +480,11 @@ Back action, and alternatives.
   text-expander-style spike investigates lower latency. Do not enable the new
   transport by default without physical evidence that it preserves exact text,
   selection, focus, Undo, continued typing, and overlay retention.
-- [ ] Complete a bounded second-machine beta soak. Content-free safe-skip,
+- [x] Complete a bounded second-machine beta soak. Content-free safe-skip,
   refusal, load, recovery, memory, and energy evidence is already recorded;
   both debug and release-config runs support a provisional 200 MiB RSS budget.
-  Keep the evidence in
+  The final notarized candidate also remained flat at about 160 MiB RSS and
+  0% CPU for an 11-minute clean-machine observation. Keep the evidence in
   [Bear performance samples](../testing/bear-performance-samples.md).
 - [x] Add capability and version gating so an unknown Bear Accessibility
   contract disables mutation rather than attempting a best guess.
@@ -555,8 +568,8 @@ Back action, and alternatives.
 
 ## Milestone 2: Minimum beta shell
 
-**Status: In progress — 7 of 8 work items are done. The signed, notarized,
-clean-machine acceptance gate remains.**
+**Status: In progress — the signed/notarized and clean-install halves pass;
+the authenticated permission UI half remains.**
 
 ### Outcome
 
@@ -587,8 +600,8 @@ ordinary app or Accessibility lifecycle changes.
 - [x] Declare reviewable Accessibility and Input Monitoring purpose text in the
   signed bundle, and reject beta artifacts that omit either privacy
   description.
-- [ ] Produce a signed beta build and a repeatable clean-machine install and
-  permission test. The Developer ID/notarization script and clean-machine
+- [ ] Complete the signed beta and repeatable clean-machine permission test.
+  The Developer ID/notarization script and clean-machine
   checklist are implemented in
   [Beta distribution](../testing/beta-distribution.md). The local Developer ID
   archive now passes strict signature, expected-team, hardened-runtime, secure
@@ -603,9 +616,13 @@ ordinary app or Accessibility lifecycle changes.
   path and mismatched-bundle tests pass. The bundle and executable now both
   declare the supported macOS 27.0 deployment floor, and the verifier requires
   them to match. Building and validating the notarized
-  candidate and executing the clean-machine permission checklist remain.
-  A 2026-08-02 clean-revision local build recorded its exact Git SHA with
-  `dirty=false`; the integrated verifier and negative distribution tests pass.
+  candidate and executing the clean-machine permission checklist were the
+  original remaining steps. Candidate `0.1.0 (20260804072103)` from clean
+  revision `e38f535` is now Apple-notarized, stapled, Gatekeeper-approved, and
+  receipt-verified. A second Mac passed checksum verification, clean
+  `/Applications` install, and fresh GUI launch. The candidate's first-run
+  permission UI still needs an unlocked authenticated pass through grant,
+  revocation, recovery, and Bear observation.
 
 ### Exit criteria
 
@@ -616,8 +633,8 @@ ordinary app or Accessibility lifecycle changes.
 
 ## Parallel track: Release operations
 
-**Status: In progress — the local contract and artifact-verification path are
-done; installed lifecycle and public-release decisions remain.**
+**Status: In progress — the full signed lifecycle matrix passes; permissioned
+claim audit and repository visibility remain.**
 
 This track may proceed after the minimum beta shell is stable. It does not
 block local contextual-correction development, but it must pass before Typover
@@ -627,12 +644,18 @@ is offered as a public beta.
   [beta release-operations contract](../testing/beta-release-operations.md)
   defines numeric versions/builds, exact source provenance, manual update,
   rollback, uninstall footprint, and a release-note template.
-- [ ] Test update and uninstall behavior on a clean Mac.
+- [x] Finish clean-Mac lifecycle testing. Notarized 0.0.9-to-0.1.0 update,
+  rollback, and final restore pass with one process and preserved settings and
+  learning data. The final candidate completed an 11-minute flat-resource soak;
+  recoverable app-only removal preserved state, and explicit full-data removal
+  cleared the app, process, preferences, Application Support, and launch-item
+  footprint without touching macOS-owned TCC records.
 - [x] Select GitHub Issues as the beta support channel; make the repository
   public before inviting ordinary testers.
 - [x] Select and document the MIT license.
-- [ ] Produce the intended public distribution artifact and verify its signing,
-  notarization, installation, update, and removal behavior.
+- [ ] Accept the intended public distribution artifact. Candidate 0.1.0 passes
+  signing, notarization, receipt, installation, update, rollback, soak, and
+  removal; the permissioned Bear row remains before publication.
 - [ ] Confirm that public privacy, support, and compatibility claims match the
   shipped build.
 

@@ -4,6 +4,12 @@ Create one Markdown file for every distributed beta candidate. Use the
 marketing version and build number in the filename, for example
 `0.1-20260802010101.md`.
 
+## Candidates
+
+- [`0.1.0 (20260804072103)`](0.1.0-20260804072103.md) — notarized
+  clean-revision public-beta candidate; permissioned Bear acceptance remains
+  open and the binary is not published.
+
 ## Template
 
 ```text
