@@ -124,7 +124,8 @@ public enum CompletedSentenceDetector {
   }
 
   public static func isSentenceTerminator(_ text: String) -> Bool {
-    text.unicodeScalars.allSatisfy(sentenceTerminators.contains)
+    !text.isEmpty
+      && text.unicodeScalars.allSatisfy(sentenceTerminators.contains)
   }
 
   private static func isLeadingSeparator(_ text: String) -> Bool {

@@ -79,6 +79,10 @@ extension NSAttributedString.Key {
 
 @MainActor
 final class TypoverTextView: NSTextView {
+  private static let contextualLogger = Logger(
+    subsystem: "com.malpern.typover",
+    category: "ControlledEditorContextual"
+  )
   private static let transactionLogger = Logger(
     subsystem: "com.malpern.typover",
     category: "ControlledEditorTransaction"
@@ -254,6 +258,13 @@ final class TypoverTextView: NSTextView {
     }
     applyCorrectionBeforeTypedBoundary()
     if let completedUserEdit {
+      if CompletedSentenceDetector.isSentenceTerminator(
+        completedUserEdit.replacement
+      ) {
+        Self.contextualLogger.debug(
+          "Observed sentence terminator edit length \(completedUserEdit.replacement.utf16.count, privacy: .public)"
+        )
+      }
       scheduleContextualCorrection(after: completedUserEdit)
     }
   }
@@ -416,6 +427,9 @@ final class TypoverTextView: NSTextView {
       range: sentence.range,
       text: sentence.text
     )
+    Self.contextualLogger.debug(
+      "Started contextual request sentence length \(sentence.text.utf16.count, privacy: .public); model=\(self.behaviorSettings.contextualModel.rawValue, privacy: .public); scope=\(scope.rawValue, privacy: .public)"
+    )
     contextualCorrectionTasks[requestID] = Task { [weak self] in
       defer {
         self?.contextualCorrectionTasks[requestID] = nil
@@ -425,6 +439,9 @@ final class TypoverTextView: NSTextView {
         !Task.isCancelled
       else {
         self?.pendingContextualRequests[requestID] = nil
+        Self.contextualLogger.debug(
+          "Contextual request ended before proposal; available=false or cancelled=true"
+        )
         return
       }
 
@@ -439,8 +456,14 @@ final class TypoverTextView: NSTextView {
         )
         guard !Task.isCancelled, let result else {
           self?.pendingContextualRequests[requestID] = nil
+          Self.contextualLogger.debug(
+            "Contextual request returned no proposal or was cancelled"
+          )
           return
         }
+        Self.contextualLogger.debug(
+          "Contextual request returned a proposal"
+        )
         self?.applyContextualResult(
           result,
           requestID: requestID,
@@ -448,10 +471,14 @@ final class TypoverTextView: NSTextView {
         )
       } catch is CancellationError {
         self?.pendingContextualRequests[requestID] = nil
+        Self.contextualLogger.debug("Contextual request was cancelled")
         return
       } catch {
         self?.pendingContextualRequests[requestID] = nil
         self?.recordDiagnostic(.contextualModelFailure)
+        Self.contextualLogger.error(
+          "Contextual model request failed without retaining document text"
+        )
       }
     }
   }
