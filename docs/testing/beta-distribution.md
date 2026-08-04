@@ -1,8 +1,7 @@
 # Beta distribution
 
-- Status: Clean-revision Developer ID build and clean-bundle onboarding pass;
-  clean-machine permission gate pending
-- Updated: 2026-08-02
+- Status: Notarized 0.1.0 candidate and second-Mac lifecycle pass; permission UI pending
+- Updated: 2026-08-04
 
 Typover's beta artifact is a release-built `.app` signed with the Developer ID
 Application identity. Notarization uses the existing App Store Connect API key;
@@ -87,6 +86,17 @@ signature, missing-hardened-runtime, version, and build-number rejection tests
 all passed. This proves local artifact provenance and archive integrity; it
 does not prove notarization or clean-machine behavior.
 
+On 2026-08-04, candidate `0.1.0 (20260804072103)` was built from clean revision
+`e38f535ee2715ff52a8247a9e19e7b882996e13e`. Apple accepted notarization
+submission `327962e7-f006-4a0e-b4b4-5f81715f256a`; stapling, Gatekeeper,
+archive/receipt verification, and the adversarial receipt suite passed. The
+archive SHA-256 is
+`495473c1ef297d6446cdcbf2a64d3c16c01974149ab9f6ac685f763b4c7aabda`.
+
+The build now runs the sentence-boundary admission regression in optimized
+configuration before signing. This gate was added after installed acceptance
+found a real release-only failure that debug tests did not reproduce.
+
 ## Notarized candidate
 
 ```bash
@@ -103,16 +113,28 @@ build directory.
 
 ## Clean-machine gate
 
-The build is not beta-ready until a clean macOS 27 machine verifies:
+The second macOS 27 Mac has verified the artifact checksum, Developer ID
+signature, stapled ticket, Gatekeeper acceptance, clean `/Applications`
+installation, and fresh process launch. It also completed a notarized
+0.0.9-to-0.1.0 update, a rollback to 0.0.9, and a final restore to 0.1.0 with
+one process and preserved preferences/learning checksum at every step.
 
-1. Gatekeeper opens the downloaded and expanded app without bypasses.
-2. First run clearly explains Accessibility and Input Monitoring.
-3. The tester can defer permission setup and use the controlled editor.
-4. After granting permissions, Bear status becomes observing without developer
+The build is not beta-ready until the remaining visible permission rows verify:
+
+1. First run clearly explains Accessibility and Input Monitoring on the clean
+   unlocked session.
+2. The tester can defer permission setup and use the controlled editor.
+3. After granting permissions, Bear status becomes observing without developer
    tools or manual defaults changes.
-5. Revoking either permission produces an understandable unavailable state.
-6. Typover and Bear relaunch recover from a fresh baseline.
-7. Removing the app leaves no helper, daemon, login item, or uploaded trace.
+4. Revoking either permission produces an understandable unavailable state.
+5. Typover and Bear relaunch recover from a fresh baseline.
+6. Removing the app leaves no helper, daemon, login item, or uploaded trace.
+
+The final candidate completed an 11-minute second-Mac soak at 0% CPU with flat
+RSS near 160 MiB. Recoverable app-only removal left the preferences and learning
+file intact; explicit full-data removal then left no app, process, Typover
+preferences domain, Application Support directory, or Typover launch item. The
+test did not modify macOS-owned TCC records.
 
 The initial beta is manually launched per ADR-015. Update and rollback behavior
 remain part of the parallel release-operations track.
