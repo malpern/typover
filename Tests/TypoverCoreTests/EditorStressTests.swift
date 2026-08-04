@@ -51,6 +51,84 @@ struct EditorStressTests {
     )
   }
 
+  @Test("Correction marks start visible and fade without losing their history")
+  func correctionMarksFadeButRemainReversible() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh ")
+    let correction = try #require(fixture.appliedSnapshots.first)
+
+    #expect(
+      fixture.editor.visibleCorrectionIDsForTesting()
+        == [correction.correction.id]
+    )
+
+    fixture.editor.expireRecentCorrectionMarksForTesting()
+
+    #expect(fixture.editor.visibleCorrectionIDsForTesting().isEmpty)
+    #expect(
+      fixture.editor.correctionMenu(for: correction.correction.id) != nil
+    )
+  }
+
+  @Test("Reviewing one sentence reveals only that sentence's corrections")
+  func sentenceReviewRevealsLocalCorrections() throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh wrod. teh ")
+    let snapshots = fixture.appliedSnapshots.sorted {
+      $0.annotatedRanges[0].location < $1.annotatedRanges[0].location
+    }
+    #expect(snapshots.count == 3)
+    fixture.editor.expireRecentCorrectionMarksForTesting()
+
+    fixture.editor.revealCorrectionsForTesting(atUTF16Offset: 1)
+
+    #expect(
+      fixture.editor.visibleCorrectionIDsForTesting()
+        == Set(snapshots.prefix(2).map(\.correction.id))
+    )
+
+    let finalRange = try #require(snapshots.last?.annotatedRanges.first)
+    fixture.editor.revealCorrectionsForTesting(
+      atUTF16Offset: finalRange.location
+    )
+
+    #expect(
+      fixture.editor.visibleCorrectionIDsForTesting()
+        == [snapshots[2].correction.id]
+    )
+  }
+
+  @Test("Typing clears a caret-triggered correction review")
+  func typingClearsCaretReview() {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh. ")
+    fixture.editor.expireRecentCorrectionMarksForTesting()
+    fixture.editor.revealCorrectionsForTesting(atUTF16Offset: 1)
+    #expect(fixture.editor.visibleCorrectionIDsForTesting().count == 1)
+
+    fixture.moveCaret(to: fixture.editor.string.utf16.count)
+    fixture.type("x")
+
+    #expect(fixture.editor.visibleCorrectionIDsForTesting().isEmpty)
+  }
+
+  @Test("Always-visible marks ignore the brief visibility deadline")
+  func alwaysVisibleCorrectionMarks() {
+    let settings = makeBehaviorSettings(
+      scope: .careful,
+      correctionMarkVisibility: .alwaysVisible
+    )
+    let fixture = EditorFixture(behaviorSettings: settings)
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh ")
+    fixture.editor.expireRecentCorrectionMarksForTesting()
+
+    #expect(fixture.editor.visibleCorrectionIDsForTesting().count == 1)
+  }
+
   @Test("A manual phrase mapping applies without a spelling suggestion")
   func manualMappingAppliesWithoutEngineSuggestion() throws {
     let fixture = EditorFixture()
@@ -1037,7 +1115,8 @@ private actor SuspendedContextualEngine: ContextualCorrectionEngine {
 @MainActor
 private func makeBehaviorSettings(
   scope: ContextualCorrectionScope,
-  allowsSentenceRewrites: Bool = false
+  allowsSentenceRewrites: Bool = false,
+  correctionMarkVisibility: CorrectionMarkVisibility = .briefAndContextual
 ) -> CorrectionBehaviorSettings {
   let defaults = UserDefaults(
     suiteName: "EditorStressTests.\(UUID().uuidString)"
@@ -1045,6 +1124,7 @@ private func makeBehaviorSettings(
   let settings = CorrectionBehaviorSettings(defaults: defaults)
   settings.contextualScope = scope
   settings.allowsSentenceRewrites = allowsSentenceRewrites
+  settings.correctionMarkVisibility = correctionMarkVisibility
   return settings
 }
 

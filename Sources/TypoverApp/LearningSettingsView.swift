@@ -596,6 +596,32 @@ private struct CorrectionBehaviorSection: View {
       .pickerStyle(.segmented)
       .accessibilityIdentifier("typover.settings.correction-scope")
 
+      LabeledContent {
+        Picker(
+          String(
+            localized: "Correction marks",
+            bundle: #bundle,
+            comment:
+            "Accessibility label for the Typover correction-mark visibility picker."
+          ),
+          selection: $behaviorSettings.correctionMarkVisibility
+        ) {
+          ForEach(CorrectionMarkVisibility.allCases, id: \.self) { visibility in
+            Text(visibility.title)
+              .tag(visibility)
+          }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("typover.settings.correction-mark-visibility")
+      } label: {
+        Text(
+          "Correction marks",
+          bundle: #bundle,
+          comment: "Label beside the correction-mark visibility setting."
+        )
+      }
+
       Toggle(
         isOn: $behaviorSettings.allowsSentenceRewrites
       ) {
@@ -624,7 +650,30 @@ private struct CorrectionBehaviorSection: View {
         comment: "Heading for Typover's automatic-correction behavior settings."
       )
     } footer: {
-      Text(behaviorSettings.contextualScope.explanation)
+      VStack(alignment: .leading, spacing: 4) {
+        Text(behaviorSettings.contextualScope.explanation)
+        Text(behaviorSettings.correctionMarkVisibility.explanation)
+      }
+    }
+  }
+}
+
+private extension CorrectionMarkVisibility {
+  var title: LocalizedStringResource {
+    switch self {
+    case .briefAndContextual:
+      "Brief + contextual"
+    case .alwaysVisible:
+      "Always visible"
+    }
+  }
+
+  var explanation: LocalizedStringResource {
+    switch self {
+    case .briefAndContextual:
+      "Marks fade after four seconds and return when you review or move the insertion point into that sentence."
+    case .alwaysVisible:
+      "Every unresolved automatic correction remains marked."
     }
   }
 }

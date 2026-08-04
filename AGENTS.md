@@ -8,8 +8,9 @@ spell correction.
 - Apply only corrections that pass the current explicit eligibility policy.
 - Replace the smallest safe text range; never rewrite an entire document.
 - Preserve the original text for every automatic correction.
-- Keep automatic corrections visibly distinguishable until the user resolves
-  them.
+- Keep automatic corrections distinguishable and retriggerable until the user
+  resolves them; a mark may fade only while its correction history and review
+  affordance remain intact.
 - Make restoring the original or choosing another suggestion immediate.
 - Treat typed text as private. Prefer on-device processing and document every
   boundary where text could leave the Mac.

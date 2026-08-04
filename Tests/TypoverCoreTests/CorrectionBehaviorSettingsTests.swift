@@ -17,6 +17,7 @@ struct CorrectionBehaviorSettingsTests {
     #expect(settings.contextualScope == .careful)
     #expect(!settings.allowsSentenceRewrites)
     #expect(settings.contextualModel == .apple)
+    #expect(settings.correctionMarkVisibility == .briefAndContextual)
     #expect(!settings.bearAutomaticCorrectionEnabled)
   }
 
@@ -30,6 +31,7 @@ struct CorrectionBehaviorSettingsTests {
     settings.contextualScope = .comprehensive
     settings.allowsSentenceRewrites = true
     settings.contextualModel = .anthropic
+    settings.correctionMarkVisibility = .alwaysVisible
     settings.bearAutomaticCorrectionEnabled = true
 
     let relaunched = CorrectionBehaviorSettings(
@@ -39,6 +41,7 @@ struct CorrectionBehaviorSettingsTests {
     #expect(relaunched.contextualScope == .comprehensive)
     #expect(relaunched.allowsSentenceRewrites)
     #expect(relaunched.contextualModel == .anthropic)
+    #expect(relaunched.correctionMarkVisibility == .alwaysVisible)
     #expect(relaunched.bearAutomaticCorrectionEnabled)
   }
 }

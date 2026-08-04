@@ -113,6 +113,35 @@ Editing inside the captured sentence makes the result stale and it is
 discarded. Pasted text and active marked-text composition do not trigger
 contextual analysis.
 
+## Correction-mark visibility
+
+The default **Brief + contextual** interaction keeps each new light-gray
+squiggle fully visible for four seconds, then fades it over 150 milliseconds.
+The correction record, original text, alternatives, Undo transaction, and menu
+remain intact after the mark disappears.
+
+Reviewing a sentence reveals every unresolved correction in that sentence:
+
+- pointer review uses the sentence's rendered TextKit line fragments, expanded
+  by 12 points horizontally and 6 points vertically;
+- a 100-millisecond dwell prevents marks from flashing during incidental
+  pointer travel;
+- a 250-millisecond exit grace prevents flicker at fragment boundaries;
+- clicking or navigating the insertion point into an earlier sentence reveals
+  its corrections, but ordinary continued typing clears that caret review so
+  the active sentence does not stay permanently decorated; and
+- an open correction menu pins its mark until the menu closes.
+
+Sentence locality uses the same explicit punctuation and paragraph boundaries
+as Typover's contextual correction detector. Multiple corrections in the
+reviewed sentence return together; corrections in other sentences remain
+hidden. **Always Visible** keeps every unresolved mark drawn. The preference is
+stored in the standard macOS application-preferences domain.
+
+This interaction is implemented only in Typover's controlled editor. Bear
+continues using persistent overlay marks until the dedicated geometry,
+performance, and interaction spike establishes a reliable approximation.
+
 ## Transaction safety
 
 Immediately before replacement, Typover verifies that the expected original
@@ -157,8 +186,9 @@ can reset statistics independently or clear all local learning after a
 confirmation.
 
 User-selectable behavior settings—including correction scope, sentence rewrite
-permission, model choice, Bear automatic correction, and diagnostic toggles—are
-stored in Typover’s standard macOS application-preferences domain
+permission, model choice, correction-mark visibility, Bear automatic
+correction, and diagnostic toggles—are stored in Typover’s standard macOS
+application-preferences domain
 (`com.malpern.typover`). They survive relaunch and remain local to this Mac.
 Structured correction preferences and statistics stay in Typover’s Application
 Support data file, and provider API keys remain encrypted in Add Secret; neither

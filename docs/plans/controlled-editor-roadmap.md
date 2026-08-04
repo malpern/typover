@@ -19,11 +19,26 @@ attempts to reproduce those capabilities through Accessibility in another app.
 
 - [x] Replace only the exact misspelled range.
 - [x] Preserve the original and replacement in `TypoverCore`.
-- [x] Render a persistent light-gray squiggle.
+- [x] Render a light-gray squiggle with retained correction metadata.
 - [x] Provide Change Back, alternatives, and Undo.
 - [x] Preserve the caret and selection through replacement.
 - [x] Keep many corrections independently annotated and reversible; changing
       one does not remove another correction's mark or menu.
+
+### 1a. Brief, contextual correction marks
+
+- [x] Keep a new correction visible for four seconds, then fade it quietly.
+- [x] Reveal every correction in the reviewed sentence from a padded TextKit
+      hover corridor.
+- [x] Reveal from deliberate caret navigation without keeping the actively
+      typed sentence permanently marked.
+- [x] Add hover dwell, exit grace, and menu pinning.
+- [x] Preserve Change Back, alternatives, Undo, and correction history while a
+      mark is hidden.
+- [x] Add an Always Visible preference in the standard macOS preferences
+      domain.
+- [x] Cover timing state, sentence locality, typing dismissal, persistence, and
+      the always-visible fallback with deterministic tests.
 
 ### 2. Modern TextKit reference editor
 

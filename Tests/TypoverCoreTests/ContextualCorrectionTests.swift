@@ -35,6 +35,50 @@ struct ContextualCorrectionTests {
     )
   }
 
+  @Test("Sentence review ranges stay on the sentence containing the location")
+  func sentenceReviewRangesAreLocal() throws {
+    let text = "First thought. Second thought!\nThird thought"
+    let first = try #require(
+      CompletedSentenceDetector.sentenceRange(
+        containingUTF16Offset: 2,
+        in: text
+      )
+    )
+    let secondLocation = (text as NSString).range(of: "Second").location
+    let second = try #require(
+      CompletedSentenceDetector.sentenceRange(
+        containingUTF16Offset: secondLocation,
+        in: text
+      )
+    )
+    let thirdLocation = (text as NSString).range(of: "Third").location
+    let third = try #require(
+      CompletedSentenceDetector.sentenceRange(
+        containingUTF16Offset: thirdLocation,
+        in: text
+      )
+    )
+
+    #expect((text as NSString).substring(with: first) == "First thought.")
+    #expect((text as NSString).substring(with: second) == "Second thought!")
+    #expect((text as NSString).substring(with: third) == "Third thought")
+  }
+
+  @Test("Trailing sentence whitespace resolves to the preceding sentence")
+  func trailingWhitespaceUsesPrecedingSentence() throws {
+    let text = "A complete thought.   "
+    let range = try #require(
+      CompletedSentenceDetector.sentenceRange(
+        containingUTF16Offset: text.utf16.count,
+        in: text
+      )
+    )
+
+    #expect(
+      (text as NSString).substring(with: range) == "A complete thought."
+    )
+  }
+
   @Test("The detector requires sentence punctuation at the caret")
   func requiresSentenceBoundary() {
     #expect(!CompletedSentenceDetector.isSentenceTerminator(""))

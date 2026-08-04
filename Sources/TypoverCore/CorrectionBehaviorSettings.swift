@@ -16,6 +16,13 @@ public enum ContextualCorrectionModel: String, Codable, CaseIterable, Equatable,
   case anthropic
 }
 
+public enum CorrectionMarkVisibility: String, Codable, CaseIterable, Equatable,
+  Sendable
+{
+  case briefAndContextual = "brief-and-contextual"
+  case alwaysVisible = "always-visible"
+}
+
 @MainActor
 @Observable
 public final class CorrectionBehaviorSettings {
@@ -23,6 +30,7 @@ public final class CorrectionBehaviorSettings {
     static let contextualScope = "contextual-correction-scope"
     static let allowsSentenceRewrites = "allows-sentence-rewrites"
     static let contextualModel = "contextual-correction-model"
+    static let correctionMarkVisibility = "correction-mark-visibility"
     static let bearAutomaticCorrectionEnabled =
       "bear-automatic-correction-enabled"
   }
@@ -47,6 +55,15 @@ public final class CorrectionBehaviorSettings {
   public var contextualModel: ContextualCorrectionModel {
     didSet {
       defaults.set(contextualModel.rawValue, forKey: Key.contextualModel)
+    }
+  }
+
+  public var correctionMarkVisibility: CorrectionMarkVisibility {
+    didSet {
+      defaults.set(
+        correctionMarkVisibility.rawValue,
+        forKey: Key.correctionMarkVisibility
+      )
     }
   }
 
@@ -76,6 +93,10 @@ public final class CorrectionBehaviorSettings {
       defaults.string(forKey: Key.contextualModel)
       .flatMap(ContextualCorrectionModel.init(rawValue:))
       ?? .apple
+    self.correctionMarkVisibility =
+      defaults.string(forKey: Key.correctionMarkVisibility)
+      .flatMap(CorrectionMarkVisibility.init(rawValue:))
+      ?? .briefAndContextual
     self.bearAutomaticCorrectionEnabled = defaults.bool(
       forKey: Key.bearAutomaticCorrectionEnabled
     )
