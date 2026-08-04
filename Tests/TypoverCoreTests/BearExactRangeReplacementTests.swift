@@ -407,6 +407,92 @@ struct BearExactRangeReplacementTests {
     #expect(application.correctionRecord?.disposition == .applied)
   }
 
+  @Test("A verified synthetic edit is adopted without another write")
+  func adapterAdoptsSyntheticCorrection() {
+    let originalRange = AccessibilityTextRange(location: 6, length: 3)
+    let replacementRange = AccessibilityTextRange(location: 6, length: 3)
+    let anchor = BearCorrectionAnchor(
+      correctionRange: replacementRange,
+      documentLength: 10,
+      leadingContext: "alpha ",
+      trailingContext: " "
+    )
+    let adapter = BearCorrectionAdapter(
+      replacer: StubBearReplacer(
+        report: BearExactRangeReplacementReport(
+          status: .replacementWriteFailed,
+          targetRange: originalRange
+        )
+      ),
+      reanchorer: StubBearReanchorer(
+        outcome: BearCorrectionReanchorOutcome(
+          status: .reanchored,
+          correctionAnchor: anchor
+        )
+      )
+    )
+
+    let application = adapter.adoptSyntheticCorrection(
+      BearSyntheticCorrectionAdoptionRequest(
+        original: "teh",
+        replacement: "the",
+        originalRange: originalRange,
+        replacementRange: replacementRange,
+        selectionAfter: AccessibilityTextRange(location: 10, length: 0)
+      )
+    )
+
+    #expect(application.report.status == .applied)
+    #expect(application.report.isVerifiedApplication)
+    #expect(application.report.selectionBefore == nil)
+    #expect(application.isReversibleApplication)
+    #expect(application.correctionAnchor == anchor)
+    #expect(application.correctionRecord?.disposition == .applied)
+  }
+
+  @Test("An unverified synthetic write remains visible to the circuit breaker")
+  func adapterRejectsUnverifiedSyntheticCorrection() {
+    let adapter = BearCorrectionAdapter(
+      reanchorer: StubBearReanchorer(
+        outcome: BearCorrectionReanchorOutcome(status: .superseded)
+      )
+    )
+    let application = adapter.adoptSyntheticCorrection(
+      BearSyntheticCorrectionAdoptionRequest(
+        original: "teh",
+        replacement: "the",
+        originalRange: AccessibilityTextRange(location: 0, length: 3),
+        replacementRange: AccessibilityTextRange(location: 0, length: 3),
+        selectionAfter: AccessibilityTextRange(location: 4, length: 0)
+      )
+    )
+
+    #expect(application.report.status == .verificationFailed)
+    #expect(application.report.writeOccurred)
+    #expect(!application.report.isVerifiedApplication)
+    #expect(!application.isReversibleApplication)
+    #expect(application.correctionRecord == nil)
+    #expect(application.correctionAnchor == nil)
+  }
+
+  @Test("Malformed synthetic adoption evidence is rejected")
+  func adapterRejectsMalformedSyntheticEvidence() {
+    let adapter = BearCorrectionAdapter()
+    let application = adapter.adoptSyntheticCorrection(
+      BearSyntheticCorrectionAdoptionRequest(
+        original: "teh",
+        replacement: "the",
+        originalRange: AccessibilityTextRange(location: 0, length: 2),
+        replacementRange: AccessibilityTextRange(location: 1, length: 3),
+        selectionAfter: AccessibilityTextRange(location: 4, length: 1)
+      )
+    )
+
+    #expect(application.report.status == .invalidRequest)
+    #expect(application.report.writeOccurred)
+    #expect(!application.isReversibleApplication)
+  }
+
   @Test(
     "Live Bear transaction replaces the completed synthetic typo",
     .enabled(

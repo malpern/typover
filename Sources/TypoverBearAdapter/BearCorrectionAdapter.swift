@@ -67,6 +67,28 @@ public struct BearCorrectionReanchoredApplication: Equatable, Sendable {
   }
 }
 
+public struct BearSyntheticCorrectionAdoptionRequest: Equatable, Sendable {
+  public let original: String
+  public let replacement: String
+  public let originalRange: AccessibilityTextRange
+  public let replacementRange: AccessibilityTextRange
+  public let selectionAfter: AccessibilityTextRange
+
+  public init(
+    original: String,
+    replacement: String,
+    originalRange: AccessibilityTextRange,
+    replacementRange: AccessibilityTextRange,
+    selectionAfter: AccessibilityTextRange
+  ) {
+    self.original = original
+    self.replacement = replacement
+    self.originalRange = originalRange
+    self.replacementRange = replacementRange
+    self.selectionAfter = selectionAfter
+  }
+}
+
 public struct BearCorrectionAdapter: Sendable {
   private let replacer: any BearExactRangeReplacing
   private let restorer: any BearCorrectionRestoring
@@ -141,6 +163,58 @@ public struct BearCorrectionAdapter: Sendable {
       correction: correction,
       correctionRecord: record,
       correctionAnchor: anchor
+    )
+  }
+
+  /// Adopts a correction whose text was already changed by the experimental
+  /// synthetic-input lane. This method performs no write. It verifies the
+  /// replacement again through Bear Accessibility and creates the same
+  /// bounded reversible anchor used by exact-range AX applications.
+  public func adoptSyntheticCorrection(
+    _ request: BearSyntheticCorrectionAdoptionRequest
+  ) -> BearCorrectionApplication {
+    let correction = Correction(
+      original: request.original,
+      replacement: request.replacement
+    )
+    guard
+      correction.changesText,
+      request.originalRange.location >= 0,
+      request.originalRange.length == request.original.utf16.count,
+      request.replacementRange.location == request.originalRange.location,
+      request.replacementRange.length == request.replacement.utf16.count,
+      request.selectionAfter.location >= 0,
+      request.selectionAfter.length == 0
+    else {
+      return syntheticApplication(
+        correction: correction,
+        request: request,
+        status: .invalidRequest,
+        anchor: nil
+      )
+    }
+
+    let outcome = reanchorer.reanchor(
+      BearCorrectionReanchorRequest(
+        targetRange: request.replacementRange,
+        expectedText: request.replacement,
+        leadingContextLimit: 256,
+        trailingContextLimit: 256
+      )
+    )
+    guard let anchor = outcome.correctionAnchor else {
+      return syntheticApplication(
+        correction: correction,
+        request: request,
+        status: .verificationFailed,
+        anchor: nil
+      )
+    }
+    return syntheticApplication(
+      correction: correction,
+      request: request,
+      status: .applied,
+      anchor: anchor
     )
   }
 
@@ -295,6 +369,31 @@ public struct BearCorrectionAdapter: Sendable {
         correctionRecord: application.correctionRecord,
         correctionAnchor: anchor
       )
+    )
+  }
+
+  private func syntheticApplication(
+    correction: Correction,
+    request: BearSyntheticCorrectionAdoptionRequest,
+    status: BearExactRangeReplacementStatus,
+    anchor: BearCorrectionAnchor?
+  ) -> BearCorrectionApplication {
+    BearCorrectionApplication(
+      report: BearExactRangeReplacementReport(
+        status: status,
+        writeOccurred: true,
+        targetRange: request.originalRange,
+        replacementRange: request.replacementRange,
+        selectionBefore: nil,
+        selectionAfter: request.selectionAfter,
+        surroundingContextVerified: anchor != nil,
+        caretRestored: anchor != nil
+      ),
+      correction: correction,
+      correctionRecord: anchor.map { _ in
+        CorrectionRecord(correction: correction)
+      },
+      correctionAnchor: anchor
     )
   }
 }

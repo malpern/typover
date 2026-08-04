@@ -13,6 +13,12 @@ public enum BearHIDTelemetryParsing {
     milliseconds(named: "arrivalMs", from: logLine)
   }
 
+  public static func preDispatchCallbackMilliseconds(
+    from logLine: String
+  ) -> Double? {
+    milliseconds(named: "callbackMs", from: logLine)
+  }
+
   private static func milliseconds(
     named field: String,
     from logLine: String

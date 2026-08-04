@@ -137,6 +137,16 @@ struct BearHIDTestingTests {
         from: "Automatic correction applied latencyMs=431.781"
       ) == nil
     )
+    #expect(
+      BearHIDTelemetryParsing.preDispatchCallbackMilliseconds(
+        from: "Experimental Bear pre-dispatch correction emitted callbackMs=0.184"
+      ) == 0.184
+    )
+    #expect(
+      BearHIDTelemetryParsing.preDispatchCallbackMilliseconds(
+        from: "Experimental Bear pre-dispatch correction emitted callbackMs=none"
+      ) == nil
+    )
   }
 
   @Test("Default matrix spans realistic through burst typing")

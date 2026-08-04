@@ -95,6 +95,12 @@ final class TypoverTextView: NSTextView {
     let replacement: String
   }
 
+  private struct PendingContextualRequest {
+    var range: NSRange
+    let text: String
+    var wasInvalidated = false
+  }
+
   private final class AlternativeSelection: NSObject {
     let correctionID: Correction.ID
     let replacement: String
@@ -123,7 +129,8 @@ final class TypoverTextView: NSTextView {
   private var behaviorSettings = CorrectionBehaviorSettings()
   private var learningStore = CorrectionLearningStore()
 
-  private var contextualCorrectionTask: Task<Void, Never>?
+  private var contextualCorrectionTasks: [UUID: Task<Void, Never>] = [:]
+  private var pendingContextualRequests: [UUID: PendingContextualRequest] = [:]
   private var correctionsByID: [Correction.ID: Correction] = [:]
   private var isPerformingCorrection = false
   private var isPerformingPaste = false
@@ -137,6 +144,12 @@ final class TypoverTextView: NSTextView {
   var onLearnedSuppression: ((String?) -> Void)?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
   private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
+
+  isolated deinit {
+    for task in contextualCorrectionTasks.values {
+      task.cancel()
+    }
+  }
 
   struct CorrectionSnapshot: Equatable {
     let correction: Correction
@@ -204,6 +217,10 @@ final class TypoverTextView: NSTextView {
     pendingUserEdit = PendingUserEdit(
       replacement: replacementString ?? ""
     )
+    adjustPendingContextualRequests(
+      forReplacing: affectedCharRange,
+      withUTF16Length: (replacementString ?? "").utf16.count
+    )
     updatePendingManualCorrections(
       for: affectedCharRange,
       replacementString: replacementString ?? ""
@@ -252,7 +269,9 @@ final class TypoverTextView: NSTextView {
   }
 
   func waitForContextualCorrectionForTesting() async {
-    await contextualCorrectionTask?.value
+    while let task = contextualCorrectionTasks.values.first {
+      await task.value
+    }
   }
 
   override func draw(_ dirtyRect: NSRect) {
@@ -373,7 +392,6 @@ final class TypoverTextView: NSTextView {
       return
     }
 
-    contextualCorrectionTask?.cancel()
     let engine =
       contextualCorrectionEngineOverride
       ?? contextualCorrectionEngine(for: behaviorSettings.contextualModel)
@@ -382,11 +400,20 @@ final class TypoverTextView: NSTextView {
     let allowsSentenceRewrite =
       scope == .comprehensive
       && behaviorSettings.allowsSentenceRewrites
-    contextualCorrectionTask = Task { [weak self] in
+    let requestID = UUID()
+    pendingContextualRequests[requestID] = PendingContextualRequest(
+      range: sentence.range,
+      text: sentence.text
+    )
+    contextualCorrectionTasks[requestID] = Task { [weak self] in
+      defer {
+        self?.contextualCorrectionTasks[requestID] = nil
+      }
       guard
         await engine.availability(for: language) == .available,
         !Task.isCancelled
       else {
+        self?.pendingContextualRequests[requestID] = nil
         return
       }
 
@@ -400,16 +427,19 @@ final class TypoverTextView: NSTextView {
           )
         )
         guard !Task.isCancelled, let result else {
+          self?.pendingContextualRequests[requestID] = nil
           return
         }
         self?.applyContextualResult(
           result,
-          to: sentence,
+          requestID: requestID,
           language: language
         )
       } catch is CancellationError {
+        self?.pendingContextualRequests[requestID] = nil
         return
       } catch {
+        self?.pendingContextualRequests[requestID] = nil
         self?.recordDiagnostic(.contextualModelFailure)
       }
     }
@@ -417,10 +447,38 @@ final class TypoverTextView: NSTextView {
 
   private func applyContextualResult(
     _ result: ContextualCorrectionResult,
-    to capturedSentence: CompletedSentence,
+    requestID: UUID,
     language: String?
   ) {
+    guard
+      let pending = pendingContextualRequests.removeValue(
+        forKey: requestID
+      )
+    else {
+      return
+    }
+    let capturedSentence = CompletedSentence(
+      range: pending.range,
+      text: pending.text
+    )
     guard let textStorage else {
+      return
+    }
+    // A model can return long after the terminator that started the request.
+    // Never mutate text storage while an input method owns marked text, even
+    // when the captured sentence itself is still unchanged.
+    guard !hasMarkedText() else {
+      recordDiagnostic(
+        .contextualCompositionActive,
+        range: capturedSentence.range
+      )
+      return
+    }
+    guard !pending.wasInvalidated else {
+      recordDiagnostic(
+        .contextualStaleSentence,
+        range: capturedSentence.range
+      )
       return
     }
     guard NSMaxRange(capturedSentence.range) <= textStorage.length else {
@@ -553,6 +611,14 @@ final class TypoverTextView: NSTextView {
       return false
     }
 
+    // `shouldChangeText` intentionally ignores Typover-owned edits. Rebase
+    // every other in-flight contextual request explicitly before this exact
+    // replacement changes document coordinates.
+    adjustPendingContextualRequests(
+      forReplacing: range,
+      withUTF16Length: replacementText.utf16.count
+    )
+
     let selectionBeforeChange = selectedRange()
     let replacementRange = NSRange(
       location: range.location,
@@ -620,6 +686,26 @@ final class TypoverTextView: NSTextView {
     }
     undoManager?.setActionName(actionName)
     return true
+  }
+
+  private func adjustPendingContextualRequests(
+    forReplacing replacedRange: NSRange,
+    withUTF16Length replacementLength: Int
+  ) {
+    let delta = replacementLength - replacedRange.length
+    let replacedEnd = NSMaxRange(replacedRange)
+    for requestID in Array(pendingContextualRequests.keys) {
+      guard var request = pendingContextualRequests[requestID] else {
+        continue
+      }
+      let requestEnd = NSMaxRange(request.range)
+      if replacedEnd <= request.range.location {
+        request.range.location += delta
+      } else if replacedRange.location < requestEnd {
+        request.wasInvalidated = true
+      }
+      pendingContextualRequests[requestID] = request
+    }
   }
 
   private func reconcileAnnotations() {

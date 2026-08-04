@@ -34,6 +34,23 @@ struct EditorStressTests {
     )
   }
 
+  @Test("A local correction is complete before the next key is processed")
+  func localCorrectionCompletesInsideBoundaryEdit() {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("teh ")
+    #expect(fixture.editor.string == "the ")
+    #expect(fixture.appliedSnapshots.count == 1)
+
+    fixture.type("x")
+    #expect(fixture.editor.string == "the x")
+    #expect(
+      fixture.appliedSnapshots.first?.annotatedRanges
+        == [NSRange(location: 0, length: 3)]
+    )
+  }
+
   @Test("Each correction keeps an independent annotation and menu action")
   func multipleCorrectionsRemainIndependent() throws {
     let fixture = EditorFixture()
@@ -430,6 +447,86 @@ struct EditorStressTests {
     )
   }
 
+  @Test("Consecutive sentences keep independent contextual requests")
+  func consecutiveContextualRequestsAreNotDropped() async {
+    let contextualEngine = SentenceMappedContextualEngine()
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home. The dog wagged it's tail.")
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(
+      fixture.editor.string
+        == "They're going home. The dog wagged its tail."
+    )
+    #expect(fixture.appliedSnapshots.count == 2)
+    #expect(await contextualEngine.requestCount == 2)
+  }
+
+  @Test(
+    "A delayed contextual correction preserves a selection made while typing continues"
+  )
+  func contextualCorrectionPreservesMovedSelection() async throws {
+    let contextualEngine = SuspendedContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home.")
+    await contextualEngine.waitUntilRequested()
+    fixture.type(" Next")
+    fixture.editor.setSelectedRange(NSRange(location: 18, length: 4))
+
+    await contextualEngine.resume()
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == "They're going home. Next")
+    #expect(
+      fixture.editor.selectedRange() == NSRange(location: 20, length: 4)
+    )
+  }
+
+  @Test("A contextual result never interrupts marked-text composition")
+  func contextualCorrectionRefusesActiveComposition() async {
+    let contextualEngine = SuspendedContextualEngine(
+      candidate: ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    )
+    let fixture = EditorFixture(
+      contextualCorrectionEngine: contextualEngine
+    )
+    defer { fixture.removeLearningStore() }
+
+    fixture.type("Their going home.")
+    await contextualEngine.waitUntilRequested()
+    fixture.editor.setMarkedText(
+      "n",
+      selectedRange: NSRange(location: 1, length: 0),
+      replacementRange: NSRange(location: NSNotFound, length: 0)
+    )
+
+    await contextualEngine.resume()
+    await fixture.editor.waitForContextualCorrectionForTesting()
+
+    #expect(fixture.editor.string == "Their going home.n")
+    #expect(fixture.appliedSnapshots.isEmpty)
+    #expect(
+      fixture.editor.correctionDiagnostics.last?.kind
+        == .contextualCompositionActive
+    )
+  }
+
   @Test("A contextual proposal is discarded when its sentence changes")
   func contextualCorrectionRejectsStaleSentence() async {
     let contextualEngine = SuspendedContextualEngine(
@@ -808,6 +905,39 @@ private actor CountingContextualEngine: ContextualCorrectionEngine {
   ) -> ContextualCorrectionResult? {
     requestCount += 1
     return nil
+  }
+}
+
+private actor SentenceMappedContextualEngine: ContextualCorrectionEngine {
+  private(set) var requestCount = 0
+
+  func availability(
+    for _: String?
+  ) -> ContextualCorrectionAvailability {
+    .available
+  }
+
+  func proposal(
+    for request: ContextualCorrectionRequest
+  ) -> ContextualCorrectionResult? {
+    requestCount += 1
+    let candidate: ContextualCorrectionCandidate?
+    if request.sentence == "Their going home." {
+      candidate = ContextualCorrectionCandidate(
+        original: "Their",
+        replacement: "They're"
+      )
+    } else if request.sentence == "The dog wagged it's tail." {
+      candidate = ContextualCorrectionCandidate(
+        original: "it's",
+        replacement: "its"
+      )
+    } else {
+      candidate = nil
+    }
+    return candidate.map {
+      ContextualCorrectionResult(candidates: [$0])
+    }
   }
 }
 

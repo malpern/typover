@@ -67,7 +67,10 @@ private struct TypoverTelemetrySummary: Codable {
   let learnedSuppression: Int
   let replacementRefused: Int
   let valueBeforeBoundaryCallback: Int
+  let preDispatchEmitted: Int
+  let eventTapDisabled: Int
   let boundaryToValueMilliseconds: [Double]
+  let preDispatchCallbackMilliseconds: [Double]
   let correctionLatencyMilliseconds: [Double]
 }
 
@@ -134,6 +137,7 @@ private struct MatrixArtifact: Codable {
   let host: String
   let plan: BearHIDTestPlan
   let loadProfile: BearHIDLoadProfile
+  let requiresPreDispatchEvidence: Bool
   let classification: String
   let cases: [CaseArtifact]
   let privacyNote: String
@@ -786,6 +790,7 @@ private struct Options {
   var loadProfile = BearHIDLoadProfile.quiet
   var scenario = BearHIDTestScenario.repeatedWords
   var exclusiveDesktopConfirmed = false
+  var requiresPreDispatchEvidence = false
   var outputDirectory: String?
 
   static func parse(_ arguments: [String]) throws -> Options {
@@ -802,6 +807,9 @@ private struct Options {
       switch argument {
       case "--exclusive-desktop-confirmed":
         options.exclusiveDesktopConfirmed = true
+        index += 1
+      case "--require-pre-dispatch-evidence":
+        options.requiresPreDispatchEvidence = true
         index += 1
       case "--fixture-client", "--fixture-host", "--jig-tool", "--jig-client",
         "--bear-cli", "--bear-note-id",
@@ -880,6 +888,8 @@ private struct Options {
     Run requires --exclusive-desktop-confirmed and --bear-note-id <UUID>.
     The explicit disposable note prevents physical input from reaching a
     different Bear note after the nonactivating Jig opens.
+    Use --require-pre-dispatch-evidence only when the installed Typover process
+    was launched with TYPOVER_EXPERIMENTAL_BEAR_TEXT_EXPANSION=1.
   """
 }
 
@@ -1125,7 +1135,8 @@ private enum TypoverBearHIDHarness {
         jig: jig,
         caseCount: plan.cases.count,
         readiness: readiness,
-        requiresLoadEvidence: options.loadProfile != .quiet
+        requiresLoadEvidence: options.loadProfile != .quiet,
+        requiresPreDispatchEvidence: options.requiresPreDispatchEvidence
       )
       caseArtifacts.append(artifact)
       try writeJSON(
@@ -1162,12 +1173,13 @@ private enum TypoverBearHIDHarness {
     }
 
     let summary = MatrixArtifact(
-      schemaVersion: 5,
+      schemaVersion: 6,
       runID: matrixRunID,
       createdAt: Date(),
       host: fixture.host,
       plan: plan,
       loadProfile: options.loadProfile,
+      requiresPreDispatchEvidence: options.requiresPreDispatchEvidence,
       classification: classification,
       cases: caseArtifacts,
       privacyNote:
@@ -1186,7 +1198,8 @@ private enum TypoverBearHIDHarness {
     jig: JigController,
     caseCount: Int,
     readiness: [HostReadinessSample],
-    requiresLoadEvidence: Bool
+    requiresLoadEvidence: Bool,
+    requiresPreDispatchEvidence: Bool
   ) throws -> CaseArtifact {
     let loadSampler = HostLoadSampler()
     loadSampler.start()
@@ -1416,6 +1429,9 @@ private enum TypoverBearHIDHarness {
     if !focusRemainedValid || finalStatus?.state != "complete"
       || finalStatus?.runId != runID
       || telemetry.applied != analysis.correctedWords
+      || (requiresPreDispatchEvidence
+        && (telemetry.preDispatchEmitted != analysis.correctedWords
+          || telemetry.eventTapDisabled != 0))
       || !loadEvidenceComplete
     {
       evidenceClassification = "invalid-evidence"
@@ -1667,7 +1683,7 @@ private enum TypoverBearHIDHarness {
         "--start", formatter.string(from: start),
         "--end", formatter.string(from: end.addingTimeInterval(1)),
         "--predicate",
-        "process == \"Typover\" AND subsystem == \"com.malpern.typover\" AND category == \"BearAutomaticCorrection\"",
+        "process == \"Typover\" AND subsystem == \"com.malpern.typover\" AND (category == \"BearAutomaticCorrection\" OR category == \"BearPreDispatchEventTap\")",
       ],
       timeout: 10
     )
@@ -1690,8 +1706,17 @@ private enum TypoverBearHIDHarness {
       valueBeforeBoundaryCallback: count(
         "Bear value change preceded completion-boundary callback"
       ),
+      preDispatchEmitted: count(
+        "Experimental Bear pre-dispatch correction emitted"
+      ),
+      eventTapDisabled: count(
+        "Experimental Bear event tap failed open after disable"
+      ),
       boundaryToValueMilliseconds: logs.compactMap {
         BearHIDTelemetryParsing.boundaryToValueMilliseconds(from: $0)
+      },
+      preDispatchCallbackMilliseconds: logs.compactMap {
+        BearHIDTelemetryParsing.preDispatchCallbackMilliseconds(from: $0)
       },
       correctionLatencyMilliseconds: logs.compactMap { line in
         guard line.contains("Automatic correction applied") else {

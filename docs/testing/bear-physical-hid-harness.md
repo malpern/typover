@@ -71,6 +71,11 @@ the harness can restore that exact target after Jig setup:
 ```bash
 Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
   --bear-note-id <UUID>
+
+# Active-tap candidate only: require one pre-dispatch emission per correction
+# and invalidate the row on any event-tap disablement.
+Scripts/typover-hid-harness run --exclusive-desktop-confirmed \
+  --bear-note-id <UUID> --require-pre-dispatch-evidence
 ```
 
 After a quiet baseline, controlled contention can be selected explicitly:
@@ -146,12 +151,59 @@ non-negative sample. This measures the observable path from Typover's input
 monitor to Bear's Accessibility notification; it does not claim to measure
 ESP32 USB submission-to-screen-paint latency.
 
+Schema 6 adds active-tap qualification evidence. With
+`--require-pre-dispatch-evidence`, every corrected word must have one matching
+pre-dispatch emission log, every callback-duration value is retained, and any
+tap-disable notification makes the case invalid. Use the flag only when the
+installed Typover process was launched with
+`TYPOVER_EXPERIMENTAL_BEAR_TEXT_EXPANSION=1`. The log predicate includes only
+Typover's content-free automatic-correction and pre-dispatch-tap categories.
+This does not infer proxy ordering from logging; the fixture schedule, exact
+Bear text, verified application, retained overlay, and absence of tap
+disablement remain jointly required.
+
 The same schema records the visible Typover correction-window count before and
 after each case while the selected load remains active. A final count is exact
 retention evidence only when the baseline count was zero; otherwise it is kept
 as diagnostic context because old and new correction windows cannot be
 distinguished by count alone. For release evidence, relaunch Typover and run
 one timing case so `fullyRetainedFromEmptyBaseline` can be `true`.
+
+## Schema-6 active-tap result: 2026-08-03
+
+The fresh-process run ending `03-58-52Z` passed consecutive five-word rows at
+160 and 100 milliseconds per character. It recorded ten exact corrections, ten
+matching pre-dispatch emissions, ten verified applications, zero tap disables,
+valid Bear focus, zero late fixture reports, and ten retained overlays. Event
+tap callback duration was 0.041–0.110 milliseconds and verified application
+latency was 29–52 milliseconds.
+
+The full quiet matrix then exposed lifecycle and lane-ownership races. Return
+correctly invalidated the tap but initially left it unarmed for the next row;
+the coordinator now reauthorizes only after an explicit invalidating event and
+a fresh settled AX snapshot. At 40 milliseconds, a coalesced fallback scan and
+an authorized tap briefly competed for ownership, correctly opening the
+mutation circuit. The fallback now explicitly disarms pre-dispatch before it
+claims any range or scan.
+
+The post-fix strict run ending `04-03-46Z` reached 5/5 at 60 milliseconds with
+four pre-dispatch corrections and one verified idle fallback. It had no tap
+disable or circuit break, but `--require-pre-dispatch-evidence` correctly kept
+the mixed-path row invalid because that flag requires one active emission per
+corrected word. The resilience run ending `04-04-50Z`, without the active-only
+requirement, safely completed both burst rows: 4/5 at 60 milliseconds and 5/5
+at 40 milliseconds. The latter used one active correction and four bounded
+catch-up corrections. Focus remained valid, every fixture report arrived on
+time, no replacement was refused, the tap did not disable, and all nine applied
+corrections retained overlays.
+
+The combined-load run ending `04-06-03Z` passed 5/5 at 100 milliseconds with
+strict pre-dispatch evidence. All five corrections used the event tap, callback
+duration stayed at 0.034–0.091 milliseconds, verified application latency stayed
+at 34–39 milliseconds, all five overlays remained, and sampled CPU idle fell as
+low as 23.5 percent. This qualifies the active path at normal rapid typing
+rates. The 60/40 millisecond rows remain mixed-lane burst-resilience evidence,
+not an active-only guarantee.
 
 The default evidence directory is
 `~/.local/state/typover/bear-hid/<run-id>/`. Each JSON file is mode `0600` and

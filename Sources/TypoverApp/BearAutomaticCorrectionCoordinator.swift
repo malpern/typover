@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import OSLog
 import Observation
 import TypoverAccessibility
@@ -168,7 +169,16 @@ protocol BearTypingInputMonitoring: AnyObject {
   func start(
     handler: @escaping @MainActor @Sendable (BearTypingInputObservation) -> Void
   ) -> Bool
+  func authorizePreDispatch(
+    from snapshot: BearTypingContextSnapshot?
+  )
   func stop()
+}
+
+extension BearTypingInputMonitoring {
+  func authorizePreDispatch(
+    from _: BearTypingContextSnapshot?
+  ) {}
 }
 
 @MainActor
@@ -182,6 +192,14 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
     eventMonitor = NSEvent.addGlobalMonitorForEvents(
       matching: .keyDown
     ) { event in
+      // The quarantined text-expansion experiment marks every synthesized
+      // event. Never feed those events back into the physical-input safety
+      // state or let them arm another correction.
+      guard
+        !CGEventBearTextExpansionPerformer.isTypoverSyntheticEvent(event)
+      else {
+        return
+      }
       let modifiers = event.modifierFlags.intersection(
         .deviceIndependentFlagsMask
       )
@@ -195,6 +213,12 @@ final class AppKitBearTypingInputMonitor: BearTypingInputMonitoring {
       // stale or distort correction latency diagnostics.
       let observation = BearTypingInputObservation(
         intent: intent,
+        textExpansionToken: BearTypingInput.textExpansionToken(
+          characters: event.characters,
+          modifiers: modifiers,
+          intent: intent,
+          isRepeat: event.isARepeat
+        ),
         observedAt: ContinuousClock().now
       )
       Task { @MainActor in
@@ -227,7 +251,21 @@ private enum SystemPhysicalInputActivity {
 
 struct BearTypingInputObservation: Equatable, Sendable {
   let intent: BearTypingInputIntent
+  let textExpansionToken: BearTextExpansionInputToken
   let observedAt: ContinuousClock.Instant
+  let preDispatchMutation: BearPreDispatchMutationReceipt?
+
+  init(
+    intent: BearTypingInputIntent,
+    textExpansionToken: BearTextExpansionInputToken,
+    observedAt: ContinuousClock.Instant,
+    preDispatchMutation: BearPreDispatchMutationReceipt? = nil
+  ) {
+    self.intent = intent
+    self.textExpansionToken = textExpansionToken
+    self.observedAt = observedAt
+    self.preDispatchMutation = preDispatchMutation
+  }
 }
 
 enum BearTypingInputIntent: Equatable {
@@ -278,6 +316,41 @@ enum BearTypingInput {
       return .other
     }
     return .completionBoundary(characters ?? "")
+  }
+
+  static func textExpansionToken(
+    characters: String?,
+    modifiers: NSEvent.ModifierFlags,
+    intent: BearTypingInputIntent,
+    isRepeat: Bool
+  ) -> BearTextExpansionInputToken {
+    guard !isRepeat else {
+      return .invalidate
+    }
+    switch intent {
+    case .completionBoundary(let boundary):
+      return .boundary(boundary)
+    case .undoOrRedo:
+      return .invalidate
+    case .other:
+      let disallowedModifiers: NSEvent.ModifierFlags = [
+        .command,
+        .control,
+        .option,
+      ]
+      guard
+        modifiers.isDisjoint(with: disallowedModifiers),
+        let characters,
+        characters.utf16.count == 1,
+        characters.unicodeScalars.allSatisfy({ scalar in
+          scalar.value >= 65 && scalar.value <= 90
+            || scalar.value >= 97 && scalar.value <= 122
+        })
+      else {
+        return .invalidate
+      }
+      return .text(characters)
+    }
   }
 }
 
@@ -473,6 +546,7 @@ final class BearAutomaticCorrectionCoordinator {
   private let invalidationMonitor: any BearAccessibilityInvalidationObserving
   private let correctionEngine: any CorrectionEngine
   private let correctionApplicator: any BearCorrectionApplying
+  private let textExpansionLane: BearTextExpansionExperimentalLane?
   private let annotationTracker: any BearAnnotationTracking
   private let typingInputMonitor: any BearTypingInputMonitoring
   private let environmentChecker: any BearEnvironmentChecking
@@ -485,6 +559,9 @@ final class BearAutomaticCorrectionCoordinator {
   private let observationRestartDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let privateDiagnosticsEnabled: @MainActor @Sendable () -> Bool
+  private let textExpansionExperimentEnabled: @MainActor @Sendable () -> Bool
+  private let secureInputIsActive: @MainActor @Sendable () -> Bool
+  private let textExpansionVerificationDelays: [Duration]
   private let clock = ContinuousClock()
   private let logger = Logger(
     subsystem: "com.malpern.typover",
@@ -501,18 +578,24 @@ final class BearAutomaticCorrectionCoordinator {
   private var deferredCorrections: [DeferredCorrection] = []
   private var deferredScanStartLocation: Int?
   private var deferredCorrectionTask: Task<Void, Never>?
+  private var textExpansionWordTracker = BearTextExpansionWordTracker()
+  private var pendingTextExpansion: BearTextExpansionPendingCorrection?
+  private var textExpansionVerificationTask: Task<Void, Never>?
   private var suppressesNextRedundantAutomaticValueChange = false
   private var settleGeneration = 0
   private var settleTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
   private var observationRetryCount = 0
   private var isMutationCircuitOpen = false
+  private var preDispatchNeedsReauthorization = false
   private let maximumObservationRetryCount = 4
 
   convenience init(
     learningStore: CorrectionLearningStore,
     correctionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
   ) {
+    let preDispatchExperimentEnabled =
+      BearTextExpansionExperimentConfiguration.isEnabled()
     #if DEBUG
       let correctionApplicator =
         BearAutomaticCorrectionDebugFaults.correctionApplicator(
@@ -526,12 +609,25 @@ final class BearAutomaticCorrectionCoordinator {
       invalidationMonitor: BearAccessibilityInvalidationMonitor(),
       correctionEngine: AppleSpellCheckerEngine(),
       correctionApplicator: correctionApplicator,
+      textExpansionLane:
+        preDispatchExperimentEnabled
+        ? BearTextExpansionExperimentalLane(adopter: correctionAdapter)
+        : nil,
       annotationTracker: BearAnnotationOverlayCollectionController(
         adapter: correctionAdapter
       ),
-      typingInputMonitor: AppKitBearTypingInputMonitor(),
+      typingInputMonitor:
+        preDispatchExperimentEnabled
+        ? CGEventTapBearTypingInputMonitor()
+        : AppKitBearTypingInputMonitor(),
       environmentChecker: SystemBearEnvironmentChecker(),
-      learningStore: learningStore
+      learningStore: learningStore,
+      textExpansionExperimentEnabled: {
+        preDispatchExperimentEnabled
+      },
+      secureInputIsActive: {
+        IsSecureEventInputEnabled()
+      }
     )
   }
 
@@ -540,6 +636,7 @@ final class BearAutomaticCorrectionCoordinator {
     invalidationMonitor: any BearAccessibilityInvalidationObserving,
     correctionEngine: any CorrectionEngine,
     correctionApplicator: any BearCorrectionApplying,
+    textExpansionLane: BearTextExpansionExperimentalLane? = nil,
     annotationTracker: any BearAnnotationTracking,
     typingInputMonitor: any BearTypingInputMonitoring,
     environmentChecker: any BearEnvironmentChecking,
@@ -561,6 +658,17 @@ final class BearAutomaticCorrectionCoordinator {
         forKey: BearAutomaticCorrectionPrivateDiagnostics.defaultsKey
       )
     },
+    textExpansionExperimentEnabled: @escaping @MainActor @Sendable () -> Bool = {
+      false
+    },
+    secureInputIsActive: @escaping @MainActor @Sendable () -> Bool = {
+      false
+    },
+    textExpansionVerificationDelays: [Duration] = [
+      .milliseconds(12),
+      .milliseconds(24),
+      .milliseconds(48),
+    ],
     workspaceNotificationCenter: NotificationCenter =
       NSWorkspace.shared.notificationCenter
   ) {
@@ -568,6 +676,7 @@ final class BearAutomaticCorrectionCoordinator {
     self.invalidationMonitor = invalidationMonitor
     self.correctionEngine = correctionEngine
     self.correctionApplicator = correctionApplicator
+    self.textExpansionLane = textExpansionLane
     self.annotationTracker = annotationTracker
     self.typingInputMonitor = typingInputMonitor
     self.environmentChecker = environmentChecker
@@ -580,6 +689,9 @@ final class BearAutomaticCorrectionCoordinator {
     self.physicalInputIdleDuration = physicalInputIdleDuration
     self.observationRestartDelay = observationRestartDelay
     self.privateDiagnosticsEnabled = privateDiagnosticsEnabled
+    self.textExpansionExperimentEnabled = textExpansionExperimentEnabled
+    self.secureInputIsActive = secureInputIsActive
+    self.textExpansionVerificationDelays = textExpansionVerificationDelays
     self.workspaceNotificationCenter = workspaceNotificationCenter
     installWorkspaceObservers()
   }
@@ -587,6 +699,7 @@ final class BearAutomaticCorrectionCoordinator {
   isolated deinit {
     settleTask?.cancel()
     deferredCorrectionTask?.cancel()
+    textExpansionVerificationTask?.cancel()
     invalidationMonitor.stop()
     typingInputMonitor.stop()
     for observer in workspaceObservers {
@@ -648,6 +761,51 @@ final class BearAutomaticCorrectionCoordinator {
         let intent = observation.intent
         let observedAt = observation.observedAt
         self.typingInputGeneration += 1
+        if let receipt = observation.preDispatchMutation {
+          self.diagnostics.recordBoundaryInput()
+          if self.beginPreDispatchTextExpansion(receipt: receipt) {
+            return
+          }
+          // The tap has already emitted an edit. Any inability to authorize
+          // or verify its ownership is an indeterminate write, not a safe miss.
+          self.openMutationCircuit(
+            status: .verificationFailed,
+            range: AccessibilityTextRange(
+              location: max(
+                0,
+                receipt.predictedAuthorizedSnapshot.caretLocation
+                  - receipt.plan.original.utf16.count
+              ),
+              length: receipt.plan.original.utf16.count
+            )
+          )
+          return
+        }
+        if observation.textExpansionToken == .invalidate {
+          self.preDispatchNeedsReauthorization = true
+          // Unsupported keys and mouse input invalidate the event-tap model.
+          // Request a fresh settled AX snapshot even when the input itself does
+          // not produce a Bear value-change notification.
+          self.scheduleSettledRead()
+        }
+        let textExpansionCompletion: BearTextExpansionCompletion?
+        if self.textExpansionExperimentEnabled() {
+          textExpansionCompletion = self.textExpansionWordTracker.consume(
+            observation.textExpansionToken
+          )
+        } else {
+          self.textExpansionWordTracker.reset()
+          textExpansionCompletion = nil
+        }
+        if self.pendingTextExpansion != nil {
+          if intent == .undoOrRedo {
+            self.openMutationCircuit(
+              status: .verificationFailed,
+              range: self.pendingTextExpansionRange
+            )
+          }
+          return
+        }
         self.scheduleDeferredCorrectionsIfNeeded()
         self.tracePrivate("input intent=\(intent.traceLabel)")
         switch intent {
@@ -655,6 +813,14 @@ final class BearAutomaticCorrectionCoordinator {
           self.pendingInputIntent = intent
           self.diagnostics.recordBoundaryInput()
           self.pendingBoundaryObservedAt = observedAt
+          if let textExpansionCompletion,
+            self.beginTextExpansion(
+              completion: textExpansionCompletion,
+              observedAt: observedAt
+            )
+          {
+            return
+          }
           if self.pendingValueChange {
             // Bear can publish AXValueChanged before AppKit delivers the same
             // physical key to the global monitor. That ordering is safe, but
@@ -704,8 +870,10 @@ final class BearAutomaticCorrectionCoordinator {
     let baseline = contextReader.read()
     if case .ready(let snapshot) = baseline {
       lastSnapshot = snapshot
+      authorizePreDispatchIfEligible(from: snapshot)
     } else {
       lastSnapshot = nil
+      typingInputMonitor.authorizePreDispatch(from: nil)
     }
     updateStatus(for: baseline)
   }
@@ -728,6 +896,10 @@ final class BearAutomaticCorrectionCoordinator {
     scheduledBoundaryObservedAt = nil
     typingInputGeneration += 1
     clearDeferredCorrections()
+    textExpansionVerificationTask?.cancel()
+    textExpansionVerificationTask = nil
+    pendingTextExpansion = nil
+    textExpansionWordTracker.reset()
     suppressesNextRedundantAutomaticValueChange = false
   }
 
@@ -736,6 +908,21 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     annotationTracker.handleInvalidation(event)
+    if pendingTextExpansion != nil {
+      switch event {
+      case .focusedElementChanged, .focusedWindowChanged:
+        diagnostics.recordRefusal(.postWriteReconciliationFailed)
+        openMutationCircuit(
+          status: .verificationFailed,
+          range: pendingTextExpansionRange
+        )
+      case .valueChanged, .selectionChanged:
+        tracePrivate("accessibility event=syntheticMutationChanged")
+      case .layoutChanged, .windowMoved, .windowResized:
+        break
+      }
+      return
+    }
     switch event {
     case .valueChanged:
       logger.debug("Bear value change observed")
@@ -864,6 +1051,17 @@ final class BearAutomaticCorrectionCoordinator {
     let previousSnapshot = lastSnapshot
     lastSnapshot = currentSnapshot
     status = .observing
+    // An unsupported physical event (Return, mouse input, modified key, and so
+    // on) deliberately invalidates the active event-tap predictor. Once Bear
+    // publishes a fresh, settled AX snapshot, reauthorize from that verified
+    // state unless another correction transaction still owns the session.
+    // This keeps the fast path useful after ordinary editing while preserving
+    // the one-authorization-per-destructive-write contract.
+    defer {
+      if preDispatchNeedsReauthorization {
+        authorizePreDispatchIfEligible(from: currentSnapshot)
+      }
+    }
     tracePrivate(
       "evaluation valueChange=\(valueChangeWasObserved) boundary=\(pendingBoundaryCharacter.debugDescription) ageMs=\(boundaryPairingElapsed.traceMilliseconds) previous={\(previousSnapshot.traceDescription)} current={\(currentSnapshot.traceDescription)}"
     )
@@ -945,12 +1143,191 @@ final class BearAutomaticCorrectionCoordinator {
         authorizedContext: currentSnapshot
       )
     )
+    deauthorizePreDispatchForDeferredLane()
     diagnostics.recordDeferred()
     tracePrivate(
       "outcome=idleDeferred range=\(completion.targetRange.location):\(completion.targetRange.length)"
     )
     logger.debug("Correction deferred until typing is idle")
     scheduleDeferredCorrectionsIfNeeded()
+  }
+
+  private var pendingTextExpansionRange: AccessibilityTextRange {
+    guard let pendingTextExpansion else {
+      return AccessibilityTextRange(location: 0, length: 0)
+    }
+    let plan = pendingTextExpansion.mutation.plan
+    return AccessibilityTextRange(
+      location: max(
+        0,
+        pendingTextExpansion.mutation.authorizedSnapshot.caretLocation
+          - plan.original.utf16.count
+      ),
+      length: plan.original.utf16.count
+    )
+  }
+
+  private func beginTextExpansion(
+    completion: BearTextExpansionCompletion,
+    observedAt: ContinuousClock.Instant
+  ) -> Bool {
+    guard
+      let textExpansionLane,
+      deferredCorrections.isEmpty,
+      deferredScanStartLocation == nil,
+      let authorizedSnapshot = lastSnapshot,
+      let engineProposal = correctionEngine.proposal(for: completion.word),
+      let proposal = learningStore.applyingPreference(to: engineProposal),
+      proposal.correction.original == completion.word,
+      let pending = textExpansionLane.begin(
+        completion: completion,
+        proposal: proposal,
+        authorizedSnapshot: authorizedSnapshot,
+        boundaryObservedAt: observedAt,
+        bearIsFrontmost:
+          frontmostBundleIdentifier()
+          == BearAccessibilityProbe.bearBundleIdentifier,
+        secureInputIsActive: secureInputIsActive()
+      )
+    else {
+      return false
+    }
+
+    pendingTextExpansion = pending
+    pendingValueChange = false
+    pendingInputIntent = .other
+    pendingBoundaryObservedAt = nil
+    scheduledBoundaryObservedAt = nil
+    settleTask?.cancel()
+    settleTask = nil
+    tracePrivate(
+      "outcome=textExpansionEmitted original=\(completion.word.debugDescription)"
+    )
+    logger.notice("Experimental Bear text expansion emitted")
+    scheduleTextExpansionVerification()
+    return true
+  }
+
+  private func beginPreDispatchTextExpansion(
+    receipt: BearPreDispatchMutationReceipt
+  ) -> Bool {
+    guard
+      pendingTextExpansion == nil,
+      let textExpansionLane,
+      deferredCorrections.isEmpty,
+      deferredScanStartLocation == nil,
+      let engineProposal = correctionEngine.proposal(
+        for: receipt.plan.original
+      ),
+      let proposal = learningStore.applyingPreference(to: engineProposal),
+      let pending = textExpansionLane.beginPreDispatched(
+        receipt: receipt,
+        proposal: proposal,
+        bearIsFrontmost:
+          frontmostBundleIdentifier()
+          == BearAccessibilityProbe.bearBundleIdentifier,
+        secureInputIsActive: secureInputIsActive()
+      )
+    else {
+      return false
+    }
+
+    pendingTextExpansion = pending
+    pendingValueChange = false
+    pendingInputIntent = .other
+    pendingBoundaryObservedAt = nil
+    scheduledBoundaryObservedAt = nil
+    settleTask?.cancel()
+    settleTask = nil
+    tracePrivate(
+      "outcome=preDispatchExpansionEmitted original=\(receipt.plan.original.debugDescription) callbackMs=\(Optional(receipt.callbackDuration).traceMilliseconds)"
+    )
+    logger.notice(
+      "Experimental Bear pre-dispatch correction emitted callbackMs=\(Optional(receipt.callbackDuration).traceMilliseconds, privacy: .public)"
+    )
+    scheduleTextExpansionVerification()
+    return true
+  }
+
+  private func scheduleTextExpansionVerification() {
+    textExpansionVerificationTask?.cancel()
+    guard let pending = pendingTextExpansion else {
+      return
+    }
+    let lane = textExpansionLane
+    let delays = textExpansionVerificationDelays
+    textExpansionVerificationTask = Task { [weak self] in
+      guard let self, let lane else {
+        return
+      }
+      var lastRange = self.pendingTextExpansionRange
+      var lastApplication: BearCorrectionApplication?
+      for delay in delays {
+        do {
+          try await Task.sleep(for: delay)
+        } catch {
+          return
+        }
+        guard self.pendingTextExpansion?.mutation == pending.mutation else {
+          return
+        }
+        guard
+          self.frontmostBundleIdentifier()
+            == BearAccessibilityProbe.bearBundleIdentifier
+        else {
+          self.diagnostics.recordRefusal(.postWriteReconciliationFailed)
+          self.openMutationCircuit(
+            status: .verificationFailed,
+            range: lastRange
+          )
+          return
+        }
+        guard case .ready(let currentSnapshot) = await self.readContext() else {
+          continue
+        }
+
+        let completionResult =
+          await BearAccessibilityOperationLane.shared.run {
+            lane.complete(
+              pending,
+              currentSnapshot: currentSnapshot
+            )
+          }
+        switch completionResult {
+        case .verified(let application):
+          self.pendingTextExpansion = nil
+          self.textExpansionVerificationTask = nil
+          self.recordVerifiedApplication(
+            application,
+            proposal: pending.proposal,
+            boundaryObservedAt: pending.boundaryObservedAt
+          )
+          let elapsed = pending.boundaryObservedAt.duration(to: self.clock.now)
+          self.tracePrivate(
+            "outcome=textExpansionApplied range=\(application.report.targetRange.location):\(application.report.targetRange.length)"
+          )
+          self.logger.notice(
+            "Automatic correction applied latencyMs=\(Optional(elapsed).traceMilliseconds, privacy: .public)"
+          )
+          await self.rebaseline()
+          return
+        case .transitionUnverified(let range):
+          lastRange = range
+        case .adoptionFailed(let application):
+          lastRange = application.report.targetRange
+          lastApplication = application
+        }
+      }
+
+      self.pendingTextExpansion = nil
+      self.textExpansionVerificationTask = nil
+      self.diagnostics.recordRefusal(.postWriteReconciliationFailed)
+      self.tracePrivate("outcome=textExpansionVerificationFailed")
+      self.openMutationCircuit(
+        status: lastApplication?.report.status ?? .verificationFailed,
+        range: lastRange
+      )
+    }
   }
 
   private func scheduleDeferredCorrectionsIfNeeded() {
@@ -1153,7 +1530,7 @@ final class BearAutomaticCorrectionCoordinator {
       "outcome=postWriteReconciliationFailed status=\(writeStatus.rawValue) range=\(range.location):\(range.length)"
     )
     logger.fault(
-      "Automatic correction paused after an unreconciled AX write: \(writeStatus.rawValue, privacy: .public)"
+      "Automatic correction paused after an unreconciled write: \(writeStatus.rawValue, privacy: .public)"
     )
   }
 
@@ -1194,6 +1571,19 @@ final class BearAutomaticCorrectionCoordinator {
       deferredScanStartLocation ?? absoluteStart,
       absoluteStart
     )
+    deauthorizePreDispatchForDeferredLane()
+  }
+
+  private func deauthorizePreDispatchForDeferredLane() {
+    guard textExpansionExperimentEnabled() else {
+      return
+    }
+    // The event tap and AX fallback may never own destructive work at the same
+    // time. Once the fallback has claimed a range or bounded scan, keep the
+    // fast lane disarmed until the fallback finishes and rebaseline() publishes
+    // a newly verified snapshot.
+    preDispatchNeedsReauthorization = false
+    typingInputMonitor.authorizePreDispatch(from: nil)
   }
 
   private func appendDeferredCorrectionsFromRapidScan() async {
@@ -1259,9 +1649,11 @@ final class BearAutomaticCorrectionCoordinator {
     let result = await readContext()
     if case .ready(let snapshot) = result {
       lastSnapshot = snapshot
+      authorizePreDispatchIfEligible(from: snapshot)
       tracePrivate("baseline snapshot={\(snapshot.traceDescription)}")
     } else {
       lastSnapshot = nil
+      typingInputMonitor.authorizePreDispatch(from: nil)
       tracePrivate("baseline result=\(result.traceLabel)")
     }
     updateStatus(for: result)
@@ -1339,6 +1731,37 @@ final class BearAutomaticCorrectionCoordinator {
       )
       correctionEngine.record(.edited, for: proposal)
     }
+    // The ordering spike currently contains one immutable rule snapshot.
+    // Deauthorize immediately when the user's preference changes; a later
+    // learned-rule compiler will publish a replacement snapshot explicitly.
+    typingInputMonitor.authorizePreDispatch(from: nil)
+  }
+
+  private func authorizePreDispatchIfEligible(
+    from snapshot: BearTypingContextSnapshot
+  ) {
+    preDispatchNeedsReauthorization = false
+    guard
+      isEnabled,
+      !isMutationCircuitOpen,
+      textExpansionExperimentEnabled(),
+      !secureInputIsActive(),
+      pendingTextExpansion == nil,
+      deferredCorrections.isEmpty,
+      deferredScanStartLocation == nil,
+      pendingValueChange == false,
+      pendingInputIntent == .other,
+      pendingBoundaryObservedAt == nil,
+      scheduledBoundaryObservedAt == nil,
+      let engineProposal = correctionEngine.proposal(for: "teh"),
+      let proposal = learningStore.applyingPreference(to: engineProposal),
+      proposal.correction.original == "teh",
+      proposal.correction.replacement == "the"
+    else {
+      typingInputMonitor.authorizePreDispatch(from: nil)
+      return
+    }
+    typingInputMonitor.authorizePreDispatch(from: snapshot)
   }
 
   private func installWorkspaceObservers() {

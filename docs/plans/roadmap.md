@@ -2,7 +2,8 @@
 
 - Status: Active
 - Updated: 2026-08-03
-- Current milestone: 1 — Bear word-correction beta final acceptance
+- Current focus: Parallel zero-compromise editor hardening and bounded Bear
+  lower-latency mutation spike
 
 ## Goal
 
@@ -24,13 +25,204 @@ Every milestone preserves the same invariants:
 - transmit text only after an explicit cloud-model choice; and
 - never claim compatibility from deterministic tests alone.
 
-## Current state
+## Roadmap dashboard
+
+Status meanings:
+
+- **Done** — implemented and validated at the level required for that item.
+- **In progress** — useful implementation exists, but a listed acceptance or
+  release gate is still open.
+- **Not started** — planned work has not entered implementation.
+- **Deferred** — intentionally begins only after the Bear word-level beta is
+  trustworthy.
+
+| Workstream | Status | Done | Still required |
+|---|---|---|---|
+| Controlled AppKit editor | **In progress — reference behavior complete** | Immediate in-transaction Apple Spelling, independently tracked contextual requests, local and optional cloud models, rewrites, learning, statistics, Undo/Redo, composition refusal, and multiple corrections | Installed active-typing latency and interaction acceptance |
+| Bear lower-latency spike | **Active-tap candidate physically proven at normal typing rates — burst policy pending** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, 17 ordering tests, 45 coordinator tests, 329-test full gate, strict 5/5 rows at 160/100 ms, and strict 5/5 at 100 ms under combined load | Decide the supported burst envelope from repeat 60/40 ms mixed-lane results; remains disabled by default |
+| Milestone 1: Bear word correction | **In progress — functionally complete** | 14/16 work items; automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, accessibility, diagnostics, physical load coverage, and post-pause product decision | Final-candidate qualification and second-machine soak |
+| Milestone 2: Beta shell | **In progress** | 7/8 work items; onboarding, permissions, status, privacy, About provenance, and artifact-verification tooling | Notarized candidate plus clean-machine install and permission acceptance |
+| Public-beta operations | **In progress** | Local release-operations contract and package-verification path | Update, rollback, uninstall, license, support channel, release notes, and final public claims |
+| Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
+| Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, and build a compatibility probe |
+| Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
+
+## Completed foundations
+
+- [x] Build the controlled-editor reference implementation.
+- [x] Keep local word correction inside the native boundary edit, preserve
+  selections when contextual results return behind the caret, refuse results
+  during IME composition, and retain consecutive contextual requests instead
+  of cancelling the earlier sentence.
+- [x] Implement safe automatic word correction in supported Bear versions.
+- [x] Keep multiple corrections visible and independently reversible.
+- [x] Validate exact-range behavior, continued typing, Undo/Redo, IME,
+  long notes, attachments, scrolling, alternatives, and Change Back.
+- [x] Validate rapid typing and controlled system load with the physical ESP32
+  fixture and content-free evidence.
+- [x] Complete the Settings visual, native Accessibility, and spoken VoiceOver
+  acceptance passes.
+- [x] Add privacy controls, bounded local diagnostics, learning, statistics,
+  capability gating, and explicit supported Bear versions.
+- [x] Implement signed-build, receipt, archive-integrity, and negative package
+  verification tooling.
+
+## Open gates
+
+### Required before a signed beta candidate is accepted
+
+- [x] Decide how to treat measured post-pause correction behavior. Keep the
+  idle-first AX lane as the safe Bear control/fallback and pursue a separate,
+  disabled-by-default text-expander-style experiment. Do not hold Typover's
+  own editor to Bear's mutation limitations.
+- [ ] Build and notarize the final candidate from a clean revision.
+- [ ] Run the clean-machine install and permission checklist.
+- [ ] Qualify that exact candidate with fresh Bear and Typover processes,
+  release-config memory retirement, and a bounded second-machine soak.
+
+### Required before a public beta
+
+- [ ] Validate update, rollback, and uninstall behavior on the candidate.
+- [ ] Select a license and support channel.
+- [ ] Finalize release notes and rollback instructions.
+- [ ] Verify that the published privacy, compatibility, and support claims
+  match the shipped artifact.
+
+Future contextual correction, additional applications, and larger model
+benchmarks are explicitly **not** blockers for the first word-level Bear beta.
+
+## Parallel experience lanes
+
+ADR-016 now separates the two product environments instead of forcing them
+through one compromise.
+
+The controlled editor owns `NSTextView`, `NSTextStorage`, selection, marked
+text, Undo, and drawing. Local word correction therefore completes
+synchronously during the boundary edit, before the next key is processed.
+Contextual work stays asynchronous and can apply behind continued typing or a
+moved selection only when its exact captured sentence is unchanged. Multiple
+sentences now keep independent in-flight requests, and earlier accepted edits
+rebase the ranges of later requests. A result that arrives during marked-text
+composition is refused.
+
+Bear keeps ADR-014's installed idle-first AX path as its production control.
+The lower-latency spike now has two clearly separated transports behind
+`TYPOVER_EXPERIMENTAL_BEAR_TEXT_EXPANSION=1`. The disqualified first transport
+observed Space after dispatch and then posted deletion/insertion events. The
+replacement candidate installs an active session event tap at the head of the
+stream, advances a bounded physical-letter model, posts a fully prepared
+`teh -> the` sequence at the callback proxy, and only then returns the original
+physical Space. It is off by default and supports only the ordering experiment's
+lowercase US-layout letters and Space.
+
+Each fresh AX baseline authorizes at most one destructive transaction. The tap
+disarms before it posts and can rearm only after exact bounded verification
+adopts a normal reversible Bear anchor. Synthetic events carry Typover's marker
+and cannot recurse. Secure Input, learned suppression, modifiers, repeats,
+unsupported input, mouse interaction, tap disablement, proposal mismatch, or
+startup failure deauthorize the path. An emitted write that cannot be matched
+opens the existing mutation circuit without learning, statistics, or a
+squiggle. Deterministic gates pass: 17 ordering tests, 45 coordinator tests, a
+clean build, and the full 329-test suite. Physical qualification now proves
+the active path at 160/100 ms and 100 ms under combined load; repeat 60/40 ms
+rows establish a safe but variable mixed-lane burst envelope rather than an
+active-only guarantee.
+
+The first active-tap physical admission attempt stopped before any HID input:
+the ESP32 was absent from USB, `keypath-hid-fixture.local` did not resolve, and
+its last known home-network address was unreachable. No Bear text was mutated.
+This is an infrastructure blocker, not a Typover result; the one-word 160 ms row
+remains the first physical gate when the fixture returns.
+
+The first installed physical admission attempt on 2026-08-03 passed three quiet
+host samples and found the ESP32, USB keyboard, jig, private diagnostics, and
+Typover healthy. It was rejected before any fixture input because Bear remained
+windowless after CLI targeting. A later forced Bear restart plus display wake
+confirmed that the Mac was at the locked login screen, where macOS correctly
+prevents Bear from becoming frontmost. The harness therefore could not prove a
+frontmost editor with a collapsed terminal caret. No Bear text was mutated and
+this is infrastructure-blocked evidence, not a synthetic-path result. The
+unused disposable notes were moved to Bear Trash and Typover was relaunched with
+the experimental environment gate off.
+
+After unlock, the installed physical spike passed 1/1 at 160 ms with the exact
+`the ` text and 1/1 retained overlay. A five-word matrix then passed 5/5 at both
+160 and 100 ms. At 60 ms it produced `the the the teh tthe ` and corrected only
+3/5. Focus stayed valid, the fixture completed with no late reports, and the host
+remained quiet. The fourth boundary callback was delayed while later physical
+input continued, so the post-dispatch deletion targeted stale caret timing.
+Verification opened the mutation circuit, but could not prevent the already
+emitted keystrokes from damaging text. The 40 ms row was deliberately skipped.
+Evidence is stored in `~/.local/state/typover/bear-hid/` under runs
+`typover-hid-2026-08-04T02-14-50Z` and
+`typover-hid-2026-08-04T02-15-41Z`. The global-monitor/backspace transport is
+disqualified for production; Typover was restored to the default safe path and
+the evidence note was moved to Bear Trash.
+
+Independent verification repeated the result from fresh notes and fresh Typover
+processes. Run `typover-hid-2026-08-04T02-22-44Z` again passed 5/5 at 160 and
+100 ms, then corrected only 4/5 at 60 ms with one safe `teh` miss. Run
+`typover-hid-2026-08-04T02-24-34Z` tested twenty words at 60 ms: six visibly
+changed and fourteen remained `teh`, but Typover verified only five before a
+delayed boundary produced another post-write verification failure and opened the
+circuit. Overlay sampling found 0/6 retained markers, so that row was rejected as
+invalid evidence. Both runs kept Bear focused, used quiet-host admission, and had
+no late fixture reports. The exact `tthe` corruption was not reproduced, but the
+60 ms unreliability, delayed callback, and unverified-write circuit failure were.
+This strengthens rather than weakens the decision to replace the transport.
+
+The active event-tap replacement was physically qualified on 2026-08-03. Run
+`typover-hid-2026-08-04T03-58-52Z` passed consecutive 5/5 rows at 160 and
+100 milliseconds with ten pre-dispatch emissions, ten verified applications,
+zero tap disables, valid focus, zero late fixture reports, and ten retained
+overlays. Callback work stayed between 0.041 and 0.110 milliseconds and verified
+application latency stayed between 29 and 52 milliseconds.
+
+The first full matrix exposed two lifecycle bugs without text corruption.
+Return invalidated the tap between rows but the coordinator did not initially
+republish a fresh settled authorization. A first repair then overcorrected by
+resetting the word model after every letter. The final contract rearms only
+after an explicit invalidating input and a fresh AX snapshot; ordinary letter
+updates preserve the tap's bounded predictor. At 40 milliseconds, the matrix
+also exposed competing ownership between a coalesced AX fallback scan and a
+still-authorized tap. The fallback now explicitly disarms pre-dispatch before
+claiming a range or scan, and only post-fallback rebaseline may reauthorize it.
+
+Run `typover-hid-2026-08-04T04-03-46Z` verified that handoff: Bear reached 5/5
+at 60 milliseconds using four active corrections and one idle fallback, with
+five overlays, no circuit break, and no tap disable. The strict active-only
+flag correctly classified the mixed-path row as invalid evidence. The separate
+resilience run `typover-hid-2026-08-04T04-04-50Z` continued through both burst
+rows: 60 milliseconds safely corrected 4/5, while 40 milliseconds converged
+5/5 using one active correction and four bounded catch-up corrections. It kept
+focus, received every fixture report on time, refused no replacement, and
+retained all nine applied overlays. These repeat results make 60/40 millisecond
+coverage a burst-resilience measurement, not an active-only support claim.
+
+Finally, `typover-hid-2026-08-04T04-06-03Z` passed 5/5 at 100 milliseconds
+under combined CPU, WindowServer, and Accessibility contention. All five words
+used pre-dispatch, the tap never disabled, callbacks took 0.034–0.091
+milliseconds, application latency stayed at 34–39 milliseconds, all five
+overlays remained, and sampled CPU idle fell as low as 23.5 percent. The
+candidate remains disabled by default while the burst product policy and final
+installed interaction acceptance are decided.
+
+## Detailed current state
 
 The controlled AppKit and TextKit editor is the complete reference
 implementation. It proves Apple Spelling, local contextual intelligence,
 Careful and Comprehensive correction scopes, optional sentence rewriting,
 multiple independently reversible corrections, preference learning,
 statistics, Undo and Redo, and long-document annotation behavior.
+
+An installed UI acceptance check on 2026-08-03 entered two consecutive `teh `
+tokens through individual key events and continued with another character. Both
+words changed immediately to `the`, both light-gray squiggles remained visible,
+and Change Back on the first restored only that word while the second correction
+and trailing input remained intact. The test-created learned suppression was
+removed afterward. This passes the focused active-typing and independent-action
+interaction check; the broader latency, composition, moved-caret contextual,
+and one-step Undo matrix remains open.
 
 Bear now supports guarded exact-range replacement, independent Change Back,
 ranked alternatives, bounded context re-anchoring, wrapped-range geometry, a
@@ -45,8 +237,8 @@ app. The shortcut now uses the same AppKit global key-event path already proven
 by automatic Bear correction. Deterministic coverage and an installed physical
 one-chord retest pass: one key-down plus release restored exactly the newest
 remaining correction while preserving Bear focus, the caret, and all other
-text. The feature remains opt-in because most
-automatic-writing scenarios still need permissioned installed-app validation.
+text. The feature remains opt-in because final-candidate and clean-machine
+acceptance gates are still open.
 
 Bear focus recovery now has a safe two-stage observer. Typover can wait on
 content-free application focus notifications when Bear has not exposed an
@@ -157,11 +349,10 @@ Detailed implementation history remains in the
 [Bear compatibility spike](bear-compatibility-spike.md). Those documents are
 evidence, not competing roadmaps.
 
-## Remaining plan at a glance
+## Remaining beta sequence
 
-The word-level Bear behavior is functionally complete. The remaining work is
-ordered by what blocks a trustworthy beta rather than by how much additional
-test coverage could be collected:
+The dashboard above is the summary source of truth. The remaining work is
+ordered by what blocks a trustworthy beta:
 
 1. Finish the human-facing acceptance pass by reviewing the measured post-pause
    correction behavior as a beta product decision. The unlocked Settings visual
@@ -175,9 +366,9 @@ test coverage could be collected:
    second-machine soak.
 4. Resolve public-beta operations: license, support channel, release notes,
    rollback, and public privacy and compatibility claims.
-5. After the word-level beta is trustworthy, proceed to bounded local
-   contextual correction, then a TextEdit adapter, and finally broader model
-   benchmarking.
+5. After the word-level beta is trustworthy, begin the deferred milestones:
+   bounded local contextual correction, then a TextEdit adapter, and finally
+   broader model benchmarking.
 
 ## Proportionate testing strategy
 
@@ -201,6 +392,9 @@ Use the smallest test that can establish the behavior being changed:
   row only when it protects a product claim or answers a live uncertainty.
 
 ## Milestone 1: Bear word-correction beta
+
+**Status: In progress — core behavior is complete; 14 of 16 work items are
+done. Two beta-acceptance gates remain.**
 
 ### Outcome
 
@@ -253,10 +447,11 @@ Back action, and alternatives.
   visible timing from 474.904 to 3,206.381 milliseconds because the idle-first
   policy waits for the burst to stop. Keep the evidence in
   [Bear performance samples](../testing/bear-performance-samples.md).
-- [ ] Decide whether post-pause correction is the intended beta experience.
-  Do not shorten the idle gate or write while input is active without new
-  physical evidence that the change preserves exact text, selection, focus,
-  and overlay retention.
+- [x] Decide whether post-pause correction is the intended beta experience.
+  Retain it as the safe AX control/fallback while ADR-016's separately gated
+  text-expander-style spike investigates lower latency. Do not enable the new
+  transport by default without physical evidence that it preserves exact text,
+  selection, focus, Undo, continued typing, and overlay retention.
 - [ ] Complete a bounded second-machine beta soak. Content-free safe-skip,
   refusal, load, recovery, memory, and energy evidence is already recorded;
   both debug and release-config runs support a provisional 200 MiB RSS budget.
@@ -344,6 +539,9 @@ Back action, and alternatives.
 
 ## Milestone 2: Minimum beta shell
 
+**Status: In progress — 7 of 8 work items are done. The signed, notarized,
+clean-machine acceptance gate remains.**
+
 ### Outcome
 
 A new tester can install Typover, understand its permissions and privacy
@@ -355,7 +553,7 @@ ordinary app or Accessibility lifecycle changes.
 - [x] Create a benefit-led first-run explanation for Accessibility and Input
   Monitoring, with a clear path to System Settings and an option to explore
   later. The reusable permission rows refresh whenever Typover becomes active;
-  installed visual validation remains.
+  the installed Settings visual review now passes.
 - [x] Show whether Bear correction is disabled, waiting, observing, paused,
   unsupported, or missing permission.
 - [x] Explain capability and version gating in the interface, including why an
@@ -402,24 +600,30 @@ ordinary app or Accessibility lifecycle changes.
 
 ## Parallel track: Release operations
 
+**Status: In progress — the local contract and artifact-verification path are
+done; installed lifecycle and public-release decisions remain.**
+
 This track may proceed after the minimum beta shell is stable. It does not
 block local contextual-correction development, but it must pass before Typover
 is offered as a public beta.
 
-- Test update and uninstall behavior on a clean Mac.
-- Define versioning, release notes, rollback, and the beta support channel.
-  The local [beta release-operations contract](../testing/beta-release-operations.md)
-  now defines numeric versions/builds, exact source provenance, manual update,
-  rollback, uninstall footprint, and a release-note template. Installed
-  lifecycle evidence remains pending. The repository is private, so a support
-  email or public issue tracker still requires an owner decision.
-- Select and document the license.
-- Produce the intended public distribution artifact and verify its signing,
+- [x] Define the local release-operations contract. The
+  [beta release-operations contract](../testing/beta-release-operations.md)
+  defines numeric versions/builds, exact source provenance, manual update,
+  rollback, uninstall footprint, and a release-note template.
+- [ ] Test update and uninstall behavior on a clean Mac.
+- [ ] Select the beta support channel. The repository is private, so a support
+  email or public issue tracker requires an owner decision.
+- [ ] Select and document the license.
+- [ ] Produce the intended public distribution artifact and verify its signing,
   notarization, installation, update, and removal behavior.
-- Confirm that public privacy, support, and compatibility claims match the
+- [ ] Confirm that public privacy, support, and compatibility claims match the
   shipped build.
 
 ## Milestone 3: Contextual correction in Bear
+
+**Status: Deferred — supporting primitives exist, but no item is complete for
+the installed Bear integration.**
 
 ### Outcome
 
@@ -429,23 +633,23 @@ contract.
 
 ### Work
 
-- Detect a verified completed sentence after punctuation. The dormant Bear
+- [ ] Detect a verified completed sentence after punctuation. The dormant Bear
   capture primitive now requires the observed terminator to match the bounded
   Accessibility text exactly.
-- Capture only the most recent sentence, capped at 400 UTF-16 units. Bounded
+- [ ] Capture only the most recent sentence, capped at 400 UTF-16 units. Bounded
   reads now resolve document coordinates only when the sentence begins at the
   document start or an earlier terminator is visible; truncated beginnings
   fail closed. Runtime scheduling remains gated on Milestone 1 evidence.
-- Run the selected contextual engine asynchronously while continued typing
+- [ ] Run the selected contextual engine asynchronously while continued typing
   remains responsive.
-- Discard a proposal if the captured sentence changes, focus moves, or the
+- [ ] Discard a proposal if the captured sentence changes, focus moves, or the
   target is no longer unique.
-- Preserve Careful as the default and keep Comprehensive plus sentence rewriting
-  as separate explicit choices.
-- Use Apple Intelligence locally by default. Use OpenAI or Anthropic only after
-  an explicit provider choice, with no automatic cloud fallback.
-- Reuse the same exact-range transactions, individual annotations, Change Back,
-  alternatives, statistics, and bounded restoration rules.
+- [ ] Preserve Careful as the default and keep Comprehensive plus sentence
+  rewriting as separate explicit choices.
+- [ ] Use Apple Intelligence locally by default. Use OpenAI or Anthropic only
+  after an explicit provider choice, with no automatic cloud fallback.
+- [ ] Reuse the same exact-range transactions, individual annotations, Change
+  Back, alternatives, statistics, and bounded restoration rules.
 
 ### Exit criteria
 
@@ -457,6 +661,8 @@ contract.
 
 ## Milestone 4: Application-neutral editor integration
 
+**Status: Not started.**
+
 ### Outcome
 
 Bear becomes one adapter for a generic Accessibility correction system rather
@@ -464,21 +670,21 @@ than the architecture itself.
 
 ### Work
 
-- Extract an application-neutral target profile containing:
+- [ ] Extract an application-neutral target profile containing:
   - bundle identity and supported versions;
   - focused-editor discovery;
   - required Accessibility attributes and notifications;
   - range replacement and caret behavior;
   - geometry and coordinate conversion; and
   - application-specific lifecycle quirks.
-- Keep correction engines, range verification, re-anchoring, overlays, learning,
-  and statistics shared.
-- Implement TextEdit as the second adapter and genericity proof.
-- Build a content-free compatibility probe that classifies an editor as full,
-  correction-only, cooperative-integration-required, or unsupported.
-- Exclude secure text fields, password editors, and any target whose text or
+- [ ] Keep correction engines, range verification, re-anchoring, overlays,
+  learning, and statistics shared.
+- [ ] Implement TextEdit as the second adapter and genericity proof.
+- [ ] Build a content-free compatibility probe that classifies an editor as
+  full, correction-only, cooperative-integration-required, or unsupported.
+- [ ] Exclude secure text fields, password editors, and any target whose text or
   selection contract cannot be inspected safely.
-- Add applications only after their own permissioned matrix passes. Native
+- [ ] Add applications only after their own permissioned matrix passes. Native
   implementation alone is not evidence of compatibility.
 
 ### Exit criteria
@@ -492,6 +698,9 @@ than the architecture itself.
 
 ## Milestone 5: Quality scale and model evaluation
 
+**Status: Early groundwork only — the target corpus and cross-version evidence
+are not complete.**
+
 ### Outcome
 
 Typover's model and policy decisions are supported by representative writing,
@@ -499,17 +708,17 @@ cross-version results, and repeatable local benchmarks.
 
 ### Work
 
-- Grow the rewrite benchmark from 35 to at least 500 cases, including at least
-  300 diverse unchanged controls.
-- Add consented, de-identified natural-writing examples containing no private
+- [ ] Grow the rewrite benchmark from 35 to at least 500 cases, including at
+  least 300 diverse unchanged controls.
+- [ ] Add consented, de-identified natural-writing examples containing no private
   text.
-- Test correction and rewrite corpora against every supported macOS system-model
-  version.
-- Benchmark selected open-source models running locally through the existing
+- [ ] Test correction and rewrite corpora against every supported macOS
+  system-model version.
+- [ ] Benchmark selected open-source models running locally through the existing
   engine boundary.
-- Revisit confidence only if calibrated evidence improves the binary automatic
-  decision without making the interaction harder to understand.
-- Keep false-positive and meaning-preservation performance ahead of raw
+- [ ] Revisit confidence only if calibrated evidence improves the binary
+  automatic decision without making the interaction harder to understand.
+- [ ] Keep false-positive and meaning-preservation performance ahead of raw
   correction coverage.
 
 ### Exit criteria
@@ -523,7 +732,8 @@ cross-version results, and repeatable local benchmarks.
 
 ## Sequencing decisions
 
-- Milestone 1 is the only active implementation milestone.
+- Milestone 1 qualification, the bounded Bear lower-latency spike, and
+  controlled-editor hardening are the active implementation lanes.
 - Remaining Phase 7 evidence is part of Milestone 1; Phase 7 is no longer a
   separate implementation stream.
 - The minimum beta shell in Milestone 2 follows the word-level Bear gate before
@@ -551,14 +761,23 @@ cross-version results, and repeatable local benchmarks.
 
 ## Immediate next slice
 
-1. Review the measured post-pause correction behavior and decide whether it is
-   the intended beta experience. If it is not, design and physically validate a
-   bounded earlier-catch-up policy before release qualification.
-2. Build the signed and notarized beta candidate and run the clean-machine
-   install and permission checklist.
-3. On that final candidate, run one fresh-process qualification: fresh Bear,
-   fresh Typover, release-config memory retirement, and the bounded
-   second-machine soak.
+1. Decide the active-tap burst product policy from the current evidence: support
+   the strict active path through 100 milliseconds per character and treat
+   60/40 millisecond bursts as safe mixed-lane recovery, or require a larger
+   repeat matrix before expanding that envelope. Keep the candidate disabled
+   by default until that decision and the installed interaction acceptance.
+2. Add release regression rows for Return/mouse invalidation followed by a
+   fresh correction and for explicit fast-to-fallback lane handoff. Preserve
+   schema-6 active-only qualification separately from mixed-lane resilience.
+3. Run an installed controlled-editor acceptance pass that measures local
+   boundary-transaction latency while typing continuously and visually checks
+   multiple squiggles, moved-caret contextual completion, composition refusal,
+   Change Back, and one-step Undo.
+4. Keep the current idle-first AX lane as the Bear production behavior while
+   the active-tap candidate is under qualification.
+5. Build and notarize the final beta candidate, then run the clean-machine
+   install, permission, fresh-process, release-memory, and second-machine soak
+   checklist against that exact artifact.
 
 Do not routinely repeat the full 20-word, severe-load, circuit-breaker, or IME
 rows. They are release regression coverage and should be rerun only when the

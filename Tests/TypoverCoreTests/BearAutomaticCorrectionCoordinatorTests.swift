@@ -60,7 +60,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
     fixture.monitor.emit(.selectionChanged)
     #expect(
       await waitUntil {
-        !fixture.applicator.requests.isEmpty
+        fixture.tracker.applications.count == 1
       }
     )
 
@@ -89,6 +89,289 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.coordinator.diagnostics.snapshot.valueChanges == 1)
     #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 0)
     #expect(fixture.coordinator.diagnostics.snapshot.lastOutcome == .applied)
+  }
+
+  @Test("The gated text-expansion path adopts a reversible correction")
+  func adoptsVerifiedTextExpansion() async throws {
+    let fixture = try Fixture(
+      textExpansionEnabled: true,
+      textExpansionVerificationDelays: [.milliseconds(1)]
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitText("t")
+    fixture.inputMonitor.emitText("e")
+    fixture.inputMonitor.emitText("h")
+    fixture.reader.result = .ready(snapshot(text: "the ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.tracker.applications.count == 1
+      }
+    )
+    #expect(fixture.textExpansionPerformer.plans.count == 1)
+    #expect(fixture.syntheticAdopter.requests.count == 1)
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.coordinator.status == .observing)
+    #expect(fixture.store.statistics().correctionsApplied == 1)
+    #expect(
+      fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1
+    )
+  }
+
+  @Test("A pre-dispatch receipt is adopted without a second synthetic write")
+  func adoptsVerifiedPreDispatchReceipt() async throws {
+    let fixture = try Fixture(
+      textExpansionEnabled: true,
+      textExpansionVerificationDelays: [.milliseconds(1)]
+    )
+    fixture.reader.result = .ready(snapshot(text: "", caret: 0))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "the ", caret: 4))
+    fixture.inputMonitor.emitPreDispatchMutation(
+      plan: BearTextExpansionPlan(
+        original: "teh",
+        replacement: "the",
+        boundary: " ",
+        deleteCount: 3,
+        insertedText: "the "
+      ),
+      authorizedSnapshot: snapshot(text: "teh", caret: 3)
+    )
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.tracker.applications.count == 1
+      }
+    )
+    #expect(fixture.textExpansionPerformer.plans.isEmpty)
+    #expect(fixture.syntheticAdopter.requests.count == 1)
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.coordinator.status == .observing)
+    #expect(fixture.store.statistics().correctionsApplied == 1)
+  }
+
+  @Test("A learned suppression never authorizes the pre-dispatch tap")
+  func learnedSuppressionDeauthorizesPreDispatchTap() throws {
+    let fixture = try Fixture(textExpansionEnabled: true)
+    let proposal = try #require(fixture.engine.proposal(for: "teh"))
+    fixture.store.recordReverted(proposal)
+    fixture.reader.result = .ready(snapshot(text: "", caret: 0))
+
+    fixture.coordinator.setEnabled(true)
+
+    #expect(
+      !fixture.inputMonitor.authorizedSnapshots.contains(where: { snapshot in
+        snapshot != nil
+      })
+    )
+    #expect(!fixture.inputMonitor.authorizedSnapshots.isEmpty)
+  }
+
+  @Test("A settled ordinary edit rearms pre-dispatch from fresh AX state")
+  func settledOrdinaryEditRearmsPreDispatch() async throws {
+    let fixture = try Fixture(textExpansionEnabled: true)
+    fixture.reader.result = .ready(snapshot(text: "the ", caret: 4))
+    fixture.coordinator.setEnabled(true)
+    let authorizationsBeforeEdit =
+      fixture.inputMonitor.authorizedSnapshots.count
+
+    fixture.inputMonitor.emitOther()
+    let freshSnapshot = snapshot(text: "the \n", caret: 5)
+    fixture.reader.result = .ready(freshSnapshot)
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.inputMonitor.authorizedSnapshots.count
+          > authorizationsBeforeEdit
+      }
+    )
+    let latestAuthorization = try #require(
+      fixture.inputMonitor.authorizedSnapshots.last
+    )
+    #expect(latestAuthorization == freshSnapshot)
+    #expect(fixture.coordinator.status == .observing)
+  }
+
+  @Test("Settled direct letters do not reset pre-dispatch authorization")
+  func settledDirectLettersPreservePreDispatchAuthorization() async throws {
+    let fixture = try Fixture(textExpansionEnabled: true)
+    fixture.reader.result = .ready(snapshot(text: "the ", caret: 4))
+    fixture.coordinator.setEnabled(true)
+    let authorizationsBeforeLetter =
+      fixture.inputMonitor.authorizedSnapshots.count
+    let readsBeforeLetter = fixture.reader.readCount
+
+    fixture.inputMonitor.emitText("t")
+    fixture.reader.result = .ready(snapshot(text: "the t", caret: 5))
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount > readsBeforeLetter
+      }
+    )
+    #expect(
+      fixture.inputMonitor.authorizedSnapshots.count
+        == authorizationsBeforeLetter
+    )
+    #expect(fixture.coordinator.status == .observing)
+  }
+
+  @Test("The deferred AX lane explicitly disarms pre-dispatch")
+  func deferredAXLaneDisarmsPreDispatch() async throws {
+    let fixture = try Fixture(
+      deferredCorrectionIdleDelay: .milliseconds(80),
+      textExpansionEnabled: true
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+    let authorizationWhileDeferred = try #require(
+      fixture.inputMonitor.authorizedSnapshots.last
+    )
+    #expect(authorizationWhileDeferred == nil)
+
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    let authorizationAfterRebaseline = try #require(
+      fixture.inputMonitor.authorizedSnapshots.last
+    )
+    #expect(authorizationAfterRebaseline != nil)
+  }
+
+  @Test("An unrecognized pre-dispatch write opens the mutation circuit")
+  func unrecognizedPreDispatchReceiptOpensCircuit() throws {
+    let fixture = try Fixture(textExpansionEnabled: true)
+    fixture.reader.result = .ready(snapshot(text: "", caret: 0))
+    fixture.coordinator.setEnabled(true)
+    let stopCountBeforeReceipt = fixture.inputMonitor.stopCount
+
+    fixture.inputMonitor.emitPreDispatchMutation(
+      plan: BearTextExpansionPlan(
+        original: "teh",
+        replacement: "ten",
+        boundary: " ",
+        deleteCount: 3,
+        insertedText: "ten "
+      ),
+      authorizedSnapshot: snapshot(text: "teh", caret: 3)
+    )
+
+    #expect(fixture.coordinator.status == .pausedAfterIndeterminateWrite)
+    #expect(fixture.inputMonitor.stopCount == stopCountBeforeReceipt + 1)
+    #expect(fixture.textExpansionPerformer.plans.isEmpty)
+    #expect(fixture.syntheticAdopter.requests.isEmpty)
+    #expect(fixture.applicator.requests.isEmpty)
+  }
+
+  @Test("An ambiguous emitted text expansion opens the mutation circuit")
+  func textExpansionVerificationFailureOpensCircuit() async throws {
+    let fixture = try Fixture(
+      textExpansionEnabled: true,
+      textExpansionVerificationDelays: [.milliseconds(1)]
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitText("t")
+    fixture.inputMonitor.emitText("e")
+    fixture.inputMonitor.emitText("h")
+    fixture.reader.result = .ready(snapshot(text: "ten ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.status == .pausedAfterIndeterminateWrite
+      }
+    )
+    #expect(fixture.textExpansionPerformer.plans.count == 1)
+    #expect(fixture.syntheticAdopter.requests.isEmpty)
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.tracker.applications.isEmpty)
+    #expect(fixture.store.statistics().correctionsApplied == 0)
+  }
+
+  @Test("Continued typing can be adopted behind the synthetic correction")
+  func textExpansionAllowsAppendOnlyTyping() async throws {
+    let fixture = try Fixture(
+      textExpansionEnabled: true,
+      textExpansionVerificationDelays: [.milliseconds(5)]
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitText("t")
+    fixture.inputMonitor.emitText("e")
+    fixture.inputMonitor.emitText("h")
+    fixture.inputMonitor.emitBoundary()
+    fixture.reader.result = .ready(snapshot(text: "the x", caret: 5))
+    fixture.inputMonitor.emitText("x")
+
+    #expect(
+      await waitUntil {
+        fixture.tracker.applications.count == 1
+      }
+    )
+    #expect(fixture.coordinator.status == .observing)
+    #expect(fixture.syntheticAdopter.requests.count == 1)
+    #expect(
+      fixture.syntheticAdopter.requests.first?.replacementRange
+        == AccessibilityTextRange(location: 0, length: 3)
+    )
+  }
+
+  @Test("Secure Input keeps the experimental path from emitting")
+  func secureInputFallsBackWithoutSyntheticWrite() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.zero)
+    let fixture = try Fixture(
+      physicalInputIdleDuration: { physicalIdle.value },
+      textExpansionEnabled: true,
+      secureInputIsActive: true
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.inputMonitor.emitText("t")
+    fixture.inputMonitor.emitText("e")
+    fixture.inputMonitor.emitText("h")
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+    #expect(fixture.applicator.requests.isEmpty)
+    physicalIdle.value = .seconds(60)
+    #expect(
+      await waitUntil {
+        fixture.applicator.requests.count == 1
+      }
+    )
+    #expect(fixture.textExpansionPerformer.plans.isEmpty)
+    #expect(fixture.syntheticAdopter.requests.isEmpty)
+    #expect(fixture.tracker.applications.count == 1)
   }
 
   @Test("Punctuation and newline keys authorize only their exact transition")
@@ -217,13 +500,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
 
     fixture.reader.result = .ready(snapshot(text: "teh teh", caret: 7))
-    let valueChangesBeforeIntermediateEdit =
-      fixture.coordinator.diagnostics.snapshot.valueChanges
+    let readsBeforeIntermediateEdit = fixture.reader.readCount
     fixture.monitor.emit(.valueChanged)
     #expect(
       await waitUntil {
-        fixture.coordinator.diagnostics.snapshot.valueChanges
-          == valueChangesBeforeIntermediateEdit + 1
+        fixture.reader.readCount >= readsBeforeIntermediateEdit + 1
       }
     )
     fixture.reader.result = .ready(snapshot(text: "teh teh ", caret: 8))
@@ -313,8 +594,10 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
   @Test("A caret move and adjacent edit invalidate a deferred correction")
   func refusesDeferredCorrectionAfterContextDrift() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.zero)
     let fixture = try Fixture(
-      deferredCorrectionIdleDelay: .milliseconds(80)
+      deferredCorrectionIdleDelay: .milliseconds(80),
+      physicalInputIdleDuration: { physicalIdle.value }
     )
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
     fixture.coordinator.setEnabled(true)
@@ -333,12 +616,20 @@ struct BearAutomaticCorrectionCoordinatorTests {
     fixture.reader.result = .ready(
       snapshot(text: "tehx ", caret: 4, documentLength: 5)
     )
+    let readsBeforeSelectionChange = fixture.reader.readCount
     fixture.monitor.emit(.selectionChanged)
-    fixture.monitor.emit(.valueChanged)
-
-    try await Task.sleep(for: .milliseconds(140))
+    #expect(
+      await waitUntil {
+        fixture.reader.readCount > readsBeforeSelectionChange
+      }
+    )
+    physicalIdle.value = .seconds(60)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips >= 1
+      }
+    )
     #expect(fixture.applicator.requests.isEmpty)
-    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips >= 1)
     #expect(
       fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
     )
@@ -403,8 +694,10 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
   @Test("Post-burst catch-up applies queued corrections from end to beginning")
   func catchesUpInReverseDocumentOrder() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.zero)
     let fixture = try Fixture(
-      deferredCorrectionIdleDelay: .milliseconds(150)
+      deferredCorrectionIdleDelay: .milliseconds(150),
+      physicalInputIdleDuration: { physicalIdle.value }
     )
     fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
     fixture.coordinator.setEnabled(true)
@@ -439,6 +732,9 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
     #expect(fixture.applicator.requests.isEmpty)
 
+    // Release the injected physical-idle gate only after both corrections are
+    // queued. This keeps parallel test load from racing the production timer.
+    physicalIdle.value = .seconds(60)
     #expect(
       await waitUntil {
         fixture.applicator.requests.count == 2
@@ -964,7 +1260,7 @@ struct BearAutomaticCorrectionCoordinatorTests {
       base: base,
       environment: [
         BearAutomaticCorrectionDebugFaults.environmentKey:
-          BearAutomaticCorrectionDebugFaults.unreconciledPostWriteValue,
+          BearAutomaticCorrectionDebugFaults.unreconciledPostWriteValue
       ]
     )
 
@@ -1083,6 +1379,8 @@ private final class Fixture {
   let applicator = TestCorrectionApplicator()
   let tracker = TestAnnotationTracker()
   let inputMonitor = TestTypingInputMonitor()
+  let textExpansionPerformer = TestCoordinatorTextExpansionPerformer()
+  let syntheticAdopter = TestCoordinatorSyntheticAdopter()
   let store: CorrectionLearningStore
   let coordinator: BearAutomaticCorrectionCoordinator
   let workspaceNotificationCenter = NotificationCenter()
@@ -1095,7 +1393,10 @@ private final class Fixture {
     deferredCorrectionIdleDelay: Duration = .milliseconds(20),
     physicalInputIdleDuration: @escaping @MainActor @Sendable () -> Duration? = {
       .seconds(60)
-    }
+    },
+    textExpansionEnabled: Bool = false,
+    secureInputIsActive: Bool = false,
+    textExpansionVerificationDelays: [Duration] = [.milliseconds(1)]
   ) throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1111,6 +1412,13 @@ private final class Fixture {
       invalidationMonitor: monitor,
       correctionEngine: engine,
       correctionApplicator: applicator,
+      textExpansionLane:
+        textExpansionEnabled
+        ? BearTextExpansionExperimentalLane(
+          performer: textExpansionPerformer,
+          adopter: syntheticAdopter
+        )
+        : nil,
       annotationTracker: tracker,
       typingInputMonitor: inputMonitor,
       environmentChecker: TestBearEnvironmentChecker(
@@ -1126,6 +1434,9 @@ private final class Fixture {
       physicalInputIdleDuration: physicalInputIdleDuration,
       observationRestartDelay: .milliseconds(1),
       privateDiagnosticsEnabled: { false },
+      textExpansionExperimentEnabled: { textExpansionEnabled },
+      secureInputIsActive: { secureInputIsActive },
+      textExpansionVerificationDelays: textExpansionVerificationDelays,
       workspaceNotificationCenter: workspaceNotificationCenter
     )
   }
@@ -1149,6 +1460,7 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
   private(set) var startCount = 0
   private(set) var stopCount = 0
   var startResults: [Bool] = []
+  private(set) var authorizedSnapshots: [BearTypingContextSnapshot?] = []
 
   func start(
     handler: @escaping @MainActor @Sendable (BearTypingInputObservation) -> Void
@@ -1167,22 +1479,59 @@ private final class TestTypingInputMonitor: BearTypingInputMonitoring {
     handler = nil
   }
 
+  func authorizePreDispatch(
+    from snapshot: BearTypingContextSnapshot?
+  ) {
+    authorizedSnapshots.append(snapshot)
+  }
+
   func emitBoundary(_ character: String = " ") {
-    emit(.completionBoundary(character))
+    emit(
+      .completionBoundary(character),
+      token: .boundary(character)
+    )
   }
 
   func emitUndoOrRedo() {
-    emit(.undoOrRedo)
+    emit(.undoOrRedo, token: .invalidate)
   }
 
   func emitOther() {
-    emit(.other)
+    emit(.other, token: .invalidate)
   }
 
-  private func emit(_ intent: BearTypingInputIntent) {
+  func emitText(_ text: String) {
+    emit(.other, token: .text(text))
+  }
+
+  func emitPreDispatchMutation(
+    plan: BearTextExpansionPlan,
+    authorizedSnapshot: BearTypingContextSnapshot
+  ) {
+    let observedAt = ContinuousClock().now
+    handler?(
+      BearTypingInputObservation(
+        intent: .completionBoundary(plan.boundary),
+        textExpansionToken: .boundary(plan.boundary),
+        observedAt: observedAt,
+        preDispatchMutation: BearPreDispatchMutationReceipt(
+          plan: plan,
+          predictedAuthorizedSnapshot: authorizedSnapshot,
+          boundaryObservedAt: observedAt,
+          callbackDuration: .microseconds(50)
+        )
+      )
+    )
+  }
+
+  private func emit(
+    _ intent: BearTypingInputIntent,
+    token: BearTextExpansionInputToken
+  ) {
     handler?(
       BearTypingInputObservation(
         intent: intent,
+        textExpansionToken: token,
         observedAt: ContinuousClock().now
       )
     )
@@ -1354,6 +1703,66 @@ private final class TestCorrectionApplicator:
       correctionAnchor: BearCorrectionAnchor(
         correctionRange: replacementRange,
         documentLength: replacement.utf16.count + 1,
+        leadingContext: "",
+        trailingContext: " "
+      )
+    )
+  }
+}
+
+private final class TestCoordinatorTextExpansionPerformer:
+  BearTextExpansionPerforming, @unchecked Sendable
+{
+  private let lock = NSLock()
+  private var storedPlans: [BearTextExpansionPlan] = []
+
+  var plans: [BearTextExpansionPlan] {
+    lock.withLock { storedPlans }
+  }
+
+  func perform(_ plan: BearTextExpansionPlan) -> Bool {
+    lock.withLock {
+      storedPlans.append(plan)
+    }
+    return true
+  }
+}
+
+private final class TestCoordinatorSyntheticAdopter:
+  BearSyntheticCorrectionAdopting, @unchecked Sendable
+{
+  private let lock = NSLock()
+  private var storedRequests: [BearSyntheticCorrectionAdoptionRequest] = []
+
+  var requests: [BearSyntheticCorrectionAdoptionRequest] {
+    lock.withLock { storedRequests }
+  }
+
+  func adoptSyntheticCorrection(
+    _ request: BearSyntheticCorrectionAdoptionRequest
+  ) -> BearCorrectionApplication {
+    lock.withLock {
+      storedRequests.append(request)
+    }
+    let correction = Correction(
+      original: request.original,
+      replacement: request.replacement
+    )
+    return BearCorrectionApplication(
+      report: BearExactRangeReplacementReport(
+        status: .applied,
+        writeOccurred: true,
+        targetRange: request.originalRange,
+        replacementRange: request.replacementRange,
+        selectionAfter: request.selectionAfter,
+        surroundingContextVerified: true,
+        caretRestored: true
+      ),
+      correction: correction,
+      correctionRecord: CorrectionRecord(correction: correction),
+      correctionAnchor: BearCorrectionAnchor(
+        correctionRange: request.replacementRange,
+        documentLength: request.selectionAfter.location,
         leadingContext: "",
         trailingContext: " "
       )
