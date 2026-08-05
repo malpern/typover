@@ -33,6 +33,56 @@ struct LearningSettingsViewTests {
   }
 
   @Test
+  func `Permission setup opens the next missing macOS pane`() {
+    let neitherAllowed = TypoverPermissionSnapshot(
+      accessibilityAllowed: false,
+      inputMonitoringAllowed: false
+    )
+    let onlyAccessibilityAllowed = TypoverPermissionSnapshot(
+      accessibilityAllowed: true,
+      inputMonitoringAllowed: false
+    )
+    let bothAllowed = TypoverPermissionSnapshot(
+      accessibilityAllowed: true,
+      inputMonitoringAllowed: true
+    )
+
+    #expect(neitherAllowed.nextSystemSettingsDestination == .accessibility)
+    #expect(
+      String(localized: neitherAllowed.setupButtonTitle)
+        == "Set Up Accessibility…"
+    )
+    #expect(
+      onlyAccessibilityAllowed.nextSystemSettingsDestination == .inputMonitoring
+    )
+    #expect(
+      String(localized: onlyAccessibilityAllowed.setupButtonTitle)
+        == "Set Up Input Monitoring…"
+    )
+    #expect(bothAllowed.nextSystemSettingsDestination == .privacyAndSecurity)
+    #expect(
+      String(localized: bothAllowed.setupButtonTitle)
+        == "Open Privacy & Security…"
+    )
+  }
+
+  @Test
+  func `Permission destinations use macOS privacy pane URLs`() {
+    #expect(
+      TypoverSystemSettingsDestination.accessibility.url?.absoluteString
+        == "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    )
+    #expect(
+      TypoverSystemSettingsDestination.inputMonitoring.url?.absoluteString
+        == "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+    )
+    #expect(
+      TypoverSystemSettingsDestination.privacyAndSecurity.url?.absoluteString
+        == "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
+    )
+  }
+
+  @Test
   func `A new Bear preview supersedes only an active interaction`() {
     #expect(BearOverlayPreviewStatus.idle.previewRequestAction == .start)
     #expect(

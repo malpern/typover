@@ -1,7 +1,7 @@
 # Controlled-editor acceptance
 
-- Status: Exact notarized candidate accepted; one pointer-only menu rerun pending
-- Updated: 2026-08-04
+- Status: Exact notarized candidate accepted
+- Updated: 2026-08-05
 
 This is the human-facing acceptance gate for Typover's owned AppKit/TextKit
 editor. Automated tests remain the safety backstop, but they do not replace
@@ -46,6 +46,8 @@ gate on macOS 27.0:
 |---|---|
 | Continued typing | One uninterrupted `teh teh teh ` action produced `the the the `. |
 | Independent annotations | All three words retained distinct light-gray squiggles. |
+| Change Back | A pointer click on the first squiggle opened the native menu; `Revert to “teh”` restored only that word while both sibling annotations remained. |
+| One-step Undo | Command-Z restored the first correction and all three annotations. |
 | Contextual correction | A separately typed final period started the on-device request and `We should of left earlier.` became `We should have left earlier.`. |
 | Earlier caret | Inserting and completing that sentence between `Earlier text.` and `Later text.` corrected only the inserted sentence and preserved both neighbors. |
 | Build identity | About showed version `0.1.0`, build `20260804072103`, and source `e38f535ee2`. |
@@ -59,19 +61,18 @@ letters, digits, whitespace, and punctuation, and the beta build runs that
 test in `release` configuration before signing. See
 [the bug record](../bugs/2026-08-04-release-sentence-boundary-optimization.md).
 
-The exact candidate's pointer-only Change Back menu could not be re-opened by
-the automation driver because its coordinate click could not target the
-restored Space. The immediately preceding notarized candidate passed Change
-Back, sibling retention, and Undo, and the final revision did not change those
-paths. That is useful regression evidence, but it is not substituted for the
-remaining exact-candidate pointer click.
+On 2026-08-05, the pointer-only interaction was repeated against the exact
+installed candidate. Three live corrections showed three independent gray
+squiggles. Clicking the first mark opened the native menu with
+`Revert to “teh”`; choosing it restored only the first word and preserved the
+other two marks. One Command-Z returned the editor to `the the the ` and
+restored all three annotations.
 
 ## Release-candidate gate
 
 The exact candidate has passed continued typing, independent annotations,
-contextual correction, and earlier-caret rows. Repeat the pointer-only Change
-Back and its one-step Undo once the window is on the active Space. The full
-338-test debug suite and the safety-critical optimized test pass at the
-candidate revision. The release gate fails if any
+pointer-only Change Back, one-step Undo, contextual correction, and
+earlier-caret rows. The full 338-test debug suite and the safety-critical
+optimized test pass at the candidate revision. The release gate fails if any
 correction replaces more than the intended range, loses a sibling annotation,
 interrupts marked-text composition, or cannot be undone as one transaction.

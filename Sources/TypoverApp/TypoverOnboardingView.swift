@@ -7,6 +7,45 @@ import SwiftUI
 struct TypoverPermissionSnapshot: Equatable, Sendable {
   let accessibilityAllowed: Bool
   let inputMonitoringAllowed: Bool
+
+  var nextSystemSettingsDestination: TypoverSystemSettingsDestination {
+    if !accessibilityAllowed {
+      return .accessibility
+    }
+    if !inputMonitoringAllowed {
+      return .inputMonitoring
+    }
+    return .privacyAndSecurity
+  }
+
+  var setupButtonTitle: LocalizedStringResource {
+    switch nextSystemSettingsDestination {
+    case .accessibility:
+      "Set Up Accessibility…"
+    case .inputMonitoring:
+      "Set Up Input Monitoring…"
+    case .privacyAndSecurity:
+      "Open Privacy & Security…"
+    }
+  }
+}
+
+enum TypoverSystemSettingsDestination: Equatable, Sendable {
+  case accessibility
+  case inputMonitoring
+  case privacyAndSecurity
+
+  var url: URL? {
+    let value = switch self {
+    case .accessibility:
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    case .inputMonitoring:
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+    case .privacyAndSecurity:
+      "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
+    }
+    return URL(string: value)
+  }
 }
 
 protocol TypoverPermissionChecking: Sendable {
@@ -41,6 +80,12 @@ final class TypoverPermissionModel {
   }
 
   func openSystemSettings() {
+    if let destinationURL = snapshot.nextSystemSettingsDestination.url,
+       NSWorkspace.shared.open(destinationURL)
+    {
+      return
+    }
+
     guard
       let settingsURL = NSWorkspace.shared.urlForApplication(
         withBundleIdentifier: "com.apple.systempreferences"
@@ -62,6 +107,7 @@ struct TypoverOnboardingView: View {
       TypoverOnboardingHeader()
       TypoverPermissionBenefits(
         snapshot: permissionModel.snapshot,
+        setupButtonTitle: permissionModel.snapshot.setupButtonTitle,
         onOpenSettings: permissionModel.openSystemSettings
       )
       TypoverOnboardingActions(onContinue: onContinue)
@@ -112,6 +158,7 @@ private struct TypoverOnboardingHeader: View {
 
 private struct TypoverPermissionBenefits: View {
   let snapshot: TypoverPermissionSnapshot
+  let setupButtonTitle: LocalizedStringResource
   let onOpenSettings: () -> Void
 
   var body: some View {
@@ -133,12 +180,7 @@ private struct TypoverPermissionBenefits: View {
 
       HStack {
         Button(action: onOpenSettings) {
-          Text(
-            "Open Privacy & Security…",
-            bundle: #bundle,
-            comment:
-            "Button that opens System Settings for Typover permission setup."
-          )
+          Text(setupButtonTitle)
         }
         .accessibilityIdentifier("typover.onboarding.open-system-settings")
 
@@ -264,12 +306,7 @@ struct TypoverPermissionsSettingsSection: View {
       )
       HStack {
         Button(action: permissionModel.openSystemSettings) {
-          Text(
-            "Open Privacy & Security…",
-            bundle: #bundle,
-            comment:
-            "Button in Typover Settings that opens macOS permission settings."
-          )
+          Text(permissionModel.snapshot.setupButtonTitle)
         }
         .accessibilityIdentifier("typover.settings.permissions.open")
 

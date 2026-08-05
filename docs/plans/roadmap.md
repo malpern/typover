@@ -1,9 +1,10 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-04
-- Current focus: Validate brief contextual marks in the owned editor, spike a
-  reliable Bear approximation, then resume final Bear qualification
+- Updated: 2026-08-05
+- Current focus: Build the replacement notarized candidate with the permission
+  fix, finish the clean-machine permission journey, then audit the shipped
+  claims and publish the beta
 
 ## Goal
 
@@ -39,10 +40,10 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **Exact candidate accepted with one pointer rerun open** | Notarized 0.1.0 passes uninterrupted three-word correction, three annotations, contextual correction, earlier-caret correction, About provenance, Settings Accessibility, 338 debug tests, and an optimized boundary gate | Re-open pointer-only Change Back on the final candidate and verify its one-step Undo |
-| Brief contextual marks | **In progress — all three surfaces implemented** | 1.5-second confirmation, 180 ms fade, exact sentence-local editor review, bounded nearby-text Bear review, menu pinning, Always Visible preference, deterministic tests, and a verified marketing focus/review prototype | Visually qualify pointer dwell plus the installed editor and Bear implementation under wrapping, scrolling, multiple marks, and idle/pointer energy measurement |
+| Controlled AppKit editor | **Exact candidate accepted; quiet review implemented in source** | Notarized 0.1.0 passes uninterrupted three-word correction, three annotations, pointer-only Change Back, one-step Undo, contextual correction, earlier-caret correction, About provenance, Settings Accessibility, 352 debug tests, and an optimized boundary gate. Source adds sentence review and deliberate hover-to-menu | Build the replacement candidate and visually accept the final fade, review, hover-menu, dismissal, and Reduced Motion behavior |
+| Brief contextual marks | **In progress — both lanes implemented in source** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The editor uses exact sentence geometry; Bear uses one collection-level pointer monitor and bounded line proximity | Validate the installed editor visually, then run Bear geometry, focus, scrolling, wrapped-line, load, VoiceOver, and physical-typing acceptance before enabling the behavior in a beta candidate |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
-| Milestone 1: Bear word correction | **In progress — user-presence gate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, and post-pause product decision | Grant final-candidate Input Monitoring, then run fresh physical Bear qualification and soak |
+| Milestone 1: Bear word correction | **Beta envelope qualified** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and fresh-process notarized-candidate qualification through 60 ms per key | Treat the single safe 40 ms stress miss as a documented extreme-speed limit; do not expand the beta claim |
 | Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
 | Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
@@ -96,11 +97,24 @@ Status meanings:
 - [x] Build and notarize candidate `0.1.0 (20260804072103)` from clean
   revision `e38f535ee2715ff52a8247a9e19e7b882996e13e`; verify its receipt,
   checksum, stapled ticket, Gatekeeper result, and optimized regression gate.
+  Its correction evidence remains valid, but the clean first-run pass
+  superseded it for distribution after finding the permission-pane misroute.
+- [ ] Build and notarize a replacement 0.1.0 candidate from the clean
+  permission-flow revision; repeat receipts, Gatekeeper, optimized tests,
+  owned-editor smoke, both permission links, and one fresh Bear physical row.
 - [ ] Finish the clean-machine permission checklist. Artifact verification,
   installation, and fresh GUI launch pass on the second Mac; visible permission
-  grant/revocation needs an unlocked authenticated session.
-- [ ] Qualify that exact candidate with fresh Bear and Typover processes and
-  release-config memory retirement. The bounded second-machine soak passed.
+  grant/revocation needs an unlocked authenticated session. The 2026-08-05
+  first-run pass verified the explanation, both denied states, and deferred
+  controlled-editor access, but found that the permission button opened
+  System Settings at General. Source now guides Accessibility first and Input
+  Monitoring second; the replacement notarized candidate must repeat this row.
+- [x] Qualify that exact candidate with fresh Bear and Typover processes and
+  release-config memory retirement. Two 2026-08-05 physical runs observed
+  159/160 corrections across 160/100/60/40 ms rows, including 20/20 through
+  60 ms with both processes fresh. The lone 40 ms result was an exact safe
+  `teh` miss with no corruption; the newest-24 retention cap behaved exactly
+  as configured. The bounded second-machine soak also passed.
 
 ### Required before a public beta
 
@@ -263,9 +277,9 @@ The pass found a release-only sentence-boundary misclassification that debug
 tests had missed; revision `e38f535` fixes it and makes an optimized regression
 test a pre-signing gate. Content-free instrumentation previously measured three
 local correction transactions at 0.350–0.461 milliseconds. The full suite now
-passes 338 tests in 30 suites. Pointer-only Change Back plus its one-step Undo
-remain the final exact-candidate editor rerun because the automation driver's
-coordinate click could not target the restored Space.
+passes 338 tests in 30 suites. The exact candidate's pointer-only Change Back
+and one-step Undo now pass as well: reverting the first of three corrections
+preserved both sibling annotations, and Command-Z restored all three.
 
 Bear now supports guarded exact-range replacement, independent Change Back,
 ranked alternatives, bounded context re-anchoring, wrapped-range geometry, a
@@ -289,6 +303,17 @@ unambiguous note body, then attach value and selection observation only after a
 native editor is available. This closes the gap where entering the note after a
 title or search field had been focused could otherwise leave automatic
 correction dormant.
+
+The exact notarized `0.1.0 (20260804072103)` candidate completed its final
+fresh-process physical qualification on 2026-08-05. A first fresh-Typover run
+corrected 80/80 words across 160/100/60/40 ms. After Bear was restarted, the
+second run corrected 20/20 at 160, 100, and 60 ms and 19/20 at 40 ms. The
+remaining token stayed exactly `teh`; there was no unexpected text, circuit
+break, lost focus, refused replacement, or late ESP32 report. Overlay history
+grew to the configured 24-item cap and then retired older corrections without
+dropping the newest tracked set. Evidence is stored under runs
+`typover-hid-2026-08-05T21-47-41Z` and
+`typover-hid-2026-08-05T21-50-26Z`.
 
 Bear's keyboard and Accessibility notifications are independent asynchronous
 streams, and exact-range replacement is a comparatively slow Accessibility

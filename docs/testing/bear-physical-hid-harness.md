@@ -390,3 +390,29 @@ its environment gate for the first beta. The beta continues to use the
 serialized 220 millisecond idle-first AX lane; the research fast-path claim is
 limited to lowercase ASCII words completed with Space at 100 milliseconds per
 key or slower.
+
+## Exact notarized-candidate qualification: 2026-08-05
+
+Candidate `0.1.0 (20260804072103)` from clean revision `e38f535` completed two
+quiet-host physical matrices with the experimental event-tap gate disabled.
+
+| Run | Process state | 160 ms | 100 ms | 60 ms | 40 ms | Unexpected text | Late reports |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `typover-hid-2026-08-05T21-47-41Z` | Fresh installed Typover; existing Bear | 20/20 | 20/20 | 20/20 | 20/20 | 0 | 0 |
+| `typover-hid-2026-08-05T21-50-26Z` | Fresh installed Typover and fresh Bear | 20/20 | 20/20 | 20/20 | 19/20 | 0 | 0 |
+
+The lone second-run miss stayed exactly `teh`; no joined token, stale-caret
+write, circuit break, replacement refusal, or unexpected chunk appeared. Focus
+and load evidence remained valid in all eight rows. Maximum ESP32 lateness was
+221 microseconds in the first matrix and 48 microseconds in the second.
+
+The first row in each matrix retained 20/20 visible correction windows from an
+empty baseline. Later rows reached and held the release configuration's newest-
+24 correction cap. Their CLI summary says overlay evidence is unavailable
+because the baseline was already populated, but the structured evidence records
+the expected 24-to-24 retirement behavior; it is not an overlay-loss failure.
+
+This closes fresh-process candidate qualification for the beta envelope. The
+40 ms row is retained as an extreme-speed resilience stress case, not a claim
+that every token is corrected. Its acceptance contract is fail-safe unchanged
+text, never corruption.
