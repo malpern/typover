@@ -116,7 +116,7 @@ contextual analysis.
 ## Correction-mark visibility
 
 The default **Brief + contextual** interaction keeps each new light-gray
-squiggle fully visible for four seconds, then fades it over 150 milliseconds.
+squiggle fully visible for 1.5 seconds, then fades it over 180 milliseconds.
 The correction record, original text, alternatives, Undo transaction, and menu
 remain intact after the mark disappears.
 
@@ -124,9 +124,9 @@ Reviewing a sentence reveals every unresolved correction in that sentence:
 
 - pointer review uses the sentence's rendered TextKit line fragments, expanded
   by 12 points horizontally and 6 points vertically;
-- a 100-millisecond dwell prevents marks from flashing during incidental
+- a 220-millisecond dwell prevents marks from flashing during incidental
   pointer travel;
-- a 250-millisecond exit grace prevents flicker at fragment boundaries;
+- a 280-millisecond exit grace prevents flicker at fragment boundaries;
 - clicking or navigating the insertion point into an earlier sentence reveals
   its corrections, but ordinary continued typing clears that caret review so
   the active sentence does not stay permanently decorated; and
@@ -138,9 +138,13 @@ reviewed sentence return together; corrections in other sentences remain
 hidden. **Always Visible** keeps every unresolved mark drawn. The preference is
 stored in the standard macOS application-preferences domain.
 
-This interaction is implemented only in Typover's controlled editor. Bear
-continues using persistent overlay marks until the dedicated geometry,
-performance, and interaction spike establishes a reliable approximation.
+The controlled editor uses exact TextKit sentence fragments. Bear cannot expose
+the same sentence geometry, so its implementation caches only already-verified
+correction placement and reveals nearby marks within a bounded visual corridor.
+One shared, throttled pointer monitor performs no Accessibility read on mouse
+movement, invisible panels are removed rather than left over Bear, and an open
+menu pins its mark. Bear's approximation still requires installed-app visual,
+scrolling, wrapping, and energy qualification before it becomes a public claim.
 
 ## Transaction safety
 

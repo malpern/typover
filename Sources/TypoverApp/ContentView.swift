@@ -115,7 +115,7 @@ private struct EditorLabSection: View {
       }
 
       Text(
-        "The word changes automatically. Its light-gray squiggle fades after a moment, then returns when you review that sentence so you can change it back or choose another correction.",
+        "The word changes automatically. Its light-gray squiggle briefly confirms the change, then returns when you review that sentence so you can change it back or choose another correction.",
         bundle: #bundle,
         comment:
           "Instructions below the Typover editor explaining the reversible correction interaction."

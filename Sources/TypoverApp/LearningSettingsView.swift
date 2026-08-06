@@ -53,6 +53,7 @@ struct LearningSettingsView: View {
       bearAutomaticCorrectionCoordinator
         ?? BearAutomaticCorrectionCoordinator(
           learningStore: learningStore,
+          behaviorSettings: behaviorSettings,
           correctionAdapter: bearCorrectionAdapter
         )
   }
@@ -671,7 +672,7 @@ private extension CorrectionMarkVisibility {
   var explanation: LocalizedStringResource {
     switch self {
     case .briefAndContextual:
-      "Marks fade after four seconds and return when you review or move the insertion point into that sentence."
+      "Marks fade after a brief confirmation. They return across the sentence in Typover, or near the pointer in Bear."
     case .alwaysVisible:
       "Every unresolved automatic correction remains marked."
     }

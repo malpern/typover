@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import TypoverAccessibility
 
 @MainActor
@@ -8,7 +9,14 @@ public protocol BearAnnotationPresenting: AnyObject {
     interaction: BearAnnotationInteraction
   )
   func showMenu()
+  func fadeOut(duration: TimeInterval)
   func hide()
+}
+
+extension BearAnnotationPresenting {
+  public func fadeOut(duration _: TimeInterval) {
+    hide()
+  }
 }
 
 @MainActor
@@ -57,9 +65,7 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
         interaction: interaction,
         isPrimaryAccessibilityElement: index == 0
       )
-      if !panel.isVisible {
-        panel.orderFrontRegardless()
-      }
+      panel.present()
     }
   }
 
@@ -67,9 +73,15 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
     panels.first(where: \.isVisible)?.showMenu()
   }
 
-  public func hide() {
+  public func fadeOut(duration: TimeInterval) {
     for panel in panels where panel.isVisible {
-      panel.orderOut(nil)
+      panel.fadeOut(duration: duration)
+    }
+  }
+
+  public func hide() {
+    for panel in panels {
+      panel.hideImmediately()
     }
   }
 }
@@ -77,6 +89,7 @@ public final class AppKitBearAnnotationPresenter: BearAnnotationPresenting {
 @MainActor
 final class BearSquigglePanel: NSPanel {
   private let squiggleView: BearSquiggleView
+  private var visibilityGeneration = 0
 
   init() {
     squiggleView = BearSquiggleView(
@@ -133,6 +146,43 @@ final class BearSquigglePanel: NSPanel {
 
   func showMenu() {
     squiggleView.showMenu()
+  }
+
+  func present() {
+    visibilityGeneration += 1
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0
+      animator().alphaValue = 1
+    }
+    if !isVisible {
+      orderFrontRegardless()
+    }
+  }
+
+  func fadeOut(duration: TimeInterval) {
+    visibilityGeneration += 1
+    let generation = visibilityGeneration
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = duration
+      context.timingFunction = CAMediaTimingFunction(
+        name: .easeOut
+      )
+      animator().alphaValue = 0
+    } completionHandler: { [weak self] in
+      Task { @MainActor in
+        guard let self, self.visibilityGeneration == generation else {
+          return
+        }
+        self.orderOut(nil)
+        self.alphaValue = 1
+      }
+    }
+  }
+
+  func hideImmediately() {
+    visibilityGeneration += 1
+    orderOut(nil)
+    alphaValue = 1
   }
 
   override var canBecomeKey: Bool { false }
@@ -197,11 +247,13 @@ final class BearSquiggleView: NSView {
       return
     }
     let session = BearAnnotationMenuSession(interaction: interaction)
+    interaction.menuVisibilityHandler(true)
     session.onClose = { [weak self] menu in
       guard self?.menuSession?.menu === menu else {
         return
       }
       self?.menuSession = nil
+      interaction.menuVisibilityHandler(false)
     }
     menuSession = session
     let menu = session.menu

@@ -17,7 +17,8 @@ struct TypoverApp: App {
     let behaviorSettings = CorrectionBehaviorSettings()
     let learningStore = CorrectionLearningStore()
     let automaticCoordinator = BearAutomaticCorrectionCoordinator(
-      learningStore: learningStore
+      learningStore: learningStore,
+      behaviorSettings: behaviorSettings
     )
     automaticCoordinator.setEnabled(
       behaviorSettings.bearAutomaticCorrectionEnabled

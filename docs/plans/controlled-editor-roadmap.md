@@ -27,7 +27,7 @@ attempts to reproduce those capabilities through Accessibility in another app.
 
 ### 1a. Brief, contextual correction marks
 
-- [x] Keep a new correction visible for four seconds, then fade it quietly.
+- [x] Keep a new correction visible for 1.5 seconds, then fade it quietly.
 - [x] Reveal every correction in the reviewed sentence from a padded TextKit
       hover corridor.
 - [x] Reveal from deliberate caret navigation without keeping the actively
