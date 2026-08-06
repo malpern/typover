@@ -16,9 +16,11 @@ long-form writing and makes individual changes hard to trust or reverse.
 Typover automatically applies only the most likely corrections and preserves
 visible, reversible provenance for each one.
 
-A corrected word receives a light-gray squiggle for four seconds. The mark then
+A corrected word receives a light-gray squiggle for 1.5 seconds. The mark then
 fades to reduce visual noise and returns when the pointer or a deliberately
-moved insertion point reviews that sentence. Selecting it shows:
+moved insertion point reviews that sentence in Typover's editor. Bear uses a
+bounded nearby-text corridor because it does not expose reliable sentence
+fragments. Selecting a visible mark shows:
 
 - the original typed word;
 - other likely corrections;

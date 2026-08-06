@@ -592,6 +592,7 @@ final class BearAutomaticCorrectionCoordinator {
 
   convenience init(
     learningStore: CorrectionLearningStore,
+    behaviorSettings: CorrectionBehaviorSettings,
     correctionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
   ) {
     let preDispatchExperimentEnabled =
@@ -614,7 +615,12 @@ final class BearAutomaticCorrectionCoordinator {
         ? BearTextExpansionExperimentalLane(adopter: correctionAdapter)
         : nil,
       annotationTracker: BearAnnotationOverlayCollectionController(
-        adapter: correctionAdapter
+        adapter: correctionAdapter,
+        markVisibility: {
+          behaviorSettings.correctionMarkVisibility == .alwaysVisible
+            ? .alwaysVisible
+            : .briefAndContextual
+        }
       ),
       typingInputMonitor:
         preDispatchExperimentEnabled

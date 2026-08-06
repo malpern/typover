@@ -723,7 +723,7 @@ both still require permissioned live-app verification.
 ## Phase 9: Brief contextual overlay spike
 
 The controlled editor now defines the preferred interaction: a correction mark
-appears for four seconds, fades, and returns with the other corrections in its
+appears for 1.5 seconds, fades, and returns with the other corrections in its
 sentence during deliberate review. Bear must not copy that implementation
 blindly. Its annotations are independent nonactivating panels, and hidden
 panels cannot safely act as hover targets.
@@ -738,6 +738,15 @@ Spike these reveal strategies without changing the first-beta default:
 3. **Bounded proximity** — reveal corrections within a measured horizontal and
    vertical radius only as a fallback experiment, not as the reference UX.
 
+The first implementation selects bounded proximity: every controller caches
+only its last verified visible placements; one shared mouse monitor samples at
+most every 40 milliseconds; a 220-millisecond dwell reveals nearby corrections;
+and a 280-millisecond exit grace fades them again. Hidden AppKit panels are
+ordered out, so they cannot intercept selection or typing. Pointer movement
+performs no Accessibility query. **Always Visible** and VoiceOver retain stable
+marks. This is ready for the matrix below, not yet a production-quality Bear
+claim.
+
 Do not place transparent panels over Bear; they could intercept selection and
 clicks. Do not issue Accessibility reads on every mouse movement. Cache only
 ranges and geometry, throttle the shared monitor, and invalidate on scroll,
@@ -747,7 +756,7 @@ The spike must record:
 
 - wrapped sentences, multiple corrections, scrolling, edits, full screen, and
   multiple displays;
-- 100-millisecond dwell, 250-millisecond exit grace, menu pinning, and the
+- 220-millisecond dwell, 280-millisecond exit grace, menu pinning, and the
   Always Visible fallback;
 - CPU and Accessibility-call rates at idle and during pointer movement;
 - whether every visible mark remains aligned and clickable while Bear stays
@@ -755,9 +764,8 @@ The spike must record:
 - a clear decision between exact sentence regions, line bands, bounded
   proximity, or retaining persistent Bear marks.
 
-Until that matrix passes, Bear keeps its existing persistent overlay behavior
-and marketing claims describe brief contextual marks as the owned-editor
-experience only.
+Until that matrix passes, marketing describes Bear marks as resurfacing near
+reviewed text and does not claim exact sentence reconstruction.
 
 ## Bear CLI fallback evaluation
 

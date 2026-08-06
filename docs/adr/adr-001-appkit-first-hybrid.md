@@ -57,7 +57,8 @@ interaction.
 1. Keep `TypoverCore` UI-independent.
 2. Add a controlled AppKit/TextKit editor.
 3. Automatically correct one narrowly eligible word using a range-level edit.
-4. Render a persistent light-gray squiggle on that correction.
+4. Render a reversible light-gray squiggle on that correction; ADR-019 governs
+   its current brief, contextual presentation.
 5. Let the writer select the mark and restore the original word.
 6. Preserve correct selection, caret, scrolling, and Undo behavior.
 7. Only then evaluate Accessibility-based replacement and external overlays in

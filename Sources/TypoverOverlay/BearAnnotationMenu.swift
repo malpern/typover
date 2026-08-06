@@ -27,11 +27,15 @@ public struct BearAnnotationInteraction {
   public let items: [BearAnnotationMenuItem]
   public let accessibilityLabel: String
   public let handler: @MainActor @Sendable (BearAnnotationAction) -> Void
+  public let menuVisibilityHandler: @MainActor @Sendable (Bool) -> Void
 
   public init(
     id: UUID = UUID(),
     items: [BearAnnotationMenuItem],
     accessibilityLabel: String,
+    menuVisibilityHandler: @escaping @MainActor @Sendable (Bool) -> Void = {
+      _ in
+    },
     handler:
       @escaping @MainActor @Sendable (
         BearAnnotationAction
@@ -40,6 +44,7 @@ public struct BearAnnotationInteraction {
     self.id = id
     self.items = items
     self.accessibilityLabel = accessibilityLabel
+    self.menuVisibilityHandler = menuVisibilityHandler
     self.handler = handler
   }
 }

@@ -41,6 +41,11 @@ public enum BearAnnotationResolution: Equatable, Sendable {
 @MainActor
 public final class BearAnnotationOverlayController {
   public static let fallbackRefreshInterval = Duration.milliseconds(125)
+  public static let briefMarkDuration = Duration.milliseconds(1_500)
+  public static let markFadeDuration: TimeInterval = 0.18
+
+  private static let pointerHorizontalRadius: CGFloat = 220
+  private static let pointerVerticalRadius: CGFloat = 14
 
   private let logger = Logger(
     subsystem: "com.malpern.typover",
@@ -56,6 +61,11 @@ public final class BearAnnotationOverlayController {
   private let textChangeRefreshDelay: Duration
   private let selectionStabilizationDelays: [Duration]
   private let handlesKeyboardShortcut: Bool
+  private let markVisibility:
+    @MainActor @Sendable () ->
+      BearAnnotationMarkVisibility
+  private let briefMarkDuration: Duration
+  private let markFadeDuration: TimeInterval
   private let shortcutRegistrar: any BearAnnotationShortcutRegistering
   private let hostApplicationBundleIdentifier: String?
   private let voiceOverEnabled: @MainActor @Sendable () -> Bool
@@ -70,6 +80,7 @@ public final class BearAnnotationOverlayController {
   private var fallbackTask: Task<Void, Never>?
   private var interactionTask: Task<Void, Never>?
   private var selectionStabilizationTask: Task<Void, Never>?
+  private var briefVisibilityTask: Task<Void, Never>?
   private var workspaceObservers: [NSObjectProtocol] = []
   private var shortcutToken: UUID?
   private var alternatives: [String] = []
@@ -83,6 +94,14 @@ public final class BearAnnotationOverlayController {
   private var trackedCorrectionID: String?
   private var reportedVisible = false
   private var accessibilityInteractionIsActive = false
+  private var isBrieflyVisible = false
+  private var hasStartedBriefVisibilityClock = false
+  private var isContextuallyRevealed = false
+  private var isMenuPinned = false
+  private var cachedPlacements: [AccessibilityBounds] = []
+  private var cachedInteraction: BearAnnotationInteraction?
+  private var observedMarkVisibility: BearAnnotationMarkVisibility =
+    .alwaysVisible
 
   public convenience init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
@@ -100,6 +119,14 @@ public final class BearAnnotationOverlayController {
       BearAnnotationOverlayController.fallbackRefreshInterval,
     textChangeRefreshDelay: Duration = .zero,
     handlesKeyboardShortcut: Bool = true,
+    markVisibility:
+      @escaping @MainActor @Sendable () -> BearAnnotationMarkVisibility = {
+        .alwaysVisible
+      },
+    briefMarkDuration: Duration =
+      BearAnnotationOverlayController.briefMarkDuration,
+    markFadeDuration: TimeInterval =
+      BearAnnotationOverlayController.markFadeDuration,
     selectionStabilizationDelays: [Duration] = [
       .milliseconds(40),
       .milliseconds(180),
@@ -114,6 +141,9 @@ public final class BearAnnotationOverlayController {
       fallbackRefreshInterval: fallbackRefreshInterval,
       textChangeRefreshDelay: textChangeRefreshDelay,
       handlesKeyboardShortcut: handlesKeyboardShortcut,
+      markVisibility: markVisibility,
+      briefMarkDuration: briefMarkDuration,
+      markFadeDuration: markFadeDuration,
       selectionStabilizationDelays: selectionStabilizationDelays,
       shortcutRegistrar: BearAnnotationShortcutCenter.shared
     )
@@ -128,6 +158,14 @@ public final class BearAnnotationOverlayController {
     fallbackRefreshInterval: Duration,
     textChangeRefreshDelay: Duration,
     handlesKeyboardShortcut: Bool,
+    markVisibility:
+      @escaping @MainActor @Sendable () -> BearAnnotationMarkVisibility = {
+        .alwaysVisible
+      },
+    briefMarkDuration: Duration =
+      BearAnnotationOverlayController.briefMarkDuration,
+    markFadeDuration: TimeInterval =
+      BearAnnotationOverlayController.markFadeDuration,
     selectionStabilizationDelays: [Duration],
     shortcutRegistrar: any BearAnnotationShortcutRegistering,
     hostApplicationBundleIdentifier: String? = Bundle.main.bundleIdentifier,
@@ -148,6 +186,10 @@ public final class BearAnnotationOverlayController {
     self.fallbackRefreshInterval = fallbackRefreshInterval
     self.textChangeRefreshDelay = textChangeRefreshDelay
     self.handlesKeyboardShortcut = handlesKeyboardShortcut
+    self.markVisibility = markVisibility
+    self.observedMarkVisibility = markVisibility()
+    self.briefMarkDuration = briefMarkDuration
+    self.markFadeDuration = markFadeDuration
     self.selectionStabilizationDelays = selectionStabilizationDelays
     self.shortcutRegistrar = shortcutRegistrar
     self.hostApplicationBundleIdentifier = hostApplicationBundleIdentifier
@@ -222,6 +264,10 @@ public final class BearAnnotationOverlayController {
     self.onFinished = onFinished
     trackedCorrectionID = application.correction.id.uuidString
     lastResolvedRange = application.correctionAnchor?.correctionRange
+    isBrieflyVisible = true
+    hasStartedBriefVisibilityClock = false
+    isContextuallyRevealed = false
+    isMenuPinned = false
     cachedFrontmostBundleIdentifier = frontmostBundleIdentifier()
     if !usesSharedLifecycle {
       installWorkspaceObservers()
@@ -252,6 +298,8 @@ public final class BearAnnotationOverlayController {
     interactionTask = nil
     selectionStabilizationTask?.cancel()
     selectionStabilizationTask = nil
+    briefVisibilityTask?.cancel()
+    briefVisibilityTask = nil
     invalidationMonitor.stop()
     removeWorkspaceObservers()
     unregisterKeyboardShortcut()
@@ -265,6 +313,12 @@ public final class BearAnnotationOverlayController {
     cachedFrontmostBundleIdentifier = nil
     trackedCorrectionID = nil
     accessibilityInteractionIsActive = false
+    isBrieflyVisible = false
+    hasStartedBriefVisibilityClock = false
+    isContextuallyRevealed = false
+    isMenuPinned = false
+    cachedPlacements = []
+    cachedInteraction = nil
   }
 
   public func showMenu() {
@@ -351,21 +405,134 @@ public final class BearAnnotationOverlayController {
       hideAnnotation(reason: "missingApplication")
       return
     }
-    presenter.show(
-      placements: placements,
-      interaction: BearAnnotationInteraction(
-        items: BearAnnotationMenuModel.items(
-          for: application,
-          alternatives: alternatives
-        ),
-        accessibilityLabel: BearAnnotationMenuModel.accessibilityLabel(
-          for: application
-        )
-      ) { [weak self] action in
+    cachedPlacements = placements
+    cachedInteraction = BearAnnotationInteraction(
+      items: BearAnnotationMenuModel.items(
+        for: application,
+        alternatives: alternatives
+      ),
+      accessibilityLabel: BearAnnotationMenuModel.accessibilityLabel(
+        for: application
+      ),
+      menuVisibilityHandler: { [weak self] isVisible in
+        self?.setMenuPinned(isVisible)
+      },
+      handler: { [weak self] action in
         self?.perform(action)
       }
     )
-    reportVisible(range: report.resolvedRange)
+    startBriefVisibilityClockIfNeeded()
+    presentCachedAnnotationIfNeeded(range: report.resolvedRange)
+  }
+
+  private var shouldPresentCachedAnnotation: Bool {
+    markVisibility() == .alwaysVisible
+      || voiceOverEnabled()
+      || isBrieflyVisible
+      || isContextuallyRevealed
+      || isMenuPinned
+  }
+
+  private func presentCachedAnnotationIfNeeded(
+    range: AccessibilityTextRange? = nil
+  ) {
+    synchronizeMarkVisibilityPreference()
+    guard
+      shouldPresentCachedAnnotation,
+      !cachedPlacements.isEmpty,
+      let cachedInteraction
+    else {
+      fadeAnnotation(reason: "briefOrContextEnded")
+      return
+    }
+    presenter.show(
+      placements: cachedPlacements,
+      interaction: cachedInteraction
+    )
+    reportVisible(range: range ?? lastResolvedRange)
+  }
+
+  private func synchronizeMarkVisibilityPreference() {
+    let currentVisibility = markVisibility()
+    guard currentVisibility != observedMarkVisibility else {
+      return
+    }
+    observedMarkVisibility = currentVisibility
+    switch currentVisibility {
+    case .briefAndContextual:
+      isBrieflyVisible = true
+      hasStartedBriefVisibilityClock = false
+      startBriefVisibilityClockIfNeeded()
+    case .alwaysVisible:
+      briefVisibilityTask?.cancel()
+      briefVisibilityTask = nil
+      hasStartedBriefVisibilityClock = false
+    }
+  }
+
+  private func startBriefVisibilityClockIfNeeded() {
+    guard
+      markVisibility() == .briefAndContextual,
+      !hasStartedBriefVisibilityClock,
+      !cachedPlacements.isEmpty
+    else {
+      return
+    }
+    hasStartedBriefVisibilityClock = true
+    scheduleBriefVisibilityExpiration()
+  }
+
+  private func scheduleBriefVisibilityExpiration() {
+    briefVisibilityTask?.cancel()
+    guard markVisibility() == .briefAndContextual else {
+      return
+    }
+    let duration = briefMarkDuration
+    briefVisibilityTask = Task { [weak self] in
+      do {
+        try await Task.sleep(for: duration)
+      } catch {
+        return
+      }
+      guard let self else { return }
+      self.briefVisibilityTask = nil
+      self.isBrieflyVisible = false
+      self.presentCachedAnnotationIfNeeded()
+    }
+  }
+
+  func setContextualReveal(_ isRevealed: Bool) {
+    guard isContextuallyRevealed != isRevealed else {
+      return
+    }
+    isContextuallyRevealed = isRevealed
+    presentCachedAnnotationIfNeeded()
+  }
+
+  func isPointerNearCachedPlacement(_ point: NSPoint) -> Bool {
+    guard application != nil, !cachedPlacements.isEmpty else {
+      return false
+    }
+    return cachedPlacements.contains { placement in
+      let frame = NSRect(
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height
+      )
+      return frame.insetBy(
+        dx: -Self.pointerHorizontalRadius,
+        dy: -Self.pointerVerticalRadius
+      ).contains(point)
+    }
+  }
+
+  private func setMenuPinned(_ isPinned: Bool) {
+    guard isMenuPinned != isPinned else {
+      return
+    }
+    isMenuPinned = isPinned
+    presentCachedAnnotationIfNeeded()
   }
 
   private func handle(
@@ -493,10 +660,11 @@ public final class BearAnnotationOverlayController {
     guard let application else {
       return
     }
-    let actionName = switch action {
-    case .changeBack: "changeBack"
-    case .chooseAlternative: "chooseAlternative"
-    }
+    let actionName =
+      switch action {
+      case .changeBack: "changeBack"
+      case .chooseAlternative: "chooseAlternative"
+      }
     logger.notice(
       "Overlay action selected id=\(application.correction.id.uuidString, privacy: .public) action=\(actionName, privacy: .public)"
     )
@@ -600,6 +768,8 @@ public final class BearAnnotationOverlayController {
             at: 0
           )
           self.application = updatedApplication
+          self.isBrieflyVisible = true
+          self.hasStartedBriefVisibilityClock = false
           if !self.usesSharedLifecycle {
             self.restartInvalidationMonitor()
           }
@@ -851,12 +1021,25 @@ public final class BearAnnotationOverlayController {
 
   private func hideAnnotation(reason: String) {
     presenter.hide()
+    cachedPlacements = []
+    cachedInteraction = nil
     guard reportedVisible, let correctionID = trackedCorrectionID else {
       return
     }
     reportedVisible = false
     logger.notice(
       "Overlay hidden id=\(correctionID, privacy: .public) reason=\(reason, privacy: .public)"
+    )
+  }
+
+  private func fadeAnnotation(reason: String) {
+    presenter.fadeOut(duration: markFadeDuration)
+    guard reportedVisible, let correctionID = trackedCorrectionID else {
+      return
+    }
+    reportedVisible = false
+    logger.notice(
+      "Overlay faded id=\(correctionID, privacy: .public) reason=\(reason, privacy: .public)"
     )
   }
 

@@ -20,8 +20,9 @@ another suggestion.
 3. A correction that passes Typover’s explicit safety rules replaces the
    smallest possible character range. An explicitly enabled sentence rewrite
    is the bounded exception.
-4. The corrected text receives a subtle mark for four seconds. The mark then
-   fades and returns when the writer reviews that sentence.
+4. The corrected text receives a subtle mark for 1.5 seconds. The mark then
+   fades and returns when the writer deliberately reviews nearby text. In the
+   owned editor, that review target is the sentence.
 5. Clicking a visible mark offers the original text and alternative
    corrections. Settings can keep every unresolved mark visible instead.
 

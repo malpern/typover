@@ -85,10 +85,10 @@ extension NSAttributedString.Key {
 
 @MainActor
 final class TypoverTextView: NSTextView {
-  private static let recentMarkDuration: TimeInterval = 4
-  private static let markFadeDuration: TimeInterval = 0.15
-  private static let hoverRevealDelay = Duration.milliseconds(100)
-  private static let hoverExitDelay = Duration.milliseconds(250)
+  private static let recentMarkDuration: TimeInterval = 1.5
+  private static let markFadeDuration: TimeInterval = 0.18
+  private static let hoverRevealDelay = Duration.milliseconds(220)
+  private static let hoverExitDelay = Duration.milliseconds(280)
   private static let sentenceHorizontalPadding: CGFloat = 12
   private static let sentenceVerticalPadding: CGFloat = 6
   private static let caretNavigationKeyCodes: Set<UInt16> = [
