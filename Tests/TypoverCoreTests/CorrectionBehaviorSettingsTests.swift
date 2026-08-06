@@ -5,6 +5,14 @@ import Testing
 
 @MainActor
 struct CorrectionBehaviorSettingsTests {
+  @Test("Quiet correction marks use the fast shared timing")
+  func quietMarkTiming() {
+    #expect(CorrectionMarkTiming.visibleMilliseconds == 1_500)
+    #expect(CorrectionMarkTiming.fadeMilliseconds == 120)
+    #expect(CorrectionMarkTiming.visibleTimeInterval == 1.5)
+    #expect(CorrectionMarkTiming.fadeTimeInterval == 0.12)
+  }
+
   @Test("Correction behavior defaults to careful without sentence rewrites")
   func defaultBehavior() throws {
     let fixture = try DefaultsFixture()

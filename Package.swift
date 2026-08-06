@@ -45,7 +45,11 @@ let package = Package(
     ),
     .target(
       name: "TypoverOverlay",
-      dependencies: ["TypoverAccessibility", "TypoverBearAdapter"]
+      dependencies: [
+        "TypoverAccessibility",
+        "TypoverBearAdapter",
+        "TypoverCore",
+      ]
     ),
     .target(
       name: "TypoverAppleIntelligence",

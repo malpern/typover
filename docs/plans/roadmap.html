@@ -160,7 +160,7 @@
     <header class="hero">
       <span class="eyebrow">Roadmap · Updated August 5, 2026</span>
       <h1>Corrections you can trust—and take back.</h1>
-      <p class="lede">The prior notarized candidate passed its owned-editor interaction gate and fresh-process Bear envelope through 60 ms per key, while one 40 ms stress token safely remained unchanged. A clean first-run test found and fixed a permission-navigation defect, so the release runway now starts with a replacement candidate.</p>
+      <p class="lede">The quiet correction-review interaction is now implemented in source for both the owned editor and Bear: marks appear, fade, return during review, and expose a reversible native menu only after deliberate pointer intent. The release runway now validates that behavior in a replacement notarized candidate.</p>
       <div class="hero-meta">
         <span class="badge">Prior 0.1.0 qualified</span>
         <span class="badge">MIT licensed</span>
@@ -190,15 +190,15 @@
         <p>The two writing environments intentionally have different safety and latency contracts.</p>
       </div>
       <div class="cards">
-        <article class="card" style="--progress: 96%">
-          <div class="card-head"><h3>Controlled AppKit editor</h3><span class="badge">Accepted</span></div>
-          <p>Immediate word correction, local contextual intelligence, earlier-caret editing, learning, and independent correction history pass. Brief contextual marks are implemented on top of that baseline.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Visual interaction tuning remains</span><strong>96%</strong></div>
+        <article class="card" style="--progress: 97%">
+          <div class="card-head"><h3>Controlled AppKit editor</h3><span class="badge pending">Candidate validation</span></div>
+          <p>Immediate correction, exact sentence review, 1.5-second marks, a 120 ms fade, caret reveal, learning, and independent history are implemented. A deliberate dwell over a visible mark now opens the native reversible menu once per hover.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Install and visually accept the final interaction</span><strong>97%</strong></div>
         </article>
-        <article class="card" style="--progress: 86%">
-          <div class="card-head"><h3>Brief contextual marks</h3><span class="badge pending">Validating</span></div>
-          <p>Marks confirm a change for 1.5 seconds, fade in 180 ms, and return after a deliberate review dwell. The editor uses exact sentence fragments; Bear uses cached verified geometry and a bounded nearby-text corridor without pointer-driven Accessibility reads.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Installed Bear visual, scroll, and energy qualification</span><strong>86%</strong></div>
+        <article class="card" style="--progress: 84%">
+          <div class="card-head"><h3>Brief contextual marks</h3><span class="badge pending">Live Bear validation</span></div>
+          <p>Both lanes now share the same timing and menu-intent contract. The editor uses exact TextKit sentence geometry; Bear uses one collection-level pointer observer and a bounded same-line corridor around verified overlay geometry, avoiding repeated note reads.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Wrapped lines, scrolling, focus, load, VoiceOver, physical typing</span><strong>84%</strong></div>
         </article>
         <article class="card" style="--progress: 90%">
           <div class="card-head"><h3>Bear word correction</h3><span class="badge pending">Permission gate</span></div>

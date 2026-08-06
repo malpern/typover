@@ -53,9 +53,10 @@ private struct TypoverHeader: View {
       .fontWeight(.semibold)
 
       Text(
-        "This first lab proves the interaction in an editor we control before we attempt compatibility with Bear.",
+        "This editor is Typover’s reference experience. Bear follows the same quiet, reversible interaction wherever its text geometry allows.",
         bundle: #bundle,
-        comment: "Explanation of why Typover begins with its own editor."
+        comment:
+          "Explanation of how the controlled editor guides Typover's Bear interaction."
       )
       .font(.title3)
       .foregroundStyle(.secondary)
@@ -115,7 +116,7 @@ private struct EditorLabSection: View {
       }
 
       Text(
-        "The word changes automatically. Its light-gray squiggle briefly confirms the change, then returns when you review that sentence so you can change it back or choose another correction.",
+        "The word changes automatically. Its light-gray squiggle fades after a moment. Move across the sentence to bring it back, then pause over the mark to change it back or choose another correction.",
         bundle: #bundle,
         comment:
           "Instructions below the Typover editor explaining the reversible correction interaction."

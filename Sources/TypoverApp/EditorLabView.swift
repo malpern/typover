@@ -85,10 +85,14 @@ extension NSAttributedString.Key {
 
 @MainActor
 final class TypoverTextView: NSTextView {
-  private static let recentMarkDuration: TimeInterval = 1.5
-  private static let markFadeDuration: TimeInterval = 0.18
-  private static let hoverRevealDelay = Duration.milliseconds(220)
-  private static let hoverExitDelay = Duration.milliseconds(280)
+  private static let recentMarkDuration =
+    CorrectionMarkTiming.visibleTimeInterval
+      + CorrectionMarkTiming.fadeTimeInterval
+  private static let markFadeDuration =
+    CorrectionMarkTiming.fadeTimeInterval
+  private static let hoverRevealDelay = Duration.milliseconds(100)
+  private static let hoverExitDelay = Duration.milliseconds(250)
+  private static let hoverMenuDelay = Duration.milliseconds(350)
   private static let sentenceHorizontalPadding: CGFloat = 12
   private static let sentenceVerticalPadding: CGFloat = 6
   private static let caretNavigationKeyCodes: Set<UInt16> = [
@@ -176,10 +180,15 @@ final class TypoverTextView: NSTextView {
   private var correctionTrackingArea: NSTrackingArea?
   private var hoverRevealTask: Task<Void, Never>?
   private var hoverExitTask: Task<Void, Never>?
+  private var hoverMenuTask: Task<Void, Never>?
+  private var hoverMenuCandidateCorrectionID: Correction.ID?
+  private var hoverMenuCandidatePoint: NSPoint?
+  private var hoverMenuWasPresentedForCurrentEntry = false
   private var visibilityRefreshTask: Task<Void, Never>?
   var onLearnedSuppression: ((String?) -> Void)?
   private(set) var correctionDiagnostics: [CorrectionDiagnostic] = []
   private(set) var correctionTransactionSamples: [CorrectionTransactionSample] = []
+  var onHoverCorrectionMenuRequestedForTesting: ((Correction.ID) -> Void)?
 
   isolated deinit {
     for task in contextualCorrectionTasks.values {
@@ -187,6 +196,7 @@ final class TypoverTextView: NSTextView {
     }
     hoverRevealTask?.cancel()
     hoverExitTask?.cancel()
+    hoverMenuTask?.cancel()
     visibilityRefreshTask?.cancel()
   }
 
@@ -409,21 +419,28 @@ final class TypoverTextView: NSTextView {
     super.mouseMoved(with: event)
     let point = convert(event.locationInWindow, from: nil)
     updateHoveredSentence(to: sentenceHoverRange(at: point))
+    updateHoverMenuIntent(at: point)
   }
 
   override func mouseExited(with event: NSEvent) {
     super.mouseExited(with: event)
     updateHoveredSentence(to: nil)
+    updateHoverMenuIntent(at: nil)
   }
 
   override func mouseDown(with event: NSEvent) {
-    guard let correctionID = correctionID(at: event) else {
+    let point = convert(event.locationInWindow, from: nil)
+    guard let correctionID = correctionID(at: point) else {
       super.mouseDown(with: event)
       revealCorrectionsAtCaret()
       return
     }
 
-    showCorrectionMenu(for: correctionID, event: event)
+    hoverMenuTask?.cancel()
+    hoverMenuTask = nil
+    hoverMenuCandidateCorrectionID = correctionID
+    hoverMenuWasPresentedForCurrentEntry = true
+    showCorrectionMenu(for: correctionID, at: point)
   }
 
   override func keyDown(with event: NSEvent) {
@@ -1035,14 +1052,16 @@ final class TypoverTextView: NSTextView {
     return ranges
   }
 
-  private func correctionID(at event: NSEvent) -> Correction.ID? {
-    let viewPoint = convert(event.locationInWindow, from: nil)
+  private func correctionID(
+    at viewPoint: NSPoint,
+    requiresVisibleMark: Bool = true
+  ) -> Correction.ID? {
     let now = Date()
 
     for (id, _) in correctionsByID {
       guard
         ledger.record(for: id)?.disposition == .applied,
-        correctionMarkAlpha(for: id, at: now) > 0
+        !requiresVisibleMark || correctionMarkAlpha(for: id, at: now) > 0
       else {
         continue
       }
@@ -1061,11 +1080,16 @@ final class TypoverTextView: NSTextView {
     return nil
   }
 
-  private func showCorrectionMenu(for id: Correction.ID, event: NSEvent) {
+  private func showCorrectionMenu(for id: Correction.ID, at point: NSPoint) {
     guard
       let menu = correctionMenu(for: id),
       let firstItem = menu.items.first
     else {
+      return
+    }
+
+    if let onHoverCorrectionMenuRequestedForTesting {
+      onHoverCorrectionMenuRequestedForTesting(id)
       return
     }
 
@@ -1077,7 +1101,7 @@ final class TypoverTextView: NSTextView {
     }
     menu.popUp(
       positioning: firstItem,
-      at: convert(event.locationInWindow, from: nil),
+      at: point,
       in: self
     )
   }
@@ -1537,6 +1561,9 @@ final class TypoverTextView: NSTextView {
     guard remaining > 0 else {
       return 0
     }
+    if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+      return 1
+    }
     return min(1, remaining / Self.markFadeDuration)
   }
 
@@ -1626,6 +1653,85 @@ final class TypoverTextView: NSTextView {
       self.hoveredSentenceRange = sentenceRange
       self.needsDisplay = true
     }
+  }
+
+  private func updateHoverMenuIntent(at point: NSPoint?) {
+    guard
+      let point,
+      let correctionID = correctionID(
+        at: point,
+        requiresVisibleMark: false
+      )
+    else {
+      hoverMenuTask?.cancel()
+      hoverMenuTask = nil
+      hoverMenuCandidateCorrectionID = nil
+      hoverMenuCandidatePoint = nil
+      hoverMenuWasPresentedForCurrentEntry = false
+      return
+    }
+
+    hoverMenuCandidatePoint = point
+    if hoverMenuCandidateCorrectionID == correctionID {
+      return
+    }
+
+    hoverMenuTask?.cancel()
+    hoverMenuCandidateCorrectionID = correctionID
+    hoverMenuWasPresentedForCurrentEntry = false
+    scheduleHoverMenu(
+      for: correctionID,
+      validatesPointerLocation: true
+    )
+  }
+
+  private func scheduleHoverMenu(
+    for correctionID: Correction.ID,
+    validatesPointerLocation: Bool
+  ) {
+    hoverMenuTask = Task { @MainActor [weak self] in
+      do {
+        try await Task.sleep(for: Self.hoverMenuDelay)
+      } catch {
+        return
+      }
+      guard let self else { return }
+      self.hoverMenuTask = nil
+      guard
+        self.hoverMenuCandidateCorrectionID == correctionID,
+        !self.hoverMenuWasPresentedForCurrentEntry,
+        let currentPoint = self.hoverMenuCandidatePoint,
+        !validatesPointerLocation
+          || self.correctionID(at: currentPoint) == correctionID
+      else {
+        return
+      }
+      self.hoverMenuWasPresentedForCurrentEntry = true
+      self.showCorrectionMenu(for: correctionID, at: currentPoint)
+    }
+  }
+
+  func beginHoverMenuIntentForTesting(correctionID: Correction.ID?) {
+    guard let correctionID else {
+      updateHoverMenuIntent(at: nil)
+      return
+    }
+    guard hoverMenuCandidateCorrectionID != correctionID else {
+      return
+    }
+    hoverMenuTask?.cancel()
+    hoverMenuCandidateCorrectionID = correctionID
+    hoverMenuCandidatePoint = .zero
+    hoverMenuWasPresentedForCurrentEntry = false
+    scheduleHoverMenu(
+      for: correctionID,
+      validatesPointerLocation: false
+    )
+  }
+
+  func waitForHoverMenuIntentForTesting() async {
+    let task = hoverMenuTask
+    await task?.value
   }
 
   private func sentenceHoverRange(at point: NSPoint) -> NSRange? {

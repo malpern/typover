@@ -18,7 +18,9 @@ struct TypoverApp: App {
     let learningStore = CorrectionLearningStore()
     let automaticCoordinator = BearAutomaticCorrectionCoordinator(
       learningStore: learningStore,
-      behaviorSettings: behaviorSettings
+      marksAlwaysVisible: {
+        behaviorSettings.correctionMarkVisibility == .alwaysVisible
+      }
     )
     automaticCoordinator.setEnabled(
       behaviorSettings.bearAutomaticCorrectionEnabled
@@ -26,7 +28,11 @@ struct TypoverApp: App {
     _behaviorSettings = State(initialValue: behaviorSettings)
     _learningStore = State(initialValue: learningStore)
     _bearOverlayPreviewCoordinator = State(
-      initialValue: BearOverlayPreviewCoordinator()
+      initialValue: BearOverlayPreviewCoordinator(
+        marksAlwaysVisible: {
+          behaviorSettings.correctionMarkVisibility == .alwaysVisible
+        }
+      )
     )
     _bearAutomaticCorrectionCoordinator = State(
       initialValue: automaticCoordinator

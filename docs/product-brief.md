@@ -18,9 +18,7 @@ visible, reversible provenance for each one.
 
 A corrected word receives a light-gray squiggle for 1.5 seconds. The mark then
 fades to reduce visual noise and returns when the pointer or a deliberately
-moved insertion point reviews that sentence in Typover's editor. Bear uses a
-bounded nearby-text corridor because it does not expose reliable sentence
-fragments. Selecting a visible mark shows:
+moved insertion point reviews that sentence. Selecting it shows:
 
 - the original typed word;
 - other likely corrections;

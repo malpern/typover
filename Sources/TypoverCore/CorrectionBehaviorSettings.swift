@@ -23,6 +23,17 @@ public enum CorrectionMarkVisibility: String, Codable, CaseIterable, Equatable,
   case alwaysVisible = "always-visible"
 }
 
+/// The shared quiet-mark timing used by every Typover writing surface.
+public enum CorrectionMarkTiming {
+  public static let visibleMilliseconds = 1_500
+  public static let fadeMilliseconds = 120
+
+  public static let visibleTimeInterval =
+    TimeInterval(visibleMilliseconds) / 1_000
+  public static let fadeTimeInterval =
+    TimeInterval(fadeMilliseconds) / 1_000
+}
+
 @MainActor
 @Observable
 public final class CorrectionBehaviorSettings {

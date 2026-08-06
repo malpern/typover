@@ -71,6 +71,40 @@ struct EditorStressTests {
     )
   }
 
+  @Test("Hover intent opens one correction menu until the pointer leaves")
+  func hoverMenuRequiresACompleteEntryCycle() async throws {
+    let fixture = EditorFixture()
+    defer { fixture.removeLearningStore() }
+    fixture.type("teh ")
+    let correction = try #require(fixture.appliedSnapshots.first)
+    var requestedIDs: [Correction.ID] = []
+    fixture.editor.onHoverCorrectionMenuRequestedForTesting = {
+      requestedIDs.append($0)
+    }
+
+    fixture.editor.beginHoverMenuIntentForTesting(
+      correctionID: correction.correction.id
+    )
+    await fixture.editor.waitForHoverMenuIntentForTesting()
+    #expect(requestedIDs == [correction.correction.id])
+
+    fixture.editor.beginHoverMenuIntentForTesting(
+      correctionID: correction.correction.id
+    )
+    await fixture.editor.waitForHoverMenuIntentForTesting()
+    #expect(requestedIDs == [correction.correction.id])
+
+    fixture.editor.beginHoverMenuIntentForTesting(correctionID: nil)
+    fixture.editor.beginHoverMenuIntentForTesting(
+      correctionID: correction.correction.id
+    )
+    await fixture.editor.waitForHoverMenuIntentForTesting()
+    #expect(
+      requestedIDs
+        == [correction.correction.id, correction.correction.id]
+    )
+  }
+
   @Test("Reviewing one sentence reveals only that sentence's corrections")
   func sentenceReviewRevealsLocalCorrections() throws {
     let fixture = EditorFixture()

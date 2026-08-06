@@ -21,12 +21,16 @@ final class BearOverlayPreviewCoordinator {
 
   init(
     bearProbe: any BearAccessibilityProbing = BearAccessibilityProbe(),
-    bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter()
+    bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter(),
+    marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = {
+      false
+    }
   ) {
     self.bearProbe = bearProbe
     self.bearCorrectionAdapter = bearCorrectionAdapter
     bearOverlayController = BearAnnotationOverlayController(
-      adapter: bearCorrectionAdapter
+      adapter: bearCorrectionAdapter,
+      marksAlwaysVisible: marksAlwaysVisible
     )
   }
 

@@ -27,6 +27,30 @@ Every milestone preserves the same invariants:
 - transmit text only after an explicit cloud-model choice; and
 - never claim compatibility from deterministic tests alone.
 
+## Target correction-review interaction
+
+The marketing prototype is now the shared interaction target rather than an
+editor-only illustration:
+
+1. Apply an eligible correction without interrupting typing.
+2. Draw its light-gray mark immediately, keep it fully visible for 1.5
+   seconds, then fade it over 120 milliseconds.
+3. Keep the correction record after the mark disappears.
+4. Reveal nearby marks after a 100-millisecond review dwell. The controlled
+   editor uses exact sentence geometry; Bear uses a bounded same-line proximity
+   corridor around already-verified overlay geometry so review does not add
+   repeated Accessibility text reads.
+5. Open the native correction menu only after a deliberate 350-millisecond
+   dwell directly over a visible mark. A click, right-click, keyboard shortcut,
+   or accessibility action remains immediate.
+6. Keep the mark visible while its menu is open, dismiss without changing text,
+   and require the pointer to leave before hover can reopen that menu.
+7. Make **Always Visible** apply consistently to the controlled editor and
+   Bear.
+
+This is implemented in source in both lanes. Deterministic validation is not a
+substitute for the remaining installed-app visual and physical Bear pass.
+
 ## Roadmap dashboard
 
 Status meanings:
@@ -55,17 +79,6 @@ Status meanings:
 - [x] Build the controlled-editor reference implementation.
 - [x] Implement brief contextual correction marks in the controlled editor
   without discarding correction history or reversibility.
-- [x] Implement the bounded Bear approximation with cached verified geometry,
-  one throttled pointer monitor, no pointer-driven Accessibility reads, no
-  transparent hit panels, menu pinning, VoiceOver/Always Visible fallbacks, and
-  deterministic fade/reveal tests.
-- [x] Update and interactively verify the marketing hero's quieter correction,
-  clean resting state, focus-driven review reveal, and Change Back menu.
-- [ ] Verify the pointer-only dwell path in a browser automation environment
-  that synthesizes real pointer-enter events.
-- [ ] Qualify the installed Bear presentation with wrapped lines, scrolling,
-  multiple corrections, focus retention, clickability, and idle/pointer energy
-  sampling before calling it production quality.
 - [x] Keep local word correction inside the native boundary edit, preserve
   selections when contextual results return behind the caret, refuse results
   during IME composition, and retain consecutive contextual requests instead
@@ -109,6 +122,11 @@ Status meanings:
   controlled-editor access, but found that the permission button opened
   System Settings at General. Source now guides Accessibility first and Input
   Monitoring second; the replacement notarized candidate must repeat this row.
+- [ ] Accept the quiet correction-review interaction on the replacement
+  candidate. Verify the 1.5-second hold and 120 ms fade, exact sentence review in the owned
+  editor, bounded proximity review in Bear, hover-menu intent and dismissal,
+  scrolling/wrapped lines, continued typing, Always Visible, VoiceOver, and no
+  focus theft or elevated idle CPU.
 - [x] Qualify that exact candidate with fresh Bear and Typover processes and
   release-config memory retirement. Two 2026-08-05 physical runs observed
   159/160 corrections across 160/100/60/40 ms rows, including 20/20 through
@@ -277,7 +295,7 @@ The pass found a release-only sentence-boundary misclassification that debug
 tests had missed; revision `e38f535` fixes it and makes an optimized regression
 test a pre-signing gate. Content-free instrumentation previously measured three
 local correction transactions at 0.350–0.461 milliseconds. The full suite now
-passes 338 tests in 30 suites. The exact candidate's pointer-only Change Back
+passes 352 tests in 30 suites. The exact candidate's pointer-only Change Back
 and one-step Undo now pass as well: reverting the first of three corrections
 preserved both sibling annotations, and Command-Z restored all three.
 
@@ -422,11 +440,10 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. Finish the human-facing acceptance pass by reviewing the measured post-pause
-   correction behavior as a beta product decision. The unlocked Settings visual
-   review, spoken VoiceOver navigation, and native Settings AX inspection now
-   pass; the remaining Computer Use failure is a diagnosed external transport
-   crash.
+1. Finish the human-facing quiet-review acceptance pass in the owned editor and
+   Bear. The post-pause correction policy is already decided; this pass is now
+   about fade/reveal timing, intentional menu activation, focus retention,
+   accessibility, and Bear geometry/performance under real typing.
 2. Produce the signed and notarized beta candidate, then run the clean-machine
    installation, permission, recovery, update, and uninstall checklist.
 3. Qualify that final candidate—not every development build—with fresh Bear

@@ -24,11 +24,8 @@ public final class BearAnnotationOverlayCollectionController {
   private let verifiedEditBatchDelay: Duration
   private let workspaceNotificationCenter: NotificationCenter
   private let shortcutRegistrar: any BearAnnotationShortcutRegistering
-  private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private let pointerMonitor: any BearAnnotationPointerMonitoring
-  private let pointerReviewEnabled: @MainActor @Sendable () -> Bool
-  private let pointerRevealDelay: Duration
-  private let pointerExitDelay: Duration
+  private let frontmostBundleIdentifier: @MainActor @Sendable () -> String?
   private var entries: [Entry] = []
   private var shortcutToken: UUID?
   private var fallbackTask: Task<Void, Never>?
@@ -37,41 +34,29 @@ public final class BearAnnotationOverlayCollectionController {
   private var isProcessingVerifiedEdits = false
   private var suppressedInvalidationDuringVerifiedEdits = false
   private var pendingVerifiedEdits: [PendingVerifiedEdit] = []
-  private var latestPointerLocation: NSPoint?
-  private var pointerSampleTask: Task<Void, Never>?
-  private var pointerRevealTask: Task<Void, Never>?
-  private var pointerExitTask: Task<Void, Never>?
-  private var contextuallyRevealedControllers: Set<ObjectIdentifier> = []
-  private var isPointerMonitorRunning = false
 
   public convenience init(
     adapter: any BearCorrectionServicing = BearCorrectionAdapter(),
-    markVisibility:
-      @escaping @MainActor @Sendable () -> BearAnnotationMarkVisibility = {
-        .briefAndContextual
-      },
     maximumTrackedCorrections: Int =
       BearAnnotationOverlayCollectionController
-      .defaultMaximumTrackedCorrections
+      .defaultMaximumTrackedCorrections,
+    marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = {
+      false
+    }
   ) {
     self.init(
       maximumTrackedCorrections: maximumTrackedCorrections,
       fallbackRefreshInterval: .seconds(2),
-      verifiedEditBatchDelay: .milliseconds(120),
-      shortcutRegistrar: BearAnnotationShortcutCenter.shared,
-      pointerReviewEnabled: {
-        markVisibility() == .briefAndContextual
-      },
-      controllerFactory: {
-        BearAnnotationOverlayController(
-          adapter: adapter,
-          fallbackRefreshInterval: .seconds(2),
-          textChangeRefreshDelay: .milliseconds(180),
-          handlesKeyboardShortcut: false,
-          markVisibility: markVisibility
-        )
-      }
-    )
+      verifiedEditBatchDelay: .milliseconds(120)
+    ) {
+      BearAnnotationOverlayController(
+        adapter: adapter,
+        fallbackRefreshInterval: .seconds(2),
+        textChangeRefreshDelay: .milliseconds(180),
+        handlesKeyboardShortcut: false,
+        marksAlwaysVisible: marksAlwaysVisible
+      )
+    }
   }
 
   public convenience init(
@@ -89,6 +74,7 @@ public final class BearAnnotationOverlayCollectionController {
       verifiedEditBatchDelay: verifiedEditBatchDelay,
       workspaceNotificationCenter: workspaceNotificationCenter,
       shortcutRegistrar: BearAnnotationShortcutCenter.shared,
+      pointerMonitor: AppKitBearAnnotationPointerMonitor(),
       controllerFactory: controllerFactory
     )
   }
@@ -102,11 +88,6 @@ public final class BearAnnotationOverlayCollectionController {
     shortcutRegistrar: any BearAnnotationShortcutRegistering,
     pointerMonitor: any BearAnnotationPointerMonitoring =
       AppKitBearAnnotationPointerMonitor(),
-    pointerReviewEnabled: @escaping @MainActor @Sendable () -> Bool = {
-      true
-    },
-    pointerRevealDelay: Duration = .milliseconds(220),
-    pointerExitDelay: Duration = .milliseconds(280),
     frontmostBundleIdentifier: @escaping @MainActor @Sendable () -> String? = {
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     },
@@ -122,9 +103,6 @@ public final class BearAnnotationOverlayCollectionController {
     self.workspaceNotificationCenter = workspaceNotificationCenter
     self.shortcutRegistrar = shortcutRegistrar
     self.pointerMonitor = pointerMonitor
-    self.pointerReviewEnabled = pointerReviewEnabled
-    self.pointerRevealDelay = pointerRevealDelay
-    self.pointerExitDelay = pointerExitDelay
     self.frontmostBundleIdentifier = frontmostBundleIdentifier
     self.controllerFactory = controllerFactory
   }
@@ -288,7 +266,6 @@ public final class BearAnnotationOverlayCollectionController {
     isProcessingVerifiedEdits = false
     suppressedInvalidationDuringVerifiedEdits = false
     pendingVerifiedEdits = []
-    stopPointerReview()
     let controllers = entries.map(\.controller)
     entries = []
     for controller in controllers {
@@ -323,9 +300,6 @@ public final class BearAnnotationOverlayCollectionController {
   private func pruneOldestIfNeeded() {
     while entries.count >= maximumTrackedCorrections {
       let entry = entries.removeFirst()
-      contextuallyRevealedControllers.remove(
-        ObjectIdentifier(entry.controller)
-      )
       entry.controller.stop()
     }
   }
@@ -338,9 +312,7 @@ public final class BearAnnotationOverlayCollectionController {
     else {
       return
     }
-    let controller = entries.remove(at: index).controller
-    contextuallyRevealedControllers.remove(ObjectIdentifier(controller))
-    controller.stop()
+    entries.remove(at: index).controller.stop()
     unregisterKeyboardShortcutIfEmpty()
   }
 
@@ -355,7 +327,6 @@ public final class BearAnnotationOverlayCollectionController {
       return
     }
     entries.remove(at: index)
-    contextuallyRevealedControllers.remove(ObjectIdentifier(controller))
     unregisterKeyboardShortcutIfEmpty()
   }
 
@@ -401,7 +372,9 @@ public final class BearAnnotationOverlayCollectionController {
       return
     }
     installWorkspaceObservers()
-    synchronizePointerMonitoring()
+    pointerMonitor.start { [weak self] point in
+      self?.handlePointerMovement(to: point)
+    }
     let interval = fallbackRefreshInterval
     fallbackTask = Task { [weak self] in
       while !Task.isCancelled {
@@ -413,7 +386,6 @@ public final class BearAnnotationOverlayCollectionController {
         guard let self else {
           return
         }
-        self.synchronizePointerMonitoring()
         guard
           self.frontmostBundleIdentifier()
             == BearAccessibilityProbe.bearBundleIdentifier
@@ -429,142 +401,28 @@ public final class BearAnnotationOverlayCollectionController {
 
   private func stopSharedLifecycle() {
     pauseFallbackRefresh()
-    stopPointerReview()
+    pointerMonitor.stop()
     for observer in workspaceObservers {
       workspaceNotificationCenter.removeObserver(observer)
     }
     workspaceObservers = []
   }
 
+  func handlePointerMovement(to point: NSPoint) {
+    guard
+      frontmostBundleIdentifier()
+        == BearAccessibilityProbe.bearBundleIdentifier
+    else {
+      return
+    }
+    for entry in entries {
+      entry.controller.handlePointerMovement(to: point)
+    }
+  }
+
   private func pauseFallbackRefresh() {
     fallbackTask?.cancel()
     fallbackTask = nil
-  }
-
-  private func handlePointerLocation(_ point: NSPoint) {
-    latestPointerLocation = point
-    guard pointerSampleTask == nil else {
-      return
-    }
-    pointerSampleTask = Task { [weak self] in
-      do {
-        try await Task.sleep(for: .milliseconds(40))
-      } catch {
-        return
-      }
-      guard let self else { return }
-      self.pointerSampleTask = nil
-      self.processLatestPointerLocation()
-    }
-  }
-
-  private func synchronizePointerMonitoring() {
-    if pointerReviewEnabled() {
-      guard !isPointerMonitorRunning else { return }
-      isPointerMonitorRunning = pointerMonitor.start { [weak self] point in
-        self?.handlePointerLocation(point)
-      }
-    } else if isPointerMonitorRunning {
-      stopPointerReview()
-    }
-  }
-
-  private func processLatestPointerLocation() {
-    guard
-      frontmostBundleIdentifier()
-        == BearAccessibilityProbe.bearBundleIdentifier,
-      let latestPointerLocation
-    else {
-      schedulePointerExit()
-      return
-    }
-    let candidates = Set(
-      entries.compactMap { entry -> ObjectIdentifier? in
-        entry.controller.isPointerNearCachedPlacement(
-          latestPointerLocation
-        )
-          ? ObjectIdentifier(entry.controller)
-          : nil
-      }
-    )
-    guard !candidates.isEmpty else {
-      pointerRevealTask?.cancel()
-      pointerRevealTask = nil
-      schedulePointerExit()
-      return
-    }
-
-    pointerExitTask?.cancel()
-    pointerExitTask = nil
-    guard candidates != contextuallyRevealedControllers else {
-      return
-    }
-    pointerRevealTask?.cancel()
-    let delay = pointerRevealDelay
-    pointerRevealTask = Task { [weak self] in
-      do {
-        try await Task.sleep(for: delay)
-      } catch {
-        return
-      }
-      guard let self, let point = self.latestPointerLocation else {
-        return
-      }
-      self.pointerRevealTask = nil
-      let currentCandidates = Set(
-        self.entries.compactMap { entry -> ObjectIdentifier? in
-          entry.controller.isPointerNearCachedPlacement(point)
-            ? ObjectIdentifier(entry.controller)
-            : nil
-        }
-      )
-      guard !currentCandidates.isEmpty else {
-        self.schedulePointerExit()
-        return
-      }
-      self.applyContextualReveal(to: currentCandidates)
-    }
-  }
-
-  private func schedulePointerExit() {
-    guard pointerExitTask == nil else {
-      return
-    }
-    let delay = pointerExitDelay
-    pointerExitTask = Task { [weak self] in
-      do {
-        try await Task.sleep(for: delay)
-      } catch {
-        return
-      }
-      guard let self else { return }
-      self.pointerExitTask = nil
-      self.applyContextualReveal(to: [])
-    }
-  }
-
-  private func applyContextualReveal(
-    to identifiers: Set<ObjectIdentifier>
-  ) {
-    contextuallyRevealedControllers = identifiers
-    for entry in entries {
-      entry.controller.setContextualReveal(
-        identifiers.contains(ObjectIdentifier(entry.controller))
-      )
-    }
-  }
-
-  private func stopPointerReview() {
-    pointerMonitor.stop()
-    isPointerMonitorRunning = false
-    pointerSampleTask?.cancel()
-    pointerSampleTask = nil
-    pointerRevealTask?.cancel()
-    pointerRevealTask = nil
-    pointerExitTask?.cancel()
-    pointerExitTask = nil
-    latestPointerLocation = nil
-    applyContextualReveal(to: [])
   }
 
   private func installWorkspaceObservers() {
@@ -617,13 +475,13 @@ public final class BearAnnotationOverlayCollectionController {
         startSharedLifecycleIfNeeded()
       } else {
         pauseFallbackRefresh()
-        stopPointerReview()
+        pointerMonitor.stop()
       }
     } else if name == NSWorkspace.didHideApplicationNotification,
       bundleIdentifier == BearAccessibilityProbe.bearBundleIdentifier
     {
       pauseFallbackRefresh()
-      stopPointerReview()
+      pointerMonitor.stop()
     }
   }
 }

@@ -26,14 +26,14 @@ public struct BearAnnotationInteraction {
   public let id: UUID
   public let items: [BearAnnotationMenuItem]
   public let accessibilityLabel: String
+  public let onMenuVisibilityChanged: @MainActor @Sendable (Bool) -> Void
   public let handler: @MainActor @Sendable (BearAnnotationAction) -> Void
-  public let menuVisibilityHandler: @MainActor @Sendable (Bool) -> Void
 
   public init(
     id: UUID = UUID(),
     items: [BearAnnotationMenuItem],
     accessibilityLabel: String,
-    menuVisibilityHandler: @escaping @MainActor @Sendable (Bool) -> Void = {
+    onMenuVisibilityChanged: @escaping @MainActor @Sendable (Bool) -> Void = {
       _ in
     },
     handler:
@@ -44,7 +44,7 @@ public struct BearAnnotationInteraction {
     self.id = id
     self.items = items
     self.accessibilityLabel = accessibilityLabel
-    self.menuVisibilityHandler = menuVisibilityHandler
+    self.onMenuVisibilityChanged = onMenuVisibilityChanged
     self.handler = handler
   }
 }

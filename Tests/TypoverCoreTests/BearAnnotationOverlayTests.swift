@@ -308,6 +308,122 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("Faded panels stop intercepting clicks but retain review geometry")
+  func fadedPanelsRemainRetriggerable() throws {
+    let presenter = AppKitBearAnnotationPresenter()
+    presenter.show(
+      placements: [
+        AccessibilityBounds(x: 100, y: 100, width: 40, height: 4)
+      ],
+      interaction: overlayInteraction()
+    )
+    let panel = try #require(presenter.panels.first)
+    let markPoint = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+    let nearbyPoint = NSPoint(
+      x: panel.frame.maxX + 120,
+      y: panel.frame.midY
+    )
+
+    presenter.setMarkVisible(false, animated: false)
+
+    #expect(panel.alphaValue == 0)
+    #expect(panel.ignoresMouseEvents)
+    #expect(presenter.containsMarkPoint(markPoint))
+    #expect(presenter.containsReviewPoint(nearbyPoint))
+
+    presenter.setMarkVisible(true, animated: false)
+
+    #expect(panel.alphaValue == 1)
+    #expect(!panel.ignoresMouseEvents)
+    presenter.hide()
+  }
+
+  @MainActor
+  @Test("Bear marks fade, reveal by proximity, and open once per hover")
+  func bearMarksUseQuietReviewInteraction() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      recentMarkDuration: .milliseconds(15),
+      reviewRevealDelay: .milliseconds(10),
+      reviewExitDelay: .milliseconds(10),
+      hoverMenuDelay: .milliseconds(20)
+    )
+    controller.track(overlayApplication())
+    #expect(
+      await waitForBearOverlay {
+        presenter.showCount == 1
+      }
+    )
+    #expect(
+      await waitForBearOverlay {
+        !presenter.markIsVisible
+      }
+    )
+
+    presenter.reviewPointMatches = true
+    presenter.markPointMatches = true
+    controller.handlePointerMovement(to: .zero)
+
+    #expect(
+      await waitForBearOverlay {
+        presenter.markIsVisible
+      }
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenter.showMenuCount == 1
+      }
+    )
+
+    controller.handlePointerMovement(to: .zero)
+    try? await Task.sleep(for: .milliseconds(30))
+    #expect(presenter.showMenuCount == 1)
+
+    presenter.markPointMatches = false
+    controller.handlePointerMovement(to: .zero)
+    presenter.markPointMatches = true
+    controller.handlePointerMovement(to: .zero)
+    #expect(
+      await waitForBearOverlay {
+        presenter.showMenuCount == 2
+      }
+    )
+
+    presenter.markPointMatches = false
+    presenter.reviewPointMatches = false
+    controller.handlePointerMovement(to: .zero)
+    #expect(
+      await waitForBearOverlay {
+        !presenter.markIsVisible
+      }
+    )
+    controller.stop()
+  }
+
+  @MainActor
+  @Test("Always Visible prevents Bear marks from fading")
+  func bearAlwaysVisiblePreferenceIsShared() async throws {
+    let presenter = SpyBearAnnotationPresenter()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      marksAlwaysVisible: { true },
+      recentMarkDuration: .milliseconds(10)
+    )
+    controller.track(overlayApplication())
+    #expect(
+      await waitForBearOverlay {
+        presenter.showCount == 1
+      }
+    )
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(presenter.markIsVisible)
+    controller.stop()
+  }
+
+  @MainActor
   @Test("The global shortcut center dispatches only to its newest owner")
   func globalShortcutCenterArbitratesOwners() throws {
     let backend = StubBearAnnotationHotKeyBackend()
@@ -481,155 +597,6 @@ struct BearAnnotationOverlayTests {
       }
     )
     #expect(visibleCount == 1)
-  }
-
-  @MainActor
-  @Test("Brief Bear marks fade and cached nearby review restores them")
-  func briefMarksFadeAndRestoreFromCachedGeometry() async {
-    let presenter = SpyBearAnnotationPresenter()
-    let controller = testController(
-      presenter: presenter,
-      service: StubBearCorrectionService(),
-      markVisibility: { .briefAndContextual },
-      briefMarkDuration: .milliseconds(100)
-    )
-
-    controller.trackWithResolution(overlayApplication())
-    #expect(
-      await waitForBearOverlay {
-        presenter.isVisible
-      }
-    )
-    #expect(
-      await waitForBearOverlay {
-        !presenter.isVisible
-      }
-    )
-
-    controller.setContextualReveal(true)
-    #expect(presenter.isVisible)
-    controller.setContextualReveal(false)
-    #expect(!presenter.isVisible)
-    controller.stop()
-  }
-
-  @MainActor
-  @Test("An open Bear correction menu pins a faded mark")
-  func menuPinsBriefMark() async throws {
-    let presenter = SpyBearAnnotationPresenter()
-    let controller = testController(
-      presenter: presenter,
-      service: StubBearCorrectionService(),
-      markVisibility: { .briefAndContextual },
-      briefMarkDuration: .milliseconds(100)
-    )
-
-    controller.trackWithResolution(overlayApplication())
-    #expect(
-      await waitForBearOverlay(timeout: .seconds(30)) {
-        presenter.isVisible
-      }
-    )
-    #expect(
-      await waitForBearOverlay {
-        !presenter.isVisible
-      }
-    )
-    let interaction = try #require(presenter.interaction)
-    interaction.menuVisibilityHandler(true)
-    #expect(presenter.isVisible)
-    interaction.menuVisibilityHandler(false)
-    #expect(!presenter.isVisible)
-    controller.stop()
-  }
-
-  @MainActor
-  @Test("The shared Bear pointer monitor reveals nearby cached marks after dwell")
-  func sharedPointerMonitorRevealsNearbyMarks() async {
-    let pointerMonitor = StubBearAnnotationPointerMonitor()
-    var presenters: [SpyBearAnnotationPresenter] = []
-    let collection = BearAnnotationOverlayCollectionController(
-      maximumTrackedCorrections: 4,
-      fallbackRefreshInterval: .seconds(60),
-      workspaceNotificationCenter: NotificationCenter(),
-      shortcutRegistrar: StubBearAnnotationShortcutRegistrar(),
-      pointerMonitor: pointerMonitor,
-      pointerRevealDelay: .milliseconds(10),
-      pointerExitDelay: .milliseconds(10),
-      frontmostBundleIdentifier: {
-        BearAccessibilityProbe.bearBundleIdentifier
-      },
-      controllerFactory: {
-        let presenter = SpyBearAnnotationPresenter()
-        presenters.append(presenter)
-        return testController(
-          presenter: presenter,
-          service: StubBearCorrectionService(),
-          handlesKeyboardShortcut: false,
-          markVisibility: { .briefAndContextual },
-          briefMarkDuration: .milliseconds(80)
-        )
-      }
-    )
-
-    collection.trackWithResolution(overlayApplication())
-    #expect(
-      await waitForBearOverlay {
-        presenters.count == 1
-          && presenters[0].showCount > 0
-          && !presenters[0].isVisible
-      }
-    )
-
-    let placement = presenters[0].placements[0]
-    pointerMonitor.send(
-      NSPoint(
-        x: placement.x + placement.width / 2,
-        y: placement.y + placement.height / 2
-      )
-    )
-    #expect(
-      await waitForBearOverlay {
-        presenters[0].isVisible
-      }
-    )
-
-    pointerMonitor.send(NSPoint(x: 900, y: 700))
-    #expect(
-      await waitForBearOverlay {
-        !presenters[0].isVisible
-      }
-    )
-    collection.stop()
-  }
-
-  @MainActor
-  @Test("Always-visible Bear marks do not install pointer monitoring")
-  func alwaysVisibleSkipsPointerMonitoring() async {
-    let pointerMonitor = StubBearAnnotationPointerMonitor()
-    let collection = BearAnnotationOverlayCollectionController(
-      maximumTrackedCorrections: 1,
-      fallbackRefreshInterval: .seconds(60),
-      workspaceNotificationCenter: NotificationCenter(),
-      shortcutRegistrar: StubBearAnnotationShortcutRegistrar(),
-      pointerMonitor: pointerMonitor,
-      pointerReviewEnabled: { false },
-      frontmostBundleIdentifier: {
-        BearAccessibilityProbe.bearBundleIdentifier
-      },
-      controllerFactory: {
-        testController(
-          presenter: SpyBearAnnotationPresenter(),
-          service: StubBearCorrectionService(),
-          handlesKeyboardShortcut: false
-        )
-      }
-    )
-
-    collection.trackWithResolution(overlayApplication())
-    #expect(collection.trackedCorrectionCount == 1)
-    #expect(pointerMonitor.startCount == 0)
-    collection.stop()
   }
 
   @MainActor
@@ -1144,6 +1111,55 @@ struct BearAnnotationOverlayTests {
 
     #expect(collection.trackedCorrectionCount == 0)
     #expect(presenters.allSatisfy { !$0.isVisible })
+  }
+
+  @MainActor
+  @Test("The collection owns one pointer monitor for every correction")
+  func collectionSharesOnePointerMonitor() {
+    let pointerMonitor = StubBearAnnotationPointerMonitor()
+    let collection = BearAnnotationOverlayCollectionController(
+      maximumTrackedCorrections: 8,
+      fallbackRefreshInterval: .seconds(60),
+      workspaceNotificationCenter: NotificationCenter(),
+      shortcutRegistrar: StubBearAnnotationShortcutRegistrar(),
+      pointerMonitor: pointerMonitor,
+      frontmostBundleIdentifier: {
+        BearAccessibilityProbe.bearBundleIdentifier
+      },
+      controllerFactory: {
+        testController(
+          presenter: SpyBearAnnotationPresenter(),
+          service: StubBearCorrectionService(),
+          handlesKeyboardShortcut: false
+        )
+      }
+    )
+
+    collection.trackWithResolution(overlayApplication())
+    collection.trackWithResolution(overlayApplication(replacement: "one"))
+    collection.trackWithResolution(overlayApplication(replacement: "two"))
+
+    #expect(pointerMonitor.startCount == 1)
+    #expect(pointerMonitor.hasHandler)
+
+    collection.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: "com.example.OtherApp"
+    )
+    #expect(pointerMonitor.stopCount == 1)
+    #expect(!pointerMonitor.hasHandler)
+
+    collection.handleWorkspaceApplicationEvent(
+      name: NSWorkspace.didActivateApplicationNotification,
+      bundleIdentifier: BearAccessibilityProbe.bearBundleIdentifier
+    )
+    #expect(pointerMonitor.startCount == 2)
+    #expect(pointerMonitor.hasHandler)
+
+    collection.stop()
+
+    #expect(pointerMonitor.stopCount == 2)
+    #expect(!pointerMonitor.hasHandler)
   }
 
   @MainActor
@@ -1916,15 +1932,18 @@ private func testController(
     StubBearInvalidationMonitor(),
   handlesKeyboardShortcut: Bool = true,
   textChangeRefreshDelay: Duration = .zero,
-  markVisibility:
-    @escaping @MainActor @Sendable () -> BearAnnotationMarkVisibility = {
-      .alwaysVisible
-    },
-  briefMarkDuration: Duration =
-    BearAnnotationOverlayController.briefMarkDuration,
   hostApplicationBundleIdentifier: String? = "com.malpern.typover",
   voiceOverEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
-  activateBear: @escaping @MainActor @Sendable () -> Void = {}
+  activateBear: @escaping @MainActor @Sendable () -> Void = {},
+  marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = { false },
+  recentMarkDuration: Duration =
+    BearAnnotationOverlayController.recentMarkDuration,
+  reviewRevealDelay: Duration =
+    BearAnnotationOverlayController.reviewRevealDelay,
+  reviewExitDelay: Duration =
+    BearAnnotationOverlayController.reviewExitDelay,
+  hoverMenuDelay: Duration =
+    BearAnnotationOverlayController.hoverMenuDelay
 ) -> BearAnnotationOverlayController {
   BearAnnotationOverlayController(
     adapter: service,
@@ -1954,8 +1973,6 @@ private func testController(
     fallbackRefreshInterval: .seconds(60),
     textChangeRefreshDelay: textChangeRefreshDelay,
     handlesKeyboardShortcut: handlesKeyboardShortcut,
-    markVisibility: markVisibility,
-    briefMarkDuration: briefMarkDuration,
     selectionStabilizationDelays: [
       .milliseconds(40),
       .milliseconds(180),
@@ -1963,7 +1980,12 @@ private func testController(
     shortcutRegistrar: BearAnnotationShortcutCenter.shared,
     hostApplicationBundleIdentifier: hostApplicationBundleIdentifier,
     voiceOverEnabled: voiceOverEnabled,
-    activateBear: activateBear
+    activateBear: activateBear,
+    marksAlwaysVisible: marksAlwaysVisible,
+    recentMarkDuration: recentMarkDuration,
+    reviewRevealDelay: reviewRevealDelay,
+    reviewExitDelay: reviewExitDelay,
+    hoverMenuDelay: hoverMenuDelay
   )
 }
 
@@ -2135,10 +2157,15 @@ private func overlayInteraction(
 @MainActor
 private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
   private(set) var isVisible = false
+  private(set) var markIsVisible = true
   private(set) var showCount = 0
   private(set) var hideCount = 0
+  private(set) var showMenuCount = 0
+  private(set) var markVisibilityChanges: [Bool] = []
   private(set) var interaction: BearAnnotationInteraction?
   private(set) var placements: [AccessibilityBounds] = []
+  var reviewPointMatches = false
+  var markPointMatches = false
 
   func show(
     placements: [AccessibilityBounds],
@@ -2150,37 +2177,26 @@ private final class SpyBearAnnotationPresenter: BearAnnotationPresenting {
     self.interaction = interaction
   }
 
-  func showMenu() {}
+  func setMarkVisible(_ visible: Bool, animated _: Bool) {
+    markIsVisible = visible
+    markVisibilityChanges.append(visible)
+  }
+
+  func containsReviewPoint(_: NSPoint) -> Bool {
+    reviewPointMatches
+  }
+
+  func containsMarkPoint(_: NSPoint) -> Bool {
+    markPointMatches
+  }
+
+  func showMenu() {
+    showMenuCount += 1
+  }
 
   func hide() {
     hideCount += 1
     isVisible = false
-  }
-}
-
-@MainActor
-private final class StubBearAnnotationPointerMonitor:
-  BearAnnotationPointerMonitoring
-{
-  private var handler: (@MainActor @Sendable (NSPoint) -> Void)?
-  private(set) var startCount = 0
-  private(set) var stopCount = 0
-
-  func start(
-    handler: @escaping @MainActor @Sendable (NSPoint) -> Void
-  ) -> Bool {
-    startCount += 1
-    self.handler = handler
-    return true
-  }
-
-  func stop() {
-    stopCount += 1
-    handler = nil
-  }
-
-  func send(_ point: NSPoint) {
-    handler?(point)
   }
 }
 
@@ -2220,6 +2236,32 @@ private final class StubBearInvalidationMonitor:
 
   func send(_ event: BearAccessibilityInvalidationEvent) {
     handler?(event)
+  }
+}
+
+@MainActor
+private final class StubBearAnnotationPointerMonitor:
+  BearAnnotationPointerMonitoring
+{
+  private var handler: (@MainActor @Sendable (NSPoint) -> Void)?
+  private(set) var startCount = 0
+  private(set) var stopCount = 0
+
+  var hasHandler: Bool {
+    handler != nil
+  }
+
+  func start(
+    handler: @escaping @MainActor @Sendable (NSPoint) -> Void
+  ) -> Bool {
+    startCount += 1
+    self.handler = handler
+    return true
+  }
+
+  func stop() {
+    stopCount += 1
+    handler = nil
   }
 }
 
