@@ -5,14 +5,7 @@ import PackageDescription
 let package = Package(
   name: "Typover",
   platforms: [
-    // Typover ships as a macOS 27 app: Support/Typover-Info.plist sets
-    // LSMinimumSystemVersion to 27.0 and verify-beta-app.sh enforces it. The
-    // compile target is deliberately one release lower so the test suite can
-    // run on GitHub's hosted runners, whose newest image is a macOS 26 host
-    // (the `xcode-27` label is macOS 26 with Xcode 27). Compiling at 26 keeps
-    // availability checking honest: a macOS 27-only API becomes a build error
-    // instead of a runtime crash.
-    .macOS(.v26)
+    .macOS(.v27)
   ],
   products: [
     .executable(name: "Typover", targets: ["TypoverApp"]),

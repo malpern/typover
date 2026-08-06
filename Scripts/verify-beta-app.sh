@@ -126,17 +126,8 @@ binary_minimum_system_version="$(
         build_version && $1 == "minos" { print $2; exit }
       '
 )"
-# The bundle gates installation at LSMinimumSystemVersion (27.0, checked
-# above). The executable is compiled one release lower so the suite can run on
-# GitHub's hosted macOS 26 runners, so require that the binary supports at
-# least everything the bundle admits rather than matching it exactly. A binary
-# built for a *newer* OS than the bundle advertises is still a hard error,
-# because macOS would admit the app and then fail to launch it.
-if ! /usr/bin/printf '%s\n%s\n' \
-  "$binary_minimum_system_version" "$minimum_system_version" \
-  | /usr/bin/sort -C -t. -k1,1n -k2,2n; then
-  echo "The beta executable requires a newer macOS than the bundle admits:" \
-    "executable $binary_minimum_system_version, bundle $minimum_system_version." >&2
+if [[ "$binary_minimum_system_version" != "$minimum_system_version" ]]; then
+  echo "The beta bundle and executable minimum system versions do not match." >&2
   exit 1
 fi
 

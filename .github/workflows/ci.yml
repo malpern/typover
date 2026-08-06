@@ -20,16 +20,24 @@ concurrency:
 
 jobs:
   build-and-test:
-    # `xcode-27` is macOS 26 with Xcode 27 as the default toolchain, which is
-    # what swift-tools-version 6.4 needs. It is the reason Package.swift
-    # compiles at .macOS(.v26): every hosted image is a macOS 26 host, and a
-    # binary stamped minos 27.0 will not launch on one. The shipped bundle
-    # still gates at LSMinimumSystemVersion 27.0.
+    # Self-hosted macOS 27, not a GitHub-hosted runner. Every hosted image is a
+    # macOS 26 host, including the `xcode-27` label (macOS 26 with Xcode 27),
+    # so a test binary built for .macOS(.v27) cannot launch there. Compiling a
+    # release lower would work today, but ADR-002 commits the editor lab to
+    # macOS 27 APIs, so pinning the target to 26 for CI's sake would break the
+    # moment that direction is followed.
     #
-    # The image is marked preview upstream, so it can queue longer than GA
-    # images. If it is retired, the fallback is a self-hosted macOS 27 runner.
-    runs-on: xcode-27
+    # Typover has no external SwiftPM dependencies, so unlike KeyPath it does
+    # not need the swiftpm-safe label for headless binary-artifact fetches.
+    runs-on: [self-hosted, macOS, typover]
     timeout-minutes: 30
+
+    # The suite exercises real timing behavior (deferred corrections, idle
+    # gates, overlay lifecycles), and the mini also serves KeyPath CI. Two
+    # concurrent runs contend for CPU and reintroduce timing flakes.
+    concurrency:
+      group: typover-self-hosted-runner
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
