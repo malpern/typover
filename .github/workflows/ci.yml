@@ -20,20 +20,16 @@ concurrency:
 
 jobs:
   build-and-test:
-    # Typover targets .macOS(.v27) with swift-tools-version 6.4, which needs
-    # Xcode 27. GitHub-hosted macOS images top out at macOS 26, so a
-    # self-hosted macOS 27 runner is the only option. Unlike KeyPath, Typover
-    # has no external SwiftPM dependencies, so it does not need the
-    # swiftpm-safe label that works around headless binary-artifact fetches.
-    runs-on: [self-hosted, macOS, typover]
+    # `xcode-27` is macOS 26 with Xcode 27 as the default toolchain, which is
+    # what swift-tools-version 6.4 needs. It is the reason Package.swift
+    # compiles at .macOS(.v26): every hosted image is a macOS 26 host, and a
+    # binary stamped minos 27.0 will not launch on one. The shipped bundle
+    # still gates at LSMinimumSystemVersion 27.0.
+    #
+    # The image is marked preview upstream, so it can queue longer than GA
+    # images. If it is retired, the fallback is a self-hosted macOS 27 runner.
+    runs-on: xcode-27
     timeout-minutes: 30
-
-    # The suite exercises real timing behavior (deferred corrections, idle
-    # gates, overlay lifecycles). Two concurrent runs on one physical machine
-    # contend for CPU and reintroduce timing flakes, so serialize them.
-    concurrency:
-      group: typover-self-hosted-runner
-      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -43,9 +39,9 @@ jobs:
 
       - name: Toolchain versions
         run: |
-          swift --version
-          xcodebuild -version
           sw_vers
+          xcodebuild -version
+          swift --version
 
       - name: Build
         run: swift build
@@ -53,8 +49,8 @@ jobs:
       - name: Test
         run: swift test
 
-      # The release gate the roadmap refers to. Optimized builds have caught
-      # sentence-boundary regressions that the debug build did not.
+      # Optimized builds have caught sentence-boundary regressions that the
+      # debug build did not, so the roadmap treats this as a release gate.
       - name: Optimized build and test
         run: |
           swift build -c release
