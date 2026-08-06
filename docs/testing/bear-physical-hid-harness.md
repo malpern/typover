@@ -416,3 +416,27 @@ This closes fresh-process candidate qualification for the beta envelope. The
 40 ms row is retained as an extreme-speed resilience stress case, not a claim
 that every token is corrected. Its acceptance contract is fail-safe unchanged
 text, never corruption.
+
+## Quiet-review replacement candidate: 2026-08-06
+
+Replacement candidate `0.1.0 (20260806051920)` from clean revision
+`329e92bdc21a2dd7651e2b252c014f228e439576` completed the full quiet physical
+matrix with the first-beta event-tap experiment disabled.
+
+| Run | 160 ms | 100 ms | 60 ms | 40 ms | Unexpected text | Late reports |
+|---|---:|---:|---:|---:|---:|---:|
+| `typover-hid-2026-08-06T05-58-02Z` | 20/20 | 20/20 | 20/20 | 20/20 | 0 | 0 |
+
+Every row retained valid Bear focus and complete load evidence. Convergence
+after the fixture completed was 2.75 ms or less, and maximum ESP32 lateness was
+43 microseconds. The first row began from the candidate's existing 20 visible
+corrections and retained all 20; subsequent rows reached and held the intended
+newest-24 correction cap.
+
+An immediately preceding attempt, `typover-hid-2026-08-06T05-52-14Z`, was
+correctly rejected as invalid evidence. The owned-editor acceptance pass had
+temporarily taught `teh -> ten` by choosing an alternative, so Bear contained
+twenty exact `ten` results while the release oracle expected `the`. Removing
+only that synthetic learned preference restored `teh -> the` in the installed
+editor before the credited retry. This demonstrates that the harness does not
+silently count a valid but different learned correction as release evidence.

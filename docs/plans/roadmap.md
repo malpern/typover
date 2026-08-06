@@ -1,10 +1,10 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-05
-- Current focus: Build the replacement notarized candidate with the permission
-  fix, finish the clean-machine permission journey, then audit the shipped
-  claims and publish the beta
+- Updated: 2026-08-06
+- Current focus: Finish the clean-machine permission journey and the remaining
+  pointer/VoiceOver acceptance for the quiet correction-review interaction,
+  then audit the shipped claims and publish the beta
 
 ## Goal
 
@@ -48,8 +48,10 @@ editor-only illustration:
 7. Make **Always Visible** apply consistently to the controlled editor and
    Bear.
 
-This is implemented in source in both lanes. Deterministic validation is not a
-substitute for the remaining installed-app visual and physical Bear pass.
+This is implemented in source in both lanes. The replacement notarized
+candidate has passed owned-editor review and the full physical Bear matrix;
+deterministic validation is not a substitute for the remaining pointer,
+VoiceOver, and clean-machine permission observations.
 
 ## Roadmap dashboard
 
@@ -64,11 +66,11 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **Exact candidate accepted; quiet review implemented in source** | Notarized 0.1.0 passes uninterrupted three-word correction, three annotations, pointer-only Change Back, one-step Undo, contextual correction, earlier-caret correction, About provenance, Settings Accessibility, 352 debug tests, and an optimized boundary gate. Source adds sentence review and deliberate hover-to-menu | Build the replacement candidate and visually accept the final fade, review, hover-menu, dismissal, and Reduced Motion behavior |
-| Brief contextual marks | **In progress — both lanes implemented in source** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The editor uses exact sentence geometry; Bear uses one collection-level pointer monitor and bounded line proximity | Validate the installed editor visually, then run Bear geometry, focus, scrolling, wrapped-line, load, VoiceOver, and physical-typing acceptance before enabling the behavior in a beta candidate |
+| Controlled AppKit editor | **Replacement candidate accepted; pointer dwell remains** | Notarized `0.1.0 (20260806051920)` passes repeated independent correction, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, quieting after continued typing, native menu dismissal, and the shared Always Visible preference. It also passes 352 debug tests and the optimized boundary gate | Complete a true pointer-only 350 ms hover observation and Reduced Motion/VoiceOver acceptance |
+| Brief contextual marks | **In progress — both lanes implemented; physical Bear row passes** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The replacement candidate passed 80/80 physical Bear corrections from 160 through 40 ms with valid focus/load evidence | Finish Bear proximity, pointer-menu, dismissal, scrolling, wrapped-line, VoiceOver, focus-theft, and idle-CPU acceptance |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
-| Milestone 1: Bear word correction | **Beta envelope qualified** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and fresh-process notarized-candidate qualification through 60 ms per key | Treat the single safe 40 ms stress miss as a documented extreme-speed limit; do not expand the beta claim |
-| Milestone 2: Beta shell | **In progress — permission UI remains** | Notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, second-Mac install, and fresh-process launch | Complete the authenticated permission/revocation journey on an unlocked session |
+| Milestone 1: Bear word correction | **Beta envelope qualified on replacement candidate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and an 80/80 exact-candidate physical matrix through 40 ms per key | Keep the 40 ms row framed as resilience evidence rather than a public minimum-speed guarantee |
+| Milestone 2: Beta shell | **In progress — clean permission cycle remains** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, and fresh-process launch | Complete the authenticated denied-to-allowed-to-revoked journey on a clean unlocked session |
 | Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |
@@ -112,21 +114,31 @@ Status meanings:
   checksum, stapled ticket, Gatekeeper result, and optimized regression gate.
   Its correction evidence remains valid, but the clean first-run pass
   superseded it for distribution after finding the permission-pane misroute.
-- [ ] Build and notarize a replacement 0.1.0 candidate from the clean
-  permission-flow revision; repeat receipts, Gatekeeper, optimized tests,
-  owned-editor smoke, both permission links, and one fresh Bear physical row.
+- [x] Build and notarize replacement candidate `0.1.0 (20260806051920)` from
+  clean revision `329e92bdc21a2dd7651e2b252c014f228e439576` and verify its
+  receipt, checksum, stapled ticket, Gatekeeper result, optimized gate,
+  installed owned-editor behavior, and permission destinations. Exact physical
+  run `typover-hid-2026-08-06T05-58-02Z` then passed 80/80 corrections across
+  160/100/60/40 ms with valid focus and load evidence and no late reports.
 - [ ] Finish the clean-machine permission checklist. Artifact verification,
   installation, and fresh GUI launch pass on the second Mac; visible permission
   grant/revocation needs an unlocked authenticated session. The 2026-08-05
   first-run pass verified the explanation, both denied states, and deferred
   controlled-editor access, but found that the permission button opened
   System Settings at General. Source now guides Accessibility first and Input
-  Monitoring second; the replacement notarized candidate must repeat this row.
-- [ ] Accept the quiet correction-review interaction on the replacement
-  candidate. Verify the 1.5-second hold and 120 ms fade, exact sentence review in the owned
-  editor, bounded proximity review in Bear, hover-menu intent and dismissal,
-  scrolling/wrapped lines, continued typing, Always Visible, VoiceOver, and no
-  focus theft or elevated idle CPU.
+  Monitoring second. On the replacement candidate, both grants are visibly
+  allowed, its button opens the Privacy & Security root, and the two exact pane
+  URLs open Accessibility and Input Monitoring correctly. The clean denied-to-
+  allowed-to-revoked cycle still requires an authenticated clean session.
+- [ ] Finish accepting the quiet correction-review interaction on the
+  replacement candidate. Installed owned-editor evidence now covers repeated
+  independent corrections, quick fade, exact sentence review after caret
+  movement, targeted alternatives with sibling retention, continued-typing
+  quieting, click-opened native menu, dismissal, and Always Visible. Still
+  verify a true 350 ms pointer-only hover, Reduced Motion/VoiceOver, Bear
+  proximity and dismissal, scrolling/wrapped lines, and pointer-driven focus
+  retention. Three post-run idle samples held Typover at 0.0% CPU with flat
+  28,224 KiB RSS.
 - [x] Qualify that exact candidate with fresh Bear and Typover processes and
   release-config memory retirement. Two 2026-08-05 physical runs observed
   159/160 corrections across 160/100/60/40 ms rows, including 20/20 through
@@ -440,19 +452,13 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. Finish the human-facing quiet-review acceptance pass in the owned editor and
-   Bear. The post-pause correction policy is already decided; this pass is now
-   about fade/reveal timing, intentional menu activation, focus retention,
-   accessibility, and Bear geometry/performance under real typing.
-2. Produce the signed and notarized beta candidate, then run the clean-machine
-   installation, permission, recovery, update, and uninstall checklist.
-3. Qualify that final candidate—not every development build—with fresh Bear
-   and Typover processes, the release-config memory envelope, and a bounded
-   second-machine soak.
-4. Finish public-beta operations: the MIT-licensed source, roadmap, waitlist,
+1. Finish the clean-machine permission cycle and the remaining pointer-only,
+   VoiceOver, Reduced Motion, and Bear geometry observations. The owned-editor
+   review and exact-candidate physical Bear matrix already pass.
+2. Finish public-beta operations: the MIT-licensed source, roadmap, waitlist,
    support channel, release notes, and rollback guidance are public; the
    artifact-to-claim audit remains before publishing the beta binary.
-5. After the word-level beta is trustworthy, begin the deferred milestones:
+3. After the word-level beta is trustworthy, begin the deferred milestones:
    bounded local contextual correction, then a TextEdit adapter, and finally
    broader model benchmarking.
 

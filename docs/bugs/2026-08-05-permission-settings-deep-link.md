@@ -1,7 +1,7 @@
 # Permission setup opened the wrong System Settings pane
 
-- Status: Fixed in source; Accessibility link verified in a development build;
-  clean candidate verification pending
+- Status: Fixed; both destinations and the allowed-state fallback are verified
+  with the replacement notarized candidate; clean permission cycle pending
 - Found: 2026-08-05
 
 ## Symptom
@@ -33,7 +33,10 @@ launching System Settings rather than failing silently.
 
 ## Verification
 
-Unit coverage fixes the ordering, button labels, and exact pane URLs. A signed
-development build opened the visible macOS 27 Accessibility list directly.
-The clean Mac test must still verify both links in the replacement notarized
-candidate before this bug and the permission journey are accepted.
+Unit coverage fixes the ordering, button labels, and exact pane URLs. Installed
+candidate `0.1.0 (20260806051920)` reports both grants allowed and its button
+opens the visible Privacy & Security root. The exact Accessibility and Input
+Monitoring URLs both open their intended macOS 27 lists, where Typover is
+visibly enabled. The clean Mac test must still exercise the candidate's dynamic
+next-missing ordering from denied through allowed and revoked states before the
+full permission journey is accepted.

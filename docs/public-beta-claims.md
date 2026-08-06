@@ -1,7 +1,7 @@
 # Public beta claims
 
-- Status: Approved wording; exact candidate audit pending permissioned Bear row
-- Updated: 2026-08-04
+- Status: Approved wording; final clean permission and interaction audit pending
+- Updated: 2026-08-06
 
 ## Compatibility
 
@@ -47,23 +47,28 @@ GitHub's private **Report a vulnerability** form described in `SECURITY.md`.
 
 ## Candidate audit
 
-Candidate `0.1.0 (20260804072103)` matches the claims that can be verified
-without granting system permissions:
+Candidate `0.1.0 (20260806051920)` matches the claims that can be verified on
+the permissioned development Mac:
 
-- the bundle requires macOS 27.0 and identifies clean source `e38f535`;
+- the bundle requires macOS 27.0 and identifies clean source `329e92b`;
 - Apple Spelling and Apple Intelligence are the defaults shown in Settings;
 - the OpenAI and Anthropic choices remain explicit;
 - the app contains no launch agent, daemon, privileged helper, XPC service,
   login item, telemetry uploader, or updater;
 - its notarized update and rollback preserve local preferences and learning;
-  and
 - the lower-latency Bear event-tap lane is not exposed as the default product
-  path.
+  path;
+- the installed app visibly has Accessibility and Input Monitoring allowed,
+  and its exact pane URLs route to the intended macOS 27 settings; and
+- quiet physical run `typover-hid-2026-08-06T05-58-02Z` passed 80/80 Bear
+  corrections from 160 through 40 ms per key with valid focus/load evidence,
+  zero unexpected text, and zero late fixture reports.
 
-The Bear compatibility, post-pause behavior, permission-state recovery, and
-bounded diagnostic claims need one final run with the exact candidate after
-the notarized app receives Input Monitoring approval. Until that row passes,
-the wording is approved but the artifact is not beta-ready.
+The Bear compatibility, post-pause behavior, exact-range mutation, and bounded
+diagnostic claims now have exact-candidate evidence. The artifact is still held
+until a clean authenticated session completes the visible denied-to-allowed-to-
+revoked permission cycle and the remaining pointer-only, VoiceOver, Reduced
+Motion, and Bear proximity/wrapped-line interaction observations pass.
 
 ## Known limitations
 
