@@ -1,0 +1,65 @@
+name: Typover CI
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    # Self-hosted macOS 27, not a GitHub-hosted runner. Every hosted image is a
+    # macOS 26 host, including the `xcode-27` label (macOS 26 with Xcode 27),
+    # so a test binary built for .macOS(.v27) cannot launch there. Compiling a
+    # release lower would work today, but ADR-002 commits the editor lab to
+    # macOS 27 APIs, so pinning the target to 26 for CI's sake would break the
+    # moment that direction is followed.
+    #
+    # Typover has no external SwiftPM dependencies, so unlike KeyPath it does
+    # not need the swiftpm-safe label for headless binary-artifact fetches.
+    runs-on: [self-hosted, macOS, typover]
+    timeout-minutes: 30
+
+    # The suite exercises real timing behavior (deferred corrections, idle
+    # gates, overlay lifecycles), and the mini also serves KeyPath CI. Two
+    # concurrent runs contend for CPU and reintroduce timing flakes.
+    concurrency:
+      group: typover-self-hosted-runner
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Toolchain versions
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      # Optimized builds have caught sentence-boundary regressions that the
+      # debug build did not, so the roadmap treats this as a release gate.
+      - name: Optimized build and test
+        run: |
+          swift build -c release
+          swift test -c release

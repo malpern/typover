@@ -74,7 +74,13 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.store.statistics().correctionsApplied == 1)
     #expect(fixture.coordinator.diagnostics.snapshot.boundaryInputs == 1)
     #expect(fixture.coordinator.diagnostics.snapshot.valueChanges == 1)
-    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
+    // The applied diagnostic is recorded after annotation tracking, so it
+    // trails the tracker signal this test already waited on.
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1
+      }
+    )
     #expect(
       fixture.coordinator.diagnostics.snapshot
         .correctionToAnnotationSampleCount == 1
@@ -594,7 +600,13 @@ struct BearAutomaticCorrectionCoordinatorTests {
       fixture.applicator.requests.first?.range
         == AccessibilityTextRange(location: 0, length: 3)
     )
-    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1)
+    // The applied diagnostic is recorded after the write, so it trails the
+    // applicator signal this test already waited on.
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1
+      }
+    )
   }
 
   @Test("A caret move and adjacent edit invalidate a deferred correction")
@@ -750,7 +762,13 @@ struct BearAutomaticCorrectionCoordinatorTests {
         AccessibilityTextRange(location: 4, length: 3),
         AccessibilityTextRange(location: 0, length: 3),
       ])
-    #expect(fixture.coordinator.diagnostics.snapshot.correctionsApplied == 2)
+    // The coordinator records the applied diagnostic after the overlay work
+    // that follows each write, so the counter trails the applicator request.
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsApplied == 2
+      }
+    )
   }
 
   @Test("Post-burst scan recovers boundaries coalesced by Accessibility")
@@ -972,7 +990,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
     #expect(fixture.applicator.requests.isEmpty)
     #expect(fixture.tracker.applications.isEmpty)
-    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+      }
+    )
     #expect(
       fixture.coordinator.diagnostics.snapshot.lastOutcome == .contextChanged
     )
@@ -993,7 +1015,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
     )
 
     #expect(fixture.applicator.requests.isEmpty)
-    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+      }
+    )
     #expect(
       fixture.coordinator.diagnostics.snapshot.lastOutcome
         == .unarmedValueChange
@@ -1017,7 +1043,11 @@ struct BearAutomaticCorrectionCoordinatorTests {
 
     #expect(fixture.applicator.requests.isEmpty)
     #expect(fixture.tracker.applications.isEmpty)
-    #expect(fixture.coordinator.diagnostics.snapshot.safeSkips == 1)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.safeSkips == 1
+      }
+    )
     #expect(
       fixture.coordinator.diagnostics.snapshot.lastOutcome
         == .staleBoundaryInput
