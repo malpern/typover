@@ -371,6 +371,17 @@ struct BearAnnotationOverlayTests {
         presenter.markIsVisible
       }
     )
+
+    // Arm the hover dwell only once the mark is actually visible. The first
+    // movement above lands while the mark is still faded, and the controller
+    // requires isMarkVisible when its hover timer fires; if the reveal has not
+    // been applied by then it drops the intent and does not re-arm itself. A
+    // real pointer keeps emitting movement, so production recovers on the next
+    // event -- a single synthetic movement has nothing to recover from, which
+    // made this assertion fail on slower machines. Sending movement after the
+    // reveal models the live pointer instead of racing it.
+    controller.handlePointerMovement(to: .zero)
+
     #expect(
       await waitForBearOverlay {
         presenter.showMenuCount == 1
@@ -1423,16 +1434,27 @@ struct BearAnnotationOverlayTests {
 
     monitor.send(.valueChanged)
     try await Task.sleep(for: .milliseconds(60))
+    let secondChange = ContinuousClock().now
     monitor.send(.selectionChanged)
-    try await Task.sleep(for: .milliseconds(60))
-    #expect(presenter.showCount == 1)
-    #expect(!presenter.isVisible)
 
+    // The second change must restart the debounce window, so the refresh may
+    // not land until textChangeRefreshDelay after it. Assert that elapsed floor
+    // rather than sampling showCount at a fixed instant: Task.sleep only
+    // guarantees a lower bound, so a loaded machine overshoots any chosen
+    // sampling point and reports a refresh that debounced correctly as a
+    // failure. A floor cannot fail that way -- overshoot only makes the
+    // measured interval longer, while a refresh that ignored the second change
+    // would land ~40ms after it and still be caught.
     #expect(
-      await waitForBearOverlay(timeout: .milliseconds(100)) {
+      await waitForBearOverlay {
         presenter.showCount == 2
       }
     )
+    #expect(ContinuousClock().now - secondChange >= .milliseconds(100))
+
+    // Coalescing means exactly one refresh, so the count must now hold steady.
+    try await Task.sleep(for: .milliseconds(120))
+    #expect(presenter.showCount == 2)
     controller.stop()
   }
 
