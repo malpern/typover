@@ -74,7 +74,7 @@ Status meanings:
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **Beta envelope qualified on replacement candidate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and an 80/80 exact-candidate physical matrix through 40 ms per key | Keep the 40 ms row framed as resilience evidence rather than a public minimum-speed guarantee |
 | Milestone 2: Beta shell | **Done** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, fresh-process launch, the authenticated denied-to-allowed-to-revoked journey on a disposable clean macOS 27 guest, and Input Monitoring presented as included with Accessibility rather than as a second grantable switch, shipped in notarized candidate `0.1.0 (20260808224257)` and verified rendering in a clean guest | Nothing outstanding |
-| Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
+| Public-beta operations | **Claims audited; binary held for the interaction pass** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, recoverable app-only/full-data uninstall, and the artifact-to-claim audit against `0.1.0 (20260808224257)` on a clean guest | Publish the binary once the quiet correction-review interaction pass completes |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |
 | Milestone 5: Quality and model scale | **Early groundwork only** | Small corpus and provider benchmark infrastructure | Grow to 500+ cases, add consented natural-writing data, cross-version testing, and local open-model benchmarks |
@@ -168,8 +168,19 @@ Status meanings:
   Issues, with a content-free report contract.
 - [x] Finalize release-note and rollback instructions; instantiate them with
   the exact candidate metadata after notarization.
-- [ ] Verify that the published privacy, compatibility, and support claims
-  match the shipped artifact after the permissioned Bear row.
+- [x] Verify that the published privacy, compatibility, and support claims
+  match the shipped artifact after the permissioned Bear row. Audited against
+  candidate `0.1.0 (20260808224257)` on 2026-08-08, with the runtime half run on
+  a disposable clean macOS 27 guest rather than the permissioned development
+  Mac. Provenance, hardened runtime, notarization and checksum, absence of any
+  launch agent/daemon/helper/login item (confirmed after launch against
+  `sfltool dumpbtm`), absence of any telemetry endpoint, the on-device default
+  writing model, diagnostics off and content-free by default, and the
+  environment-only research lane all match. Two limits are stated rather than
+  glossed: Apple Intelligence is unavailable in a VM, so its on-device path
+  keeps development-Mac evidence, and Bear is not installed in the lab base, so
+  version gating rests on the physical matrix. Full record in
+  [public-beta-claims.md](../public-beta-claims.md).
 
 Future contextual correction, additional applications, and larger model
 benchmarks are explicitly **not** blockers for the first word-level Bear beta.

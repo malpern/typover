@@ -1,11 +1,9 @@
 # Public beta claims
 
-- Status: Clean permission cycle passed 2026-08-08; the interaction audit is
-  still pending. Input Monitoring is settled as included with Accessibility
-  rather than separately granted, and candidate `0.1.0 (20260808224257)` now
-  says so. **The candidate audit below still describes the superseded
-  `20260806051920`** and must be re-run against the new build before
-  publication. See
+- Status: Audited against candidate `0.1.0 (20260808224257)` on 2026-08-08; the
+  claims below match the artifact. Input Monitoring is settled as included with
+  Accessibility rather than separately granted, and this candidate says so. The
+  binary stays held pending the quiet correction-review interaction pass. See
   [Input Monitoring is not a separately grantable permission](bugs/2026-08-08-input-monitoring-reported-without-grant.md)
 - Updated: 2026-08-08
 
@@ -53,30 +51,86 @@ GitHub's private **Report a vulnerability** form described in `SECURITY.md`.
 
 ## Candidate audit
 
-Candidate `0.1.0 (20260806051920)` matches the claims that can be verified on
-the permissioned development Mac:
+Candidate `0.1.0 (20260808224257)`, audited 2026-08-08. The runtime half was
+run on a disposable macOS 27 guest that had never seen Typover, rather than on
+the permissioned development Mac, so nothing here depends on state a previous
+install left behind.
 
-- the bundle requires macOS 27.0 and identifies clean source `329e92b`;
-- Apple Spelling and Apple Intelligence are the defaults shown in Settings;
-- the OpenAI and Anthropic choices remain explicit;
-- the app contains no launch agent, daemon, privileged helper, XPC service,
-  login item, telemetry uploader, or updater;
-- its notarized update and rollback preserve local preferences and learning;
-- the lower-latency Bear event-tap lane is not exposed as the default product
-  path;
-- the installed app visibly has Accessibility allowed and its exact pane URLs
-  route to the intended macOS 27 settings. Input Monitoring is not a separate
-  grant and is not visible anywhere; from `20260808224257` the app states this
-  rather than showing it as a second switch; and
-- quiet physical run `typover-hid-2026-08-06T05-58-02Z` passed 80/80 Bear
-  corrections from 160 through 40 ms per key with valid focus/load evidence,
-  zero unexpected text, and zero late fixture reports.
+### Verified against this artifact
 
-The Bear compatibility, post-pause behavior, exact-range mutation, and bounded
-diagnostic claims now have exact-candidate evidence. The artifact is still held
-until a clean authenticated session completes the visible denied-to-allowed-to-
-revoked permission cycle and the remaining pointer-only, VoiceOver, Reduced
-Motion, and Bear proximity/wrapped-line interaction observations pass.
+**Provenance and compatibility.** The bundle declares
+`LSMinimumSystemVersion 27.0`, `CFBundleVersion 20260808224257`, and clean
+source `a81645b947a814055da79e06f92cf9b6e3e7e420` with `TypoverSourceDirty 0`.
+It is signed by team `X2RKZ5TG99` under the hardened runtime, notarized,
+stapled, and Gatekeeper-accepted, and the archive checksum matches its receipt.
+Both supported Bear versions, `2.8.1` and `2.9.1`, are present in the binary.
+
+**No background persistence.** The bundle contains only `_CodeSignature`,
+`MacOS`, and `Resources` — no launch agent, daemon, privileged helper, XPC
+service, or embedded login item — and it carries no entitlements at all. The
+binary references none of `SMLoginItemSetEnabled`, `SMAppService`,
+`NSBackgroundActivity`, `Sparkle`, or `SUUpdater`. Confirmed at run time on the
+clean guest: after launching, `~/Library/LaunchAgents`, `/Library/LaunchAgents`,
+`/Library/LaunchDaemons`, and `/Library/PrivilegedHelperTools` contain nothing
+matching Typover, and `sfltool dumpbtm` — macOS's own background-item registry —
+lists none. The only state created is the `com.malpern.typover` preferences
+domain.
+
+**No telemetry.** The only network hosts in the binary are
+`https://api.openai.com`, `https://api.anthropic.com`, and `https://github.com`
+— the two explicitly selected providers and the support link. There is no
+analytics or crash-reporting endpoint.
+
+**Model choice is explicit.** In Settings → Model on the clean guest, the
+writing-model control (`typover.settings.contextual-model`) reads
+**Apple Intelligence (On Device)**. *GPT-5.6 Terra (OpenAI)* and
+*Claude Sonnet 5 (Anthropic)* are unselected menu options.
+
+**Diagnostics are off and content-free by default.** Settings → Privacy shows
+*Save a local Bear diagnostic trace* off, with the status line
+"Off. Enable it to keep content-free timing for a diagnostic session."
+*Include bounded writing context* is a separate switch and is not actionable
+while the trace is off, and both **Export…** and **Delete** are present and
+likewise inactive with nothing recorded.
+
+**The research lane is not a product path.** The fast event-tap lane appears
+only as the environment variable `TYPOVER_EXPERIMENTAL_BEAR_TEXT_EXPANSION`,
+with no preference exposing it.
+
+**Permissions.** Accessibility grants and revokes visibly, and its exact pane
+URLs route correctly. Input Monitoring is not a separate grant and appears
+nowhere in System Settings; this build states that rather than showing it as a
+second switch.
+
+### Carried forward from `20260806051920`
+
+The diff between the two candidates is permission-row copy and a status helper
+in `TypoverApp`; no engine, Bear-integration, overlay, or preference behaviour
+changed, and no preference keys or learning formats moved. On that basis these
+keep their prior evidence rather than being re-run:
+
+- physical run `typover-hid-2026-08-06T05-58-02Z`, 80/80 Bear corrections from
+  160 through 40 ms per key with valid focus/load evidence;
+- the installed owned-editor review;
+- notarized update and rollback preserving local preferences and learning;
+- Bear post-pause behaviour, exact-range mutation, and the claim that normal
+  operation does not save note text.
+
+### Not verifiable in this environment
+
+Apple Intelligence reports **Unavailable on this Mac** in a VM guest, and
+Typover correctly falls back to Apple's spelling checker with a stated message.
+The on-device Apple Intelligence path therefore could not be exercised here; its
+evidence remains the development Mac. Bear itself is not installed in the lab
+base, so the version-gating and fail-closed behaviour was confirmed only as far
+as both supported versions being present in the binary — the behavioural
+evidence is the physical matrix above.
+
+### Status
+
+The claims match the artifact. The binary remains held pending the quiet
+correction-review interaction pass: pointer-only dwell, Reduced Motion,
+VoiceOver, and Bear proximity/wrapped-line observations.
 
 ## Known limitations
 
