@@ -1,7 +1,10 @@
 # Permission setup opened the wrong System Settings pane
 
-- Status: Fixed; both destinations and the allowed-state fallback are verified
-  with the replacement notarized candidate; clean permission cycle pending
+- Status: Fixed and verified on a clean machine. The deep link, the denied and
+  allowed button states, and the revoke path all pass. The
+  Input Monitoring ordering step remains unobserved for a reason outside this
+  bug — see
+  [Input Monitoring reports Allowed without its own grant](2026-08-08-input-monitoring-reported-without-grant.md)
 - Found: 2026-08-05
 
 ## Symptom
