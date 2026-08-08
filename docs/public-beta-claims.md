@@ -1,11 +1,11 @@
 # Public beta claims
 
-- Status: Clean permission cycle passed 2026-08-08. The interaction audit is
-  still pending. One audit line below needs revisiting: Input Monitoring is
-  implied by Accessibility rather than separately granted, so describing it as
-  *visibly* allowed does not match what a user can see. The framing of the two
-  permissions as independent choices lives in the onboarding UI rather than in
-  this document. See
+- Status: Clean permission cycle passed 2026-08-08; the interaction audit is
+  still pending. Input Monitoring is settled as included with Accessibility
+  rather than separately granted, and the onboarding now says so — but that
+  correction landed **after** candidate `0.1.0 (20260806051920)`, so the audit
+  below describes a build whose permission copy has since changed. Re-run it
+  against a candidate carrying the corrected copy. See
   [Input Monitoring is not a separately grantable permission](bugs/2026-08-08-input-monitoring-reported-without-grant.md)
 - Updated: 2026-08-08
 

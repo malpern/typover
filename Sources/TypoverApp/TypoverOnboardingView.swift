@@ -8,6 +8,18 @@ struct TypoverPermissionSnapshot: Equatable, Sendable {
   let accessibilityAllowed: Bool
   let inputMonitoringAllowed: Bool
 
+  /// The `.inputMonitoring` case is unreachable on macOS 27 and is kept
+  /// deliberately.
+  ///
+  /// It needs `accessibilityAllowed && !inputMonitoringAllowed`, and macOS
+  /// grants Input Monitoring along with Accessibility: measured on a clean
+  /// macOS 27 guest, `tccutil reset ListenEvent` left
+  /// `CGPreflightListenEventAccess()` returning true while the same reset
+  /// against Accessibility cleared both, so there is no separate approval to
+  /// withdraw. That was verified for this app, on that one OS version, in a
+  /// VM — narrow enough that removing the branch would be a bet on the
+  /// relationship never changing. If a later macOS does separate them, this
+  /// keeps guiding people to the right pane instead of silently skipping it.
   var nextSystemSettingsDestination: TypoverSystemSettingsDestination {
     if !accessibilityAllowed {
       return .accessibility
@@ -173,9 +185,10 @@ private struct TypoverPermissionBenefits: View {
       TypoverPermissionRow(
         title: "Input Monitoring",
         explanation:
-        "Lets Typover distinguish a word you just completed from pasted or programmatic text. Typover does not record your keystrokes.",
+        "Lets Typover tell a word you just finished typing from pasted or programmatic text. macOS includes this with Accessibility, so there is no separate switch to turn on. Typover does not record your keystrokes.",
         isAllowed: snapshot.inputMonitoringAllowed,
-        systemImage: "keyboard"
+        systemImage: "keyboard",
+        isImpliedByAccessibility: true
       )
 
       HStack {
@@ -203,12 +216,39 @@ private struct TypoverPermissionBenefits: View {
   }
 }
 
+enum TypoverPermissionStatus {
+  /// Input Monitoring has no control a user can reach. macOS includes it with
+  /// Accessibility, so an app holding Accessibility is never added to the
+  /// Input Monitoring list and is never asked about it. Showing "Not yet
+  /// allowed" sent the reader looking for a switch that is not there, and
+  /// offered a choice they had in fact already made by granting Accessibility.
+  static func title(
+    isAllowed: Bool,
+    isImpliedByAccessibility: Bool
+  ) -> LocalizedStringResource {
+    if isImpliedByAccessibility {
+      return "Included with Accessibility"
+    }
+    return isAllowed ? "Allowed" : "Not yet allowed"
+  }
+}
+
 private struct TypoverPermissionRow: View {
   let title: LocalizedStringResource
   let explanation: LocalizedStringResource
   let isAllowed: Bool
   let systemImage: String
   var isCompact = false
+  /// Set for a capability macOS grants along with Accessibility rather than
+  /// through a switch of its own.
+  var isImpliedByAccessibility = false
+
+  private var statusTitle: LocalizedStringResource {
+    TypoverPermissionStatus.title(
+      isAllowed: isAllowed,
+      isImpliedByAccessibility: isImpliedByAccessibility
+    )
+  }
 
   var body: some View {
     HStack(alignment: .top, spacing: 14) {
@@ -224,7 +264,7 @@ private struct TypoverPermissionRow: View {
             .font(isCompact ? .body : .headline)
           Spacer()
           Label {
-            Text(isAllowed ? "Allowed" : "Not yet allowed")
+            Text(statusTitle)
           } icon: {
             Image(
               systemName: isAllowed
@@ -299,10 +339,11 @@ struct TypoverPermissionsSettingsSection: View {
       TypoverPermissionRow(
         title: "Input Monitoring",
         explanation:
-        "Required to pair a real completion key with Bear's text change.",
+        "Required to pair a real completion key with Bear's text change. macOS includes it with Accessibility.",
         isAllowed: permissionModel.snapshot.inputMonitoringAllowed,
         systemImage: "keyboard",
-        isCompact: true
+        isCompact: true,
+        isImpliedByAccessibility: true
       )
       HStack {
         Button(action: permissionModel.openSystemSettings) {

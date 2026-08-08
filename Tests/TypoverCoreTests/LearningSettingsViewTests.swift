@@ -33,11 +33,54 @@ struct LearningSettingsViewTests {
   }
 
   @Test
+  func `Input Monitoring is presented as included with Accessibility`() {
+    // It has no switch of its own, so it must never be shown as something the
+    // reader still has to go and allow. Both states say the same thing,
+    // because the answer does not depend on the current grant.
+    for isAllowed in [true, false] {
+      #expect(
+        String(
+          localized: TypoverPermissionStatus.title(
+            isAllowed: isAllowed,
+            isImpliedByAccessibility: true
+          )
+        ) == "Included with Accessibility"
+      )
+    }
+
+    // Accessibility itself is a real switch and keeps the actionable wording.
+    #expect(
+      String(
+        localized: TypoverPermissionStatus.title(
+          isAllowed: false,
+          isImpliedByAccessibility: false
+        )
+      ) == "Not yet allowed"
+    )
+    #expect(
+      String(
+        localized: TypoverPermissionStatus.title(
+          isAllowed: true,
+          isImpliedByAccessibility: false
+        )
+      ) == "Allowed"
+    )
+  }
+
+  /// Note that `onlyAccessibilityAllowed` is a state macOS 27 does not
+  /// produce: Input Monitoring is granted with Accessibility, so the two never
+  /// diverge and **Set Up Input Monitoring…** is never shown to a real user.
+  /// Building the snapshot by hand bypasses the preflight calls, which is why
+  /// this test passed while that branch had never once run in the app — it
+  /// covers the mapping, not the reachability. It is kept because the branch is
+  /// kept, as defence against a macOS that separates the two permissions.
+  @Test
   func `Permission setup opens the next missing macOS pane`() {
     let neitherAllowed = TypoverPermissionSnapshot(
       accessibilityAllowed: false,
       inputMonitoringAllowed: false
     )
+    // Unreachable in practice; see the note above.
     let onlyAccessibilityAllowed = TypoverPermissionSnapshot(
       accessibilityAllowed: true,
       inputMonitoringAllowed: false

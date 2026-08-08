@@ -1,9 +1,9 @@
 # Input Monitoring is not a separately grantable permission
 
-- Status: Settled 2026-08-08 by controlled experiment, not inference. Not a
-  defect in the permission code. The onboarding presents Input Monitoring as a
-  second independent choice, which it is not, and one ordering branch is
-  unreachable.
+- Status: Settled 2026-08-08 by controlled experiment, not inference, and the
+  presentation is fixed. Not a defect in the permission code: the onboarding
+  presented Input Monitoring as a second independent choice, which it is not.
+  The unreachable ordering branch is retained deliberately and labelled.
 - Date: 2026-08-08
 
 ## What was observed
@@ -98,19 +98,31 @@ stating the installed app "visibly has Accessibility and Input Monitoring
 allowed", which is not true of Input Monitoring: it is visible nowhere. That
 line has been narrowed.
 
-## Recommended changes
+## Changes made
 
-These are product decisions, not fixes to make silently:
+**1. The Input Monitoring row now reads "Included with Accessibility"** in both
+the onboarding and the Settings section, instead of Allowed / Not yet allowed.
+The row is kept rather than dropped: Typover observing typing completion is a
+real privacy disclosure, and removing it to fix the wording would have told the
+reader less, not more. The status is deliberately the same in both grant states,
+because the answer does not depend on the current grant.
 
-1. Present Input Monitoring as **implied by Accessibility** rather than as a
-   second grantable row — or drop the row and explain the combined capability
-   once, accurately.
-2. Reword the onboarding explanation so it does not imply a separate,
-   deliberate Input Monitoring choice.
-3. Either delete the `.inputMonitoring` destination and its title as dead code,
-   or keep it only as defence against a future macOS that separates the two —
-   and if kept, say so at the test, which currently reads as coverage of a live
-   path.
+**2. Both explanations say where the capability comes from.** The onboarding
+now reads: *"Lets Typover tell a word you just finished typing from pasted or
+programmatic text. macOS includes this with Accessibility, so there is no
+separate switch to turn on. Typover does not record your keystrokes."* The
+keystroke assurance is unchanged.
 
-Keeping the runtime `.inputMonitoringUnavailable` safety check is still
-reasonable: it costs nothing and fails closed if the relationship ever changes.
+**3. The `.inputMonitoring` destination is kept, and labelled.** Deleting it
+would bet on the relationship never changing, and the evidence is one app on one
+macOS version in a VM — too narrow for that bet. If a later macOS separates the
+two, the branch still routes people to the right pane instead of silently
+skipping it. The reason is recorded at `nextSystemSettingsDestination`, and the
+test that exercises it now says outright that it covers the mapping rather than
+the reachability, since it builds the impossible snapshot by hand.
+
+A new test asserts the implied row never renders as "Not yet allowed" while
+Accessibility keeps its actionable wording; removing the implied case fails it.
+
+The runtime `.inputMonitoringUnavailable` check is also kept: it costs nothing
+and fails closed if the relationship ever changes.
