@@ -1,10 +1,12 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-06
-- Current focus: Finish the clean-machine permission journey and the remaining
-  pointer/VoiceOver acceptance for the quiet correction-review interaction,
-  then audit the shipped claims and publish the beta
+- Updated: 2026-08-08
+- Current focus: The clean-machine permission journey has passed. Remaining
+  before the beta: the pointer/VoiceOver acceptance for the quiet
+  correction-review interaction, resolving whether Input Monitoring is a
+  separately grantable permission, then auditing the shipped claims and
+  publishing
 
 ## Goal
 
@@ -70,7 +72,7 @@ Status meanings:
 | Brief contextual marks | **In progress — both lanes implemented; physical Bear row passes** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The replacement candidate passed 80/80 physical Bear corrections from 160 through 40 ms with valid focus/load evidence | Finish Bear proximity, pointer-menu, dismissal, scrolling, wrapped-line, VoiceOver, focus-theft, and idle-CPU acceptance |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **Beta envelope qualified on replacement candidate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and an 80/80 exact-candidate physical matrix through 40 ms per key | Keep the 40 ms row framed as resilience evidence rather than a public minimum-speed guarantee |
-| Milestone 2: Beta shell | **In progress — clean permission cycle remains** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, and fresh-process launch | Complete the authenticated denied-to-allowed-to-revoked journey on a clean unlocked session |
+| Milestone 2: Beta shell | **Clean permission cycle passed** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, fresh-process launch, and the authenticated denied-to-allowed-to-revoked journey on a disposable clean macOS 27 guest | Resolve whether Input Monitoring is a separately grantable permission at all; it tracked Accessibility rather than moving independently, leaving that ordering state unreachable |
 | Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |
@@ -120,16 +122,24 @@ Status meanings:
   installed owned-editor behavior, and permission destinations. Exact physical
   run `typover-hid-2026-08-06T05-58-02Z` then passed 80/80 corrections across
   160/100/60/40 ms with valid focus and load evidence and no late reports.
-- [ ] Finish the clean-machine permission checklist. Artifact verification,
-  installation, and fresh GUI launch pass on the second Mac; visible permission
-  grant/revocation needs an unlocked authenticated session. The 2026-08-05
-  first-run pass verified the explanation, both denied states, and deferred
+- [x] Finish the clean-machine permission checklist. The 2026-08-05 first-run
+  pass verified the explanation, both denied states, and deferred
   controlled-editor access, but found that the permission button opened
   System Settings at General. Source now guides Accessibility first and Input
-  Monitoring second. On the replacement candidate, both grants are visibly
-  allowed, its button opens the Privacy & Security root, and the two exact pane
-  URLs open Accessibility and Input Monitoring correctly. The clean denied-to-
-  allowed-to-revoked cycle still requires an authenticated clean session.
+  Monitoring second. The 2026-08-08 run then completed the authenticated
+  denied-to-allowed-to-revoked cycle on a disposable macOS 27 guest that had
+  never seen Typover, against a bundle verified as candidate
+  `0.1.0 (20260806051920)` before launch: both denied with **Set Up
+  Accessibility…**, both allowed with **Open Privacy & Security…** after an
+  authenticated grant, and both denied again with the button restored after
+  revocation. The setup button opened Accessibility directly on an account with
+  no remembered pane. Evidence in
+  [the clean permission cycle record](../testing/clean-permission-cycle-2026-08-08.md).
+  One sub-claim is deliberately excluded: the **Set Up Input Monitoring…**
+  ordering state was unreachable, because Input Monitoring tracked Accessibility
+  rather than moving independently. That is tracked as its own defect in
+  [Input Monitoring reports Allowed without its own grant](../bugs/2026-08-08-input-monitoring-reported-without-grant.md)
+  rather than held against this checklist.
 - [ ] Finish accepting the quiet correction-review interaction on the
   replacement candidate. Installed owned-editor evidence now covers repeated
   independent corrections, quick fade, exact sentence review after caret

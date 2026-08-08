@@ -1,7 +1,10 @@
 # Public beta claims
 
-- Status: Approved wording; final clean permission and interaction audit pending
-- Updated: 2026-08-06
+- Status: Approved wording; clean permission cycle passed 2026-08-08. The
+  interaction audit is still pending, and the privacy wording describing Input
+  Monitoring as a separately chosen permission is under review — see
+  [Input Monitoring reports Allowed without its own grant](bugs/2026-08-08-input-monitoring-reported-without-grant.md)
+- Updated: 2026-08-08
 
 ## Compatibility
 

@@ -158,14 +158,14 @@
 <body>
   <main>
     <header class="hero">
-      <span class="eyebrow">Roadmap · Updated August 6, 2026</span>
+      <span class="eyebrow">Roadmap · Updated August 8, 2026</span>
       <h1>Corrections you can trust—and take back.</h1>
-      <p class="lede">The replacement notarized candidate now passes the owned-editor review and the full physical Bear matrix: marks appear, fade, return during review, and remain individually reversible. The release runway is down to clean permission cycling, final pointer and accessibility observations, and the artifact-to-claim audit.</p>
+      <p class="lede">The replacement notarized candidate now passes the owned-editor review and the full physical Bear matrix: marks appear, fade, return during review, and remain individually reversible. The clean-machine permission cycle passed on 8 August on a disposable macOS 27 guest. The release runway is down to the final pointer and accessibility observations, one open question about whether Input Monitoring is separately grantable, and the artifact-to-claim audit.</p>
       <div class="hero-meta">
         <span class="badge">Replacement 0.1.0 notarized</span>
         <span class="badge">MIT licensed</span>
         <span class="badge">80/80 physical Bear corrections</span>
-        <span class="badge pending">Clean permission cycle needed</span>
+        <span class="badge">Clean permission cycle passed</span>
         <span class="badge neutral">Binary not published</span>
       </div>
     </header>
@@ -203,12 +203,12 @@
         <article class="card" style="--progress: 97%">
           <div class="card-head"><h3>Bear word correction</h3><span class="badge">Physical matrix passed</span></div>
           <p>The safe 220 ms idle-first lane, exact ranges, rapid catch-up, independent overlays, Change Back, alternatives, load recovery, version gating, and the replacement candidate's 80/80 physical matrix pass.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Clean permission and interaction observations</span><strong>97%</strong></div>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Bear interaction observations</span><strong>97%</strong></div>
         </article>
-        <article class="card" style="--progress: 98%">
+        <article class="card" style="--progress: 100%">
           <div class="card-head"><h3>Beta shell &amp; lifecycle</h3><span class="badge">Lifecycle passed</span></div>
-          <p>Onboarding, privacy, accessible Settings, strict receipts, notarization, clean install, update, rollback, soak, and recoverable uninstall are verified.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Authenticated permission/revocation</span><strong>98%</strong></div>
+          <p>Onboarding, privacy, accessible Settings, strict receipts, notarization, clean install, update, rollback, soak, and recoverable uninstall are verified. The authenticated denied → allowed → revoked cycle passed on a clean macOS 27 guest.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Authenticated permission/revocation</span><strong>100%</strong></div>
         </article>
         <article class="card" style="--progress: 42%">
           <div class="card-head"><h3>Beyond Bear</h3><span class="badge neutral">Deferred</span></div>
@@ -221,7 +221,7 @@
     <section aria-labelledby="runway-heading">
       <div class="section-title">
         <h2 id="runway-heading">Release runway</h2>
-        <p>The source and roadmap are public. The candidate and physical matrix pass; the remaining order is intentional: finish clean permissions and interaction observations, audit claims, then publish the beta binary.</p>
+        <p>The source and roadmap are public. The candidate, physical matrix, and clean permission cycle pass; the remaining order is intentional: finish the interaction observations, settle whether Input Monitoring is separately grantable, audit claims, then publish the beta binary.</p>
       </div>
       <div class="runway">
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Replacement candidate</h3><p><code>0.1.0 (20260806051920)</code> from clean revision <code>329e92b</code> passes receipt, checksum, stapling, Gatekeeper, optimized regression, installed-editor review, and permission-destination checks.</p></div><span class="badge">Done</span></article>
@@ -230,7 +230,8 @@
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Second-Mac lifecycle</h3><p>Clean install, fresh launch, notarized 0.0.9 → 0.1.0 update, rollback, and final restore preserve state.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Soak &amp; uninstall</h3><p>An 11-minute final-candidate soak stayed flat; app-only and full-data removal passed with recoverable evidence and no TCC modification.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Fresh Bear qualification</h3><p>The exact replacement candidate passed 20/20 at every 160, 100, 60, and 40 ms row: 80/80 total, valid focus and load evidence, zero unexpected text, and zero late ESP32 reports.</p></div><span class="badge">Done</span></article>
-        <article class="gate"><span class="gate-number">5</span><div><h3>Clean-machine permission journey</h3><p>The installed candidate reports both grants allowed, its button opens Privacy &amp; Security, and both exact URLs reach the intended panes. A clean authenticated session still must prove denied → allowed → revoked without mutating TCC behind the user's back.</p></div><span class="badge pending">Now</span></article>
+        <article class="gate done"><span class="gate-number">✓</span><div><h3>Clean-machine permission journey</h3><p>On a disposable macOS 27 guest that had never seen Typover, the candidate went denied → allowed → revoked under an authenticated session: both <em>Not yet allowed</em> with <em>Set Up Accessibility…</em>, both <em>Allowed</em> with <em>Open Privacy &amp; Security…</em>, then back again after revocation. The setup button opened Accessibility directly on an account with no remembered pane.</p></div><span class="badge">Done</span></article>
+        <article class="gate"><span class="gate-number">5</span><div><h3>Input Monitoring grant model</h3><p>Granting Accessibility alone flipped Input Monitoring to allowed, and revoking it flipped both back, while the Input Monitoring pane held no Typover row at all. Settle whether it is separately grantable before the onboarding copy claims two independent permissions.</p></div><span class="badge pending">Now</span></article>
         <article class="gate"><span class="gate-number">6</span><div><h3>Claim audit</h3><p>Reconcile privacy, support, and compatibility wording with the shipped artifact and the final permission evidence.</p></div><span class="badge pending">Next</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Public repository</h3><p>The MIT-licensed source, visual roadmap, private vulnerability reporting, and privacy-conscious waitlist are live. The notarized binary remains held for qualification.</p></div><span class="badge">Done</span></article>
       </div>
