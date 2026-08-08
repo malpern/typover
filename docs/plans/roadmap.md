@@ -4,9 +4,10 @@
 - Updated: 2026-08-08
 - Current focus: The clean-machine permission journey has passed, and Input
   Monitoring is settled as implied by Accessibility and now presented that way.
-  Remaining before the beta: the pointer/VoiceOver acceptance for the quiet
-  correction-review interaction, then a candidate rebuilt with the corrected
-  permission copy, the claim audit, and publishing
+  Candidate `0.1.0 (20260808224257)` carries the corrected copy. Remaining
+  before the beta: the pointer/VoiceOver acceptance for the quiet
+  correction-review interaction, then the claim audit against that candidate,
+  and publishing
 
 ## Goal
 
@@ -68,11 +69,11 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **Replacement candidate accepted; pointer dwell remains** | Notarized `0.1.0 (20260806051920)` passes repeated independent correction, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, quieting after continued typing, native menu dismissal, and the shared Always Visible preference. It also passes 352 debug tests and the optimized boundary gate | Complete a true pointer-only 350 ms hover observation and Reduced Motion/VoiceOver acceptance |
+| Controlled AppKit editor | **Replacement candidate accepted; pointer dwell remains** | Notarized `0.1.0 (20260806051920)` passes repeated independent correction, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, quieting after continued typing, native menu dismissal, and the shared Always Visible preference. It also passes 353 debug tests and the optimized boundary gate; superseded by `0.1.0 (20260808224257)`, which changes permission copy only | Complete a true pointer-only 350 ms hover observation and Reduced Motion/VoiceOver acceptance |
 | Brief contextual marks | **In progress — both lanes implemented; physical Bear row passes** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The replacement candidate passed 80/80 physical Bear corrections from 160 through 40 ms with valid focus/load evidence | Finish Bear proximity, pointer-menu, dismissal, scrolling, wrapped-line, VoiceOver, focus-theft, and idle-CPU acceptance |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **Beta envelope qualified on replacement candidate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and an 80/80 exact-candidate physical matrix through 40 ms per key | Keep the 40 ms row framed as resilience evidence rather than a public minimum-speed guarantee |
-| Milestone 2: Beta shell | **Done** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, fresh-process launch, the authenticated denied-to-allowed-to-revoked journey on a disposable clean macOS 27 guest, and Input Monitoring now presented as included with Accessibility rather than as a second grantable switch | Nothing outstanding; the shipped copy is rebuilt into the next candidate |
+| Milestone 2: Beta shell | **Done** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, fresh-process launch, the authenticated denied-to-allowed-to-revoked journey on a disposable clean macOS 27 guest, and Input Monitoring presented as included with Accessibility rather than as a second grantable switch, shipped in notarized candidate `0.1.0 (20260808224257)` and verified rendering in a clean guest | Nothing outstanding |
 | Public-beta operations | **In progress — source published** | MIT license, public repository and roadmap, GitHub waitlist and Issues, reviewed claims, exact release notes, notarized 0.0.9/0.1.0 update and rollback with preserved state, 11-minute clean-Mac soak, and recoverable app-only/full-data uninstall | Finish permissioned artifact-to-claim verification before publishing the beta binary |
 | Milestone 3: Contextual correction in Bear | **Deferred** | Controlled-editor engines and bounded capture primitives exist | Activate and validate bounded sentence correction in Bear after the word-level beta |
 | Milestone 4: Application-neutral integration | **Not started** | Shared engine boundaries are already designed for adapters | Extract target profiles, add TextEdit, then investigate the macOS ChatGPT and Claude composers with a content-free compatibility probe |

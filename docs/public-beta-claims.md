@@ -2,10 +2,10 @@
 
 - Status: Clean permission cycle passed 2026-08-08; the interaction audit is
   still pending. Input Monitoring is settled as included with Accessibility
-  rather than separately granted, and the onboarding now says so — but that
-  correction landed **after** candidate `0.1.0 (20260806051920)`, so the audit
-  below describes a build whose permission copy has since changed. Re-run it
-  against a candidate carrying the corrected copy. See
+  rather than separately granted, and candidate `0.1.0 (20260808224257)` now
+  says so. **The candidate audit below still describes the superseded
+  `20260806051920`** and must be re-run against the new build before
+  publication. See
   [Input Monitoring is not a separately grantable permission](bugs/2026-08-08-input-monitoring-reported-without-grant.md)
 - Updated: 2026-08-08
 
@@ -65,9 +65,9 @@ the permissioned development Mac:
 - the lower-latency Bear event-tap lane is not exposed as the default product
   path;
 - the installed app visibly has Accessibility allowed and its exact pane URLs
-  route to the intended macOS 27 settings. Input Monitoring reports allowed but
-  is not visible anywhere: it is implied by Accessibility, so Typover never
-  appears in that pane; and
+  route to the intended macOS 27 settings. Input Monitoring is not a separate
+  grant and is not visible anywhere; from `20260808224257` the app states this
+  rather than showing it as a second switch; and
 - quiet physical run `typover-hid-2026-08-06T05-58-02Z` passed 80/80 Bear
   corrections from 160 through 40 ms per key with valid focus/load evidence,
   zero unexpected text, and zero late fixture reports.
