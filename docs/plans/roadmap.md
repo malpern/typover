@@ -1,13 +1,16 @@
 # Typover roadmap
 
 - Status: Active
-- Updated: 2026-08-08
-- Current focus: The clean-machine permission journey has passed, and Input
-  Monitoring is settled as implied by Accessibility and now presented that way.
-  Candidate `0.1.0 (20260808224257)` carries the corrected copy. Remaining
-  before the beta: the pointer/VoiceOver acceptance for the quiet
-  correction-review interaction, then the claim audit against that candidate,
-  and publishing
+- Updated: 2026-08-14
+- Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45
+  quiet-review physical Bear pass, including wrapped text and a native
+  scroll-away/return row, plus a 42-test focused overlay pass and flat idle
+  CPU. VoiceOver turned out to change Bear's replacement semantics for the rest
+  of the boot, so Bear mutation is now latched off once VoiceOver is seen; that
+  is a shipped limitation, not an open row. The final beta gate is one short
+  pointer-only and Reduced Motion visual observation, plus a confirmation that
+  the VoiceOver pause engages and is communicated. The claim audit is complete,
+  but it predates the latch and its accessibility claims need a re-read.
 
 ## Goal
 
@@ -69,8 +72,8 @@ Status meanings:
 
 | Workstream | Status | Done | Still required |
 |---|---|---|---|
-| Controlled AppKit editor | **Replacement candidate accepted; pointer dwell remains** | Notarized `0.1.0 (20260806051920)` passes repeated independent correction, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, quieting after continued typing, native menu dismissal, and the shared Always Visible preference. It also passes 353 debug tests and the optimized boundary gate; superseded by `0.1.0 (20260808224257)`, which changes permission copy only | Complete a true pointer-only 350 ms hover observation and Reduced Motion/VoiceOver acceptance |
-| Brief contextual marks | **In progress — both lanes implemented; physical Bear row passes** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The replacement candidate passed 80/80 physical Bear corrections from 160 through 40 ms with valid focus/load evidence | Finish Bear proximity, pointer-menu, dismissal, scrolling, wrapped-line, VoiceOver, focus-theft, and idle-CPU acceptance |
+| Controlled AppKit editor | **Replacement candidate accepted; pointer dwell remains** | Notarized `0.1.0 (20260808224257)` passes repeated independent correction, immediate mark presentation, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, quieting after continued typing, native menu dismissal, and the shared Always Visible preference. It also passes the optimized boundary gate | Complete a true pointer-only 350 ms hover observation and Reduced Motion acceptance |
+| Brief contextual marks | **In progress — fresh physical correction and scroll rows pass** | 1.5-second visibility, 120 ms fade, delayed review reveal, menu pinning, one-menu-per-hover, shared Always Visible preference, deterministic locality/lifecycle tests, and the interactive marketing prototype. The replacement candidate passed its earlier 80/80 matrix plus a fresh 45/45 quiet-review sequence with valid focus, wrapped text, native scrolling, zero late reports, and flat idle CPU | Finish the visual Bear proximity/menu/dismissal row, repeat it with Reduced Motion, and confirm the VoiceOver pause engages and is communicated |
 | Bear lower-latency spike | **Qualified research candidate; beta policy decided** | Active session event tap, invalidation-only AX reauthorization, explicit fast/fallback lane ownership, tap-proxy posting before physical Space, exact adoption, strict 5/5 rows at 160/100 ms, strict 5/5 at 100 ms under combined load, and fresh mouse/Return recovery evidence | Keep disabled for the first beta; broaden beyond the 100 ms lowercase-word-plus-Space research envelope before productizing |
 | Milestone 1: Bear word correction | **Beta envelope qualified on replacement candidate** | Automatic exact-range correction, independent squiggles, Change Back, alternatives, rapid-typing catch-up, Accessibility, diagnostics, physical load coverage, post-pause product decision, and an 80/80 exact-candidate physical matrix through 40 ms per key | Keep the 40 ms row framed as resilience evidence rather than a public minimum-speed guarantee |
 | Milestone 2: Beta shell | **Done** | Replacement notarized clean-revision candidate, onboarding, status, privacy, About provenance, strict receipts, exact Accessibility/Input Monitoring pane routes, second-Mac install, fresh-process launch, the authenticated denied-to-allowed-to-revoked journey on a disposable clean macOS 27 guest, and Input Monitoring presented as included with Accessibility rather than as a second grantable switch, shipped in notarized candidate `0.1.0 (20260808224257)` and verified rendering in a clean guest | Nothing outstanding |
@@ -145,11 +148,16 @@ Status meanings:
   replacement candidate. Installed owned-editor evidence now covers repeated
   independent corrections, quick fade, exact sentence review after caret
   movement, targeted alternatives with sibling retention, continued-typing
-  quieting, click-opened native menu, dismissal, and Always Visible. Still
-  verify a true 350 ms pointer-only hover, Reduced Motion/VoiceOver, Bear
-  proximity and dismissal, scrolling/wrapped lines, and pointer-driven focus
-  retention. Three post-run idle samples held Typover at 0.0% CPU with flat
-  28,224 KiB RSS.
+  quieting, click-opened native menu, dismissal, and Always Visible. The
+  2026-08-14 pass added 45/45 fresh physical Bear corrections, wrapped-line and
+  native scroll-away/return evidence, a 42-test overlay pass, and three flat
+  0.0% idle CPU samples. Still verify a true 350 ms pointer-only hover with
+  visual Bear proximity, menu dismissal, focus retention, and Reduced Motion,
+  then confirm the VoiceOver pause engages and is communicated. VoiceOver is a
+  shipped limitation rather than an open acceptance row: it changes Bear's
+  replacement semantics for the rest of the boot, so Bear mutation latches off
+  once VoiceOver is seen. See
+  [the quiet-review acceptance record](../testing/quiet-review-acceptance-2026-08-14.md).
 - [x] Qualify that exact candidate with fresh Bear and Typover processes and
   release-config memory retirement. Two 2026-08-05 physical runs observed
   159/160 corrections across 160/100/60/40 ms rows, including 20/20 through
@@ -474,12 +482,17 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. Finish the clean-machine permission cycle and the remaining pointer-only,
-   VoiceOver, Reduced Motion, and Bear geometry observations. The owned-editor
-   review and exact-candidate physical Bear matrix already pass.
-2. Finish public-beta operations: the MIT-licensed source, roadmap, waitlist,
-   support channel, release notes, and rollback guidance are public; the
-   artifact-to-claim audit remains before publishing the beta binary.
+1. Complete one short pointer-only visual row covering Bear proximity reveal,
+   350 ms menu intent, dismissal, focus retention, and Reduced Motion, then
+   separately confirm the VoiceOver pause. Wrapped text, native scrolling, idle
+   CPU, owned-editor review, and the exact-candidate physical Bear matrix
+   already pass.
+   Document the session that first observed the VoiceOver beside-insertion in
+   `docs/bugs/`, since the shipped latch currently rests on source rationale
+   alone, and note the Bear-under-VoiceOver limitation in the release notes.
+2. Publish the already-notarized beta binary. The MIT-licensed source, roadmap,
+   waitlist, support channel, release notes, rollback guidance, clean-machine
+   permission cycle, and artifact-to-claim audit are already complete.
 3. After the word-level beta is trustworthy, begin the deferred milestones:
    bounded local contextual correction, then a TextEdit adapter, and finally
    broader model benchmarking.

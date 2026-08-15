@@ -158,13 +158,14 @@
 <body>
   <main>
     <header class="hero">
-      <span class="eyebrow">Roadmap · Updated August 8, 2026</span>
+      <span class="eyebrow">Roadmap · Updated August 14, 2026</span>
       <h1>Corrections you can trust—and take back.</h1>
-      <p class="lede">The replacement notarized candidate now passes the owned-editor review and the full physical Bear matrix: marks appear, fade, return during review, and remain individually reversible. The clean-machine permission cycle passed on 8 August on a disposable macOS 27 guest, and Input Monitoring is settled as included with Accessibility rather than separately granted. Candidate <code>0.1.0 (20260808224257)</code> carries the corrected copy, verified rendering in a clean guest. The claim audit passed against it. The release runway is down to the final pointer and accessibility observations.</p>
+      <p class="lede">The replacement notarized candidate passes the owned-editor review, the full physical Bear matrix, and a fresh 45/45 quiet-review sequence with wrapped text, native scrolling, valid focus, zero late fixture reports, and flat idle CPU. The clean-machine permission cycle and artifact-to-claim audit also pass against <code>0.1.0 (20260808224257)</code>. VoiceOver changes Bear's replacement semantics for the rest of the boot, so Bear correction now latches off once VoiceOver is used—a stated limitation rather than a silent risk. The release runway is now one short pointer-only and Reduced Motion visual observation.</p>
       <div class="hero-meta">
         <span class="badge">Replacement 0.1.0 notarized</span>
         <span class="badge">MIT licensed</span>
         <span class="badge">80/80 physical Bear corrections</span>
+        <span class="badge">45/45 quiet-review corrections</span>
         <span class="badge">Clean permission cycle passed</span>
         <span class="badge neutral">Binary not published</span>
       </div>
@@ -176,7 +177,7 @@
         <p>Only observed results count. A clean signature is not a UI pass, and a safe skip is not a correction.</p>
       </div>
       <div class="metrics">
-        <article class="metric"><strong>352</strong><span>tests passing across 30 suites</span></article>
+        <article class="metric"><strong>358</strong><span>tests passing across 30 suites</span></article>
         <article class="metric"><strong>0.1.0</strong><span>replacement Apple-notarized candidate</span></article>
         <article class="metric"><strong>4/4</strong><span>signed update and rollback transitions</span></article>
         <article class="metric"><strong>11m</strong><span>flat clean-Mac candidate soak</span></article>
@@ -190,20 +191,20 @@
         <p>The two writing environments intentionally have different safety and latency contracts.</p>
       </div>
       <div class="cards">
-        <article class="card" style="--progress: 98%">
+        <article class="card" style="--progress: 99%">
           <div class="card-head"><h3>Controlled AppKit editor</h3><span class="badge">Candidate accepted</span></div>
           <p>The installed candidate passes repeated independent corrections, quick fade, exact-sentence caret review, targeted alternatives with sibling retention, continued-typing quieting, native menu dismissal, and Always Visible.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Pointer-only dwell and accessibility observations</span><strong>98%</strong></div>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Pointer-only dwell and accessibility observations</span><strong>99%</strong></div>
         </article>
-        <article class="card" style="--progress: 91%">
+        <article class="card" style="--progress: 96%">
           <div class="card-head"><h3>Brief contextual marks</h3><span class="badge pending">Live Bear validation</span></div>
-          <p>Both lanes now share the same timing and menu-intent contract. The editor uses exact TextKit sentence geometry; Bear uses one collection-level pointer observer and a bounded same-line corridor around verified overlay geometry, avoiding repeated note reads.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Bear proximity, wrapped lines, pointer intent, VoiceOver</span><strong>91%</strong></div>
+          <p>Both lanes share the same timing and menu-intent contract. The fresh 45/45 Bear sequence adds wrapped-line and native scroll-away/return evidence; the focused 42-test overlay suite passes. Only the final visual pointer and Reduced Motion row remains, plus a confirmation that the VoiceOver pause is shown clearly.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>Pointer intent, dismissal, Reduced Motion</span><strong>96%</strong></div>
         </article>
-        <article class="card" style="--progress: 97%">
+        <article class="card" style="--progress: 99%">
           <div class="card-head"><h3>Bear word correction</h3><span class="badge">Physical matrix passed</span></div>
-          <p>The safe 220 ms idle-first lane, exact ranges, rapid catch-up, independent overlays, Change Back, alternatives, load recovery, version gating, and the replacement candidate's 80/80 physical matrix pass.</p>
-          <div class="meter"><span></span></div><div class="meter-label"><span>Bear interaction observations</span><strong>97%</strong></div>
+          <p>The safe 220 ms idle-first lane, exact ranges, rapid catch-up, independent overlays, Change Back, alternatives, load recovery, version gating, the 80/80 physical matrix, and the fresh 45/45 quiet-review sequence pass.</p>
+          <div class="meter"><span></span></div><div class="meter-label"><span>One visual interaction observation</span><strong>99%</strong></div>
         </article>
         <article class="card" style="--progress: 100%">
           <div class="card-head"><h3>Beta shell &amp; lifecycle</h3><span class="badge">Lifecycle passed</span></div>
@@ -226,7 +227,7 @@
       <div class="runway">
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Replacement candidate</h3><p><code>0.1.0 (20260808224257)</code> from clean revision <code>a81645b</code> passes receipt, checksum, stapling, Gatekeeper, and the optimized regression gate. It supersedes <code>20260806051920</code>, changing permission copy only, so that build's installed-editor review and 80/80 physical Bear matrix carry forward.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Owned-editor baseline</h3><p>The exact candidate passes three live corrections, three squiggles, pointer-only Change Back with sibling retention, one-step Undo, contextual repair, earlier-caret repair, About identity, and Settings Accessibility.</p></div><span class="badge">Done</span></article>
-        <article class="gate"><span class="gate-number">4</span><div><h3>Quiet-review interaction pass</h3><p>The installed editor now passes quick fade, sentence review, targeted alternatives, dismissal, continued-typing quieting, Always Visible, and 0.0% post-run idle CPU. Still verify true 350 ms pointer-only intent, Bear proximity and dismissal, wrapped lines, scrolling, Reduced Motion, VoiceOver, and pointer-driven focus retention.</p></div><span class="badge pending">Now</span></article>
+        <article class="gate"><span class="gate-number">4</span><div><h3>Quiet-review interaction pass</h3><p>The exact candidate passes immediate presentation, quick fade, sentence review, targeted alternatives, continued-typing quieting, Always Visible, 45/45 fresh physical Bear corrections, wrapped text, native scroll-away/return, the 42-test overlay suite, and flat idle CPU. Still visually verify true 350 ms pointer-only intent, Bear proximity and dismissal, focus retention, and Reduced Motion, then confirm the VoiceOver pause engages and is communicated. VoiceOver is no longer an open acceptance row: because it makes Bear insert a replacement beside the original for the rest of the boot, Bear mutation now latches off the moment VoiceOver is seen, and the controlled editor keeps working.</p></div><span class="badge pending">Now</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Second-Mac lifecycle</h3><p>Clean install, fresh launch, notarized 0.0.9 → 0.1.0 update, rollback, and final restore preserve state.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Soak &amp; uninstall</h3><p>An 11-minute final-candidate soak stayed flat; app-only and full-data removal passed with recoverable evidence and no TCC modification.</p></div><span class="badge">Done</span></article>
         <article class="gate done"><span class="gate-number">✓</span><div><h3>Fresh Bear qualification</h3><p>The exact replacement candidate passed 20/20 at every 160, 100, 60, and 40 ms row: 80/80 total, valid focus and load evidence, zero unexpected text, and zero late ESP32 reports.</p></div><span class="badge">Done</span></article>
@@ -241,7 +242,7 @@
       <div class="section-title"><h2 id="boundaries-heading">What will not be compromised</h2></div>
       <div class="notes">
         <article class="note"><h3>Shipping contract</h3><ul><li>Replace the smallest verified range—never a field or document.</li><li>Keep every correction accountable, retriggerable, and independently reversible.</li><li>Refuse a write when focus, selection, text, timing, or geometry is ambiguous.</li><li>Keep Apple processing local by default and cloud use explicit.</li></ul></article>
-        <article class="note"><h3>First-beta boundary</h3><p>Bear is word-level and post-pause. The event-tap fast lane is measured research, not a hidden promise. Contextual Bear edits and system-wide compatibility are later milestones.</p></article>
+        <article class="note"><h3>First-beta boundary</h3><p>Bear is word-level and post-pause. The event-tap fast lane is measured research, not a hidden promise. Contextual Bear edits and system-wide compatibility are later milestones.</p><p>Bear correction is unavailable under VoiceOver. VoiceOver changes Bear's replacement semantics for the rest of the macOS boot, so Typover latches Bear mutation off as soon as VoiceOver is used and asks for a restart rather than risking a write it cannot reverse. The controlled editor is unaffected.</p></article>
       </div>
     </section>
 
