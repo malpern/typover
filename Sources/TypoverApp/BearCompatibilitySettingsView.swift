@@ -256,6 +256,8 @@ private extension BearAutomaticCorrectionStatus {
       "Ready in the focused Bear note"
     case .pausedForSelection:
       "Paused while text is selected"
+    case .pausedForVoiceOver:
+      "Paused after VoiceOver use; restart your Mac to resume Bear correction. Typover’s editor remains available"
     case .bearVersionUnavailable:
       "Typover could not identify this Bear version"
     case let .unsupportedBearVersion(installed):
@@ -282,7 +284,7 @@ private extension BearAutomaticCorrectionStatus {
     case .bearVersionUnavailable, .unsupportedBearVersion,
          .unsupportedMacOSVersion:
       "exclamationmark.triangle.fill"
-    case .pausedForSelection:
+    case .pausedForSelection, .pausedForVoiceOver:
       "pause.circle"
     case .pausedAfterIndeterminateWrite:
       "exclamationmark.octagon.fill"
@@ -360,6 +362,8 @@ private extension BearOverlayPreviewStatus {
       "Checking the selected Bear text…"
     case .active:
       "Preview active — click the squiggle, or press Control–Option–Command–Return"
+    case .pausedForVoiceOver:
+      "Preview paused after VoiceOver use; restart your Mac before changing Bear text"
     case .accessibilityPermissionRequired:
       "Allow Typover in System Settings → Privacy & Security → Accessibility, then try again"
     case .bearUnavailable:
@@ -394,6 +398,8 @@ private extension BearOverlayPreviewStatus {
       "ellipsis"
     case .accessibilityPermissionRequired:
       "lock.fill"
+    case .pausedForVoiceOver:
+      "pause.circle"
     case .idle, .bearUnavailable, .editorUnavailable, .selectExactTypo,
          .selectionDidNotMatch, .correctionFailed:
       "info.circle"

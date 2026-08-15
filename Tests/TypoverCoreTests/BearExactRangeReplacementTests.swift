@@ -367,8 +367,8 @@ struct BearExactRangeReplacementTests {
     #expect(failed.correctionRecord == nil)
   }
 
-  @Test("A post-write verification failure recovers a reversible anchor")
-  func adapterReconcilesPostWriteFailure() throws {
+  @Test("A post-write verification failure cannot be promoted by re-anchoring")
+  func adapterRejectsPostWriteFailureReanchor() throws {
     let replacementRange = AccessibilityTextRange(location: 6, length: 3)
     let report = BearExactRangeReplacementReport(
       status: .verificationFailed,
@@ -402,9 +402,9 @@ struct BearExactRangeReplacementTests {
     )
 
     #expect(!application.report.isVerifiedApplication)
-    #expect(application.isReversibleApplication)
-    #expect(application.correctionAnchor == anchor)
-    #expect(application.correctionRecord?.disposition == .applied)
+    #expect(!application.isReversibleApplication)
+    #expect(application.correctionAnchor == nil)
+    #expect(application.correctionRecord == nil)
   }
 
   @Test("A verified synthetic edit is adopted without another write")

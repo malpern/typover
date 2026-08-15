@@ -515,6 +515,7 @@ enum BearOverlayPreviewStatus: Equatable {
   case idle
   case preparing
   case active
+  case pausedForVoiceOver
   case accessibilityPermissionRequired
   case bearUnavailable
   case editorUnavailable

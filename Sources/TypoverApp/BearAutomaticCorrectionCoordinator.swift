@@ -13,6 +13,7 @@ enum BearAutomaticCorrectionStatus: Equatable {
   case waitingForBear
   case observing
   case pausedForSelection
+  case pausedForVoiceOver
   case bearVersionUnavailable
   case unsupportedBearVersion(installed: String)
   case unsupportedMacOSVersion(installed: String)
@@ -560,6 +561,8 @@ final class BearAutomaticCorrectionCoordinator {
   private let workspaceNotificationCenter: NotificationCenter
   private let privateDiagnosticsEnabled: @MainActor @Sendable () -> Bool
   private let textExpansionExperimentEnabled: @MainActor @Sendable () -> Bool
+  private let voiceOverSafetyPauseIsRequired:
+    @MainActor @Sendable () -> Bool
   private let secureInputIsActive: @MainActor @Sendable () -> Bool
   private let textExpansionVerificationDelays: [Duration]
   private let clock = ContinuousClock()
@@ -618,7 +621,10 @@ final class BearAutomaticCorrectionCoordinator {
         : nil,
       annotationTracker: BearAnnotationOverlayCollectionController(
         adapter: correctionAdapter,
-        marksAlwaysVisible: marksAlwaysVisible
+        marksAlwaysVisible: marksAlwaysVisible,
+        mutationIsAllowed: {
+          !BearVoiceOverSafetyLatch.shared.requiresPause()
+        }
       ),
       typingInputMonitor:
         preDispatchExperimentEnabled
@@ -665,6 +671,10 @@ final class BearAutomaticCorrectionCoordinator {
     textExpansionExperimentEnabled: @escaping @MainActor @Sendable () -> Bool = {
       false
     },
+    voiceOverSafetyPauseIsRequired: @escaping
+      @MainActor @Sendable () -> Bool = {
+        BearVoiceOverSafetyLatch.shared.requiresPause()
+    },
     secureInputIsActive: @escaping @MainActor @Sendable () -> Bool = {
       false
     },
@@ -694,6 +704,8 @@ final class BearAutomaticCorrectionCoordinator {
     self.observationRestartDelay = observationRestartDelay
     self.privateDiagnosticsEnabled = privateDiagnosticsEnabled
     self.textExpansionExperimentEnabled = textExpansionExperimentEnabled
+    self.voiceOverSafetyPauseIsRequired =
+      voiceOverSafetyPauseIsRequired
     self.secureInputIsActive = secureInputIsActive
     self.textExpansionVerificationDelays = textExpansionVerificationDelays
     self.workspaceNotificationCenter = workspaceNotificationCenter
@@ -760,6 +772,24 @@ final class BearAutomaticCorrectionCoordinator {
     guard
       typingInputMonitor.start(handler: { [weak self] observation in
         guard let self else {
+          return
+        }
+        if self.voiceOverSafetyPauseIsRequired() {
+          if let receipt = observation.preDispatchMutation {
+            self.openMutationCircuit(
+              status: .verificationFailed,
+              range: AccessibilityTextRange(
+                location: max(
+                  0,
+                  receipt.predictedAuthorizedSnapshot.caretLocation
+                    - receipt.plan.original.utf16.count
+                ),
+                length: receipt.plan.original.utf16.count
+              )
+            )
+          } else {
+            self.pauseForVoiceOver()
+          }
           return
         }
         let intent = observation.intent
@@ -879,7 +909,11 @@ final class BearAutomaticCorrectionCoordinator {
       lastSnapshot = nil
       typingInputMonitor.authorizePreDispatch(from: nil)
     }
-    updateStatus(for: baseline)
+    if voiceOverSafetyPauseIsRequired() {
+      pauseForVoiceOver()
+    } else {
+      updateStatus(for: baseline)
+    }
   }
 
   private func stopObservation() {
@@ -912,6 +946,10 @@ final class BearAutomaticCorrectionCoordinator {
       return
     }
     annotationTracker.handleInvalidation(event)
+    if voiceOverSafetyPauseIsRequired() {
+      pauseForVoiceOver()
+      return
+    }
     if pendingTextExpansion != nil {
       switch event {
       case .focusedElementChanged, .focusedWindowChanged:
@@ -1007,6 +1045,10 @@ final class BearAutomaticCorrectionCoordinator {
   }
 
   private func evaluateSettledChange() async {
+    guard !voiceOverSafetyPauseIsRequired() else {
+      pauseForVoiceOver()
+      return
+    }
     let valueChangeWasObserved = pendingValueChange
     let boundaryObservedAt = pendingBoundaryObservedAt
     let pendingBoundaryCharacter: String?
@@ -1174,6 +1216,7 @@ final class BearAutomaticCorrectionCoordinator {
     observedAt: ContinuousClock.Instant
   ) -> Bool {
     guard
+      !voiceOverSafetyPauseIsRequired(),
       let textExpansionLane,
       deferredCorrections.isEmpty,
       deferredScanStartLocation == nil,
@@ -1214,6 +1257,7 @@ final class BearAutomaticCorrectionCoordinator {
     receipt: BearPreDispatchMutationReceipt
   ) -> Bool {
     guard
+      !voiceOverSafetyPauseIsRequired(),
       pendingTextExpansion == nil,
       let textExpansionLane,
       deferredCorrections.isEmpty,
@@ -1356,6 +1400,10 @@ final class BearAutomaticCorrectionCoordinator {
 
   private func applyDeferredCorrections() async {
     deferredCorrectionTask = nil
+    guard !voiceOverSafetyPauseIsRequired() else {
+      pauseForVoiceOver()
+      return
+    }
     guard
       frontmostBundleIdentifier()
         == BearAccessibilityProbe.bearBundleIdentifier
@@ -1531,6 +1579,16 @@ final class BearAutomaticCorrectionCoordinator {
     )
     logger.fault(
       "Automatic correction paused after an unreconciled write: \(writeStatus.rawValue, privacy: .public)"
+    )
+  }
+
+  private func pauseForVoiceOver() {
+    stopSettling()
+    lastSnapshot = nil
+    typingInputMonitor.authorizePreDispatch(from: nil)
+    status = .pausedForVoiceOver
+    logger.notice(
+      "Bear mutation paused after VoiceOver use for the current Mac boot"
     )
   }
 
@@ -1745,6 +1803,7 @@ final class BearAutomaticCorrectionCoordinator {
       isEnabled,
       !isMutationCircuitOpen,
       textExpansionExperimentEnabled(),
+      !voiceOverSafetyPauseIsRequired(),
       !secureInputIsActive(),
       pendingTextExpansion == nil,
       deferredCorrections.isEmpty,

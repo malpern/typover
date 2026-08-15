@@ -14,6 +14,7 @@ final class BearOverlayPreviewCoordinator {
   private let bearProbe: any BearAccessibilityProbing
   private let bearCorrectionAdapter: BearCorrectionAdapter
   private let bearOverlayController: BearAnnotationOverlayController
+  private let mutationIsAllowed: @MainActor @Sendable () -> Bool
   private let logger = Logger(
     subsystem: "com.malpern.typover",
     category: "BearOverlayPreview"
@@ -24,17 +25,29 @@ final class BearOverlayPreviewCoordinator {
     bearCorrectionAdapter: BearCorrectionAdapter = BearCorrectionAdapter(),
     marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = {
       false
+    },
+    mutationIsAllowed: @escaping @MainActor @Sendable () -> Bool = {
+      !BearVoiceOverSafetyLatch.shared.requiresPause()
     }
   ) {
     self.bearProbe = bearProbe
     self.bearCorrectionAdapter = bearCorrectionAdapter
+    self.mutationIsAllowed = mutationIsAllowed
     bearOverlayController = BearAnnotationOverlayController(
       adapter: bearCorrectionAdapter,
-      marksAlwaysVisible: marksAlwaysVisible
+      marksAlwaysVisible: marksAlwaysVisible,
+      mutationIsAllowed: mutationIsAllowed
     )
   }
 
   func previewSelectedTypo() {
+    guard mutationIsAllowed() else {
+      status = .pausedForVoiceOver
+      logger.notice(
+        "Preview refused by the current Bear VoiceOver safety pause"
+      )
+      return
+    }
     switch status.previewRequestAction {
     case .ignore:
       logger.notice("Preview ignored because another preview is preparing")
@@ -172,6 +185,8 @@ extension BearOverlayPreviewStatus {
       "preparing"
     case .active:
       "active"
+    case .pausedForVoiceOver:
+      "paused_for_voiceover"
     case .accessibilityPermissionRequired:
       "accessibility_permission_required"
     case .bearUnavailable:

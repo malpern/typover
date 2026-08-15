@@ -11,6 +11,53 @@ import TypoverOverlay
 @MainActor
 @Suite("Bear automatic correction", .serialized)
 struct BearAutomaticCorrectionCoordinatorTests {
+  @Test("The VoiceOver safety pause lasts until the next Mac boot")
+  func voiceOverSafetyPauseIsBootScoped() throws {
+    let suiteName = "BearVoiceOverSafetyLatchTests-\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let voiceOver = TestBoolean(false)
+
+    let firstBoot = BearVoiceOverSafetyLatch(
+      defaults: defaults,
+      bootIdentifier: { "boot-a" },
+      voiceOverIsEnabled: { voiceOver.value }
+    )
+    #expect(!firstBoot.requiresPause())
+
+    voiceOver.value = true
+    #expect(firstBoot.requiresPause())
+    voiceOver.value = false
+    #expect(firstBoot.requiresPause())
+
+    let sameBootRelaunch = BearVoiceOverSafetyLatch(
+      defaults: defaults,
+      bootIdentifier: { "boot-a" },
+      voiceOverIsEnabled: { false }
+    )
+    #expect(sameBootRelaunch.requiresPause())
+
+    let nextBoot = BearVoiceOverSafetyLatch(
+      defaults: defaults,
+      bootIdentifier: { "boot-b" },
+      voiceOverIsEnabled: { false }
+    )
+    #expect(!nextBoot.requiresPause())
+  }
+
+  @Test("The real boot identifier is a stable boot-session identity")
+  func systemBootIdentifierDoesNotDriftWithinABoot() throws {
+    let identifier = try #require(
+      BearVoiceOverSafetyLatch.systemBootIdentifier()
+    )
+    #expect(BearVoiceOverSafetyLatch.systemBootIdentifier() == identifier)
+    // Pins the identity to `kern.bootsessionuuid`. A seconds-based value such
+    // as `kern.boottime` is recomputed from the wall clock and can move inside
+    // one boot, which would release the safety pause while Bear is still
+    // unsafe to mutate.
+    #expect(UUID(uuidString: identifier) != nil)
+  }
+
   @Test("Only word-completion characters arm automatic correction")
   func recognizesBoundaryInput() {
     #expect(BearTypingInput.isCompletionBoundary(" "))
@@ -607,6 +654,39 @@ struct BearAutomaticCorrectionCoordinatorTests {
         fixture.coordinator.diagnostics.snapshot.correctionsApplied == 1
       }
     )
+  }
+
+  @Test("The VoiceOver safety latch cancels a queued correction")
+  func voiceOverSafetyPauseCancelsQueuedCorrection() async throws {
+    let physicalIdle = TestPhysicalIdleDuration(.zero)
+    let safetyPause = TestBoolean(false)
+    let fixture = try Fixture(
+      deferredCorrectionIdleDelay: .milliseconds(40),
+      physicalInputIdleDuration: { physicalIdle.value },
+      voiceOverSafetyPauseIsRequired: { safetyPause.value }
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.diagnostics.snapshot.correctionsDeferred == 1
+      }
+    )
+
+    safetyPause.value = true
+    physicalIdle.value = .seconds(60)
+    #expect(
+      await waitUntil {
+        fixture.coordinator.status == .pausedForVoiceOver
+      }
+    )
+    try? await Task.sleep(for: .milliseconds(80))
+
+    #expect(fixture.applicator.requests.isEmpty)
   }
 
   @Test("A caret move and adjacent edit invalidate a deferred correction")
@@ -1288,6 +1368,25 @@ struct BearAutomaticCorrectionCoordinatorTests {
     #expect(fixture.tracker.applications.isEmpty)
   }
 
+  @Test("A VoiceOver safety latch pauses before any Accessibility write")
+  func pausesBeforeWritingWhileVoiceOverIsActive() async throws {
+    let fixture = try Fixture(
+      voiceOverSafetyPauseIsRequired: { true }
+    )
+    fixture.reader.result = .ready(snapshot(text: "teh", caret: 3))
+    fixture.coordinator.setEnabled(true)
+
+    #expect(fixture.coordinator.status == .pausedForVoiceOver)
+
+    fixture.reader.result = .ready(snapshot(text: "teh ", caret: 4))
+    fixture.inputMonitor.emitBoundary()
+    fixture.monitor.emit(.valueChanged)
+    try? await Task.sleep(for: .milliseconds(50))
+
+    #expect(fixture.applicator.requests.isEmpty)
+    #expect(fixture.coordinator.status == .pausedForVoiceOver)
+  }
+
   #if DEBUG
     @Test("Debug post-write fault injection alters only one successful write")
     func debugPostWriteFaultIsOneShot() {
@@ -1409,6 +1508,15 @@ private final class TestPhysicalIdleDuration {
 }
 
 @MainActor
+private final class TestBoolean {
+  var value: Bool
+
+  init(_ value: Bool) {
+    self.value = value
+  }
+}
+
+@MainActor
 private final class Fixture {
   let reader = TestTypingContextReader()
   let monitor = TestInvalidationMonitor()
@@ -1432,6 +1540,10 @@ private final class Fixture {
       .seconds(60)
     },
     textExpansionEnabled: Bool = false,
+    voiceOverSafetyPauseIsRequired: @escaping
+      @MainActor @Sendable () -> Bool = {
+      false
+    },
     secureInputIsActive: Bool = false,
     textExpansionVerificationDelays: [Duration] = [.milliseconds(1)]
   ) throws {
@@ -1472,6 +1584,7 @@ private final class Fixture {
       observationRestartDelay: .milliseconds(1),
       privateDiagnosticsEnabled: { false },
       textExpansionExperimentEnabled: { textExpansionEnabled },
+      voiceOverSafetyPauseIsRequired: voiceOverSafetyPauseIsRequired,
       secureInputIsActive: { secureInputIsActive },
       textExpansionVerificationDelays: textExpansionVerificationDelays,
       workspaceNotificationCenter: workspaceNotificationCenter

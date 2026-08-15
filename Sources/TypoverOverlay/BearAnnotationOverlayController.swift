@@ -66,6 +66,7 @@ public final class BearAnnotationOverlayController {
   private let shortcutRegistrar: any BearAnnotationShortcutRegistering
   private let hostApplicationBundleIdentifier: String?
   private let voiceOverEnabled: @MainActor @Sendable () -> Bool
+  private let mutationIsAllowed: @MainActor @Sendable () -> Bool
   private let activateBear: @MainActor @Sendable () -> Void
   private let marksAlwaysVisible: @MainActor @Sendable () -> Bool
   private let recentMarkDuration: Duration
@@ -128,6 +129,9 @@ public final class BearAnnotationOverlayController {
     ],
     marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = {
       false
+    },
+    mutationIsAllowed: @escaping @MainActor @Sendable () -> Bool = {
+      true
     }
   ) {
     self.init(
@@ -141,6 +145,7 @@ public final class BearAnnotationOverlayController {
       handlesKeyboardShortcut: handlesKeyboardShortcut,
       selectionStabilizationDelays: selectionStabilizationDelays,
       shortcutRegistrar: BearAnnotationShortcutCenter.shared,
+      mutationIsAllowed: mutationIsAllowed,
       marksAlwaysVisible: marksAlwaysVisible
     )
   }
@@ -159,6 +164,9 @@ public final class BearAnnotationOverlayController {
     hostApplicationBundleIdentifier: String? = Bundle.main.bundleIdentifier,
     voiceOverEnabled: @escaping @MainActor @Sendable () -> Bool = {
       NSWorkspace.shared.isVoiceOverEnabled
+    },
+    mutationIsAllowed: @escaping @MainActor @Sendable () -> Bool = {
+      true
     },
     activateBear: @escaping @MainActor @Sendable () -> Void = {
       _ = NSRunningApplication.runningApplications(
@@ -189,6 +197,7 @@ public final class BearAnnotationOverlayController {
     self.shortcutRegistrar = shortcutRegistrar
     self.hostApplicationBundleIdentifier = hostApplicationBundleIdentifier
     self.voiceOverEnabled = voiceOverEnabled
+    self.mutationIsAllowed = mutationIsAllowed
     self.activateBear = activateBear
     self.marksAlwaysVisible = marksAlwaysVisible
     self.recentMarkDuration = recentMarkDuration
@@ -346,7 +355,12 @@ public final class BearAnnotationOverlayController {
   /// Typover or routing a follow-up key event through an AppKit menu.
   @discardableResult
   public func changeBack() -> Bool {
-    guard isBearFrontmost, application != nil, interactionTask == nil else {
+    guard
+      mutationIsAllowed(),
+      isBearFrontmost,
+      application != nil,
+      interactionTask == nil
+    else {
       return false
     }
     perform(.changeBack)
@@ -560,6 +574,13 @@ public final class BearAnnotationOverlayController {
 
   private func perform(_ action: BearAnnotationAction) {
     guard let application else {
+      return
+    }
+    guard mutationIsAllowed() else {
+      logger.notice(
+        "Overlay mutation refused by the current Bear safety policy"
+      )
+      finishTracking()
       return
     }
     let actionName = switch action {

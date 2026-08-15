@@ -19,8 +19,7 @@ public struct BearCorrectionApplication: Equatable, Sendable {
     self.correctionAnchor = correctionAnchor
   }
 
-  /// True when Typover has enough verified state to expose Change Back even
-  /// if the original write's final caret/context verification was incomplete.
+  /// True when Typover has enough verified state to expose Change Back.
   public var isReversibleApplication: Bool {
     report.writeOccurred
       && correctionRecord?.disposition == .applied
@@ -132,28 +131,12 @@ public struct BearCorrectionAdapter: Sendable {
       original: original,
       replacement: replacement
     )
-    let anchor: BearCorrectionAnchor?
-    if let correctionAnchor = outcome.correctionAnchor {
-      anchor = correctionAnchor
-    } else if report.writeOccurred,
-      let replacementRange = report.replacementRange
-    {
-      // A successful AX write can be followed by a failed caret restoration
-      // or bounded verification read. Re-read the exact replacement range and
-      // recover an anchor before returning; never silently discard a mutation
-      // that the user may need to reverse.
-      anchor =
-        reanchorer.reanchor(
-          BearCorrectionReanchorRequest(
-            targetRange: replacementRange,
-            expectedText: replacement,
-            leadingContextLimit: 256,
-            trailingContextLimit: 256
-          )
-        ).correctionAnchor
-    } else {
-      anchor = nil
-    }
+    // Never promote a post-write verification failure merely because the
+    // replacement text can be found at the target. Some host states insert the
+    // replacement beside the selected original, which is not reversible by
+    // changing that replacement range back. The coordinator opens its mutation
+    // circuit for every unverified write instead.
+    let anchor = outcome.correctionAnchor
     let record =
       report.writeOccurred && anchor != nil
       ? CorrectionRecord(correction: correction)

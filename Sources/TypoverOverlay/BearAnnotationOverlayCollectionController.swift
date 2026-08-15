@@ -42,6 +42,9 @@ public final class BearAnnotationOverlayCollectionController {
       .defaultMaximumTrackedCorrections,
     marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = {
       false
+    },
+    mutationIsAllowed: @escaping @MainActor @Sendable () -> Bool = {
+      true
     }
   ) {
     self.init(
@@ -54,7 +57,8 @@ public final class BearAnnotationOverlayCollectionController {
         fallbackRefreshInterval: .seconds(2),
         textChangeRefreshDelay: .milliseconds(180),
         handlesKeyboardShortcut: false,
-        marksAlwaysVisible: marksAlwaysVisible
+        marksAlwaysVisible: marksAlwaysVisible,
+        mutationIsAllowed: mutationIsAllowed
       )
     }
   }

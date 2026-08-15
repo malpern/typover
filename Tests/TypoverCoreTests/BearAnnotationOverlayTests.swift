@@ -578,6 +578,45 @@ struct BearAnnotationOverlayTests {
   }
 
   @MainActor
+  @Test("The Bear safety policy blocks every overlay mutation")
+  func safetyPolicyBlocksOverlayMutation() async {
+    let presenter = SpyBearAnnotationPresenter()
+    let completion = BearOverlayCompletionSpy()
+    let resolution = BearOverlayResolutionSpy()
+    let controller = testController(
+      presenter: presenter,
+      service: StubBearCorrectionService(),
+      mutationIsAllowed: { false }
+    )
+    controller.trackWithResolution(
+      overlayApplication(),
+      alternatives: ["ten"],
+      onResolution: { outcome in
+        resolution.value = outcome
+      },
+      onFinished: {
+        completion.didFinish = true
+      }
+    )
+    #expect(
+      await waitForBearOverlay {
+        presenter.interaction != nil
+      }
+    )
+
+    #expect(!controller.changeBack())
+    presenter.interaction?.handler(.chooseAlternative("ten"))
+
+    #expect(
+      await waitForBearOverlay {
+        completion.didFinish
+      }
+    )
+    #expect(resolution.value == nil)
+    #expect(!presenter.isVisible)
+  }
+
+  @MainActor
   @Test("Visibility timing reports only the first presented squiggle")
   func firstVisibleReportsOnce() async {
     let presenter = SpyBearAnnotationPresenter()
@@ -1956,6 +1995,7 @@ private func testController(
   textChangeRefreshDelay: Duration = .zero,
   hostApplicationBundleIdentifier: String? = "com.malpern.typover",
   voiceOverEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
+  mutationIsAllowed: @escaping @MainActor @Sendable () -> Bool = { true },
   activateBear: @escaping @MainActor @Sendable () -> Void = {},
   marksAlwaysVisible: @escaping @MainActor @Sendable () -> Bool = { false },
   recentMarkDuration: Duration =
@@ -2002,6 +2042,7 @@ private func testController(
     shortcutRegistrar: BearAnnotationShortcutCenter.shared,
     hostApplicationBundleIdentifier: hostApplicationBundleIdentifier,
     voiceOverEnabled: voiceOverEnabled,
+    mutationIsAllowed: mutationIsAllowed,
     activateBear: activateBear,
     marksAlwaysVisible: marksAlwaysVisible,
     recentMarkDuration: recentMarkDuration,
