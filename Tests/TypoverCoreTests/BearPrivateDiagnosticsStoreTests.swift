@@ -5,6 +5,17 @@ import Testing
 
 @Suite("Bear private diagnostics")
 struct BearPrivateDiagnosticsStoreTests {
+  @Test("Correction shape survives content-free stripping, the words do not")
+  func contentFreeEventKeepsShapeMetrics() {
+    let event = BearPrivateDiagnosticsStore.contentFreeEvent(
+      from: "outcome=deferredApplied editDistance=3 lengthDelta=3 "
+        + "original=\"teh\" replacement=\"theteh\" range=44:3"
+    )
+    #expect(event == "outcome=deferredApplied editDistance=3 lengthDelta=3")
+    #expect(!event.contains("teh"))
+    #expect(!event.contains("theteh"))
+  }
+
   @Test("Content-free events discard words and bounded context")
   func contentFreeEvents() {
     #expect(

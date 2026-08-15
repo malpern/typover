@@ -113,9 +113,21 @@ final class BearPrivateDiagnosticsStore: @unchecked Sendable {
     }
   }
 
+  /// Numeric fields that describe a correction's shape rather than its text.
+  /// They are safe to keep in the content-free trace and are the difference
+  /// between diagnosing a corrupt mapping in one run and chasing the host for
+  /// a day.
+  private static let contentFreeMetrics = ["editDistance=", "lengthDelta="]
+
   static func contentFreeEvent(from message: String) -> String {
     if let outcome = token(after: "outcome=", in: message) {
-      return "outcome=\(outcome)"
+      let metrics = contentFreeMetrics.compactMap { prefix -> String? in
+        guard let value = token(after: prefix, in: message) else {
+          return nil
+        }
+        return "\(prefix)\(value)"
+      }
+      return (["outcome=\(outcome)"] + metrics).joined(separator: " ")
     }
     if let event = token(after: "accessibility event=", in: message) {
       return "accessibility=\(event)"

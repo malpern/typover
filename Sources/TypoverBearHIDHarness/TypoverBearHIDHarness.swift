@@ -7,6 +7,90 @@ import TypoverAccessibility
 import TypoverHIDTesting
 import TypoverOverlay
 
+/// Reads Typover's learning store to check that no stored preference covers a
+/// word the run is about to type.
+///
+/// A corrupt `teh -> theteh` preference once produced nine consecutive
+/// `invalid-evidence` rows that looked exactly like a Bear or Accessibility
+/// fault, because a learned preference overrides the engine silently. Reading
+/// the file — never constructing `CorrectionLearningStore`, whose initializer
+/// migrates and rewrites it — keeps the harness from disturbing the state it
+/// is inspecting.
+enum LearningStoreInspection {
+  private struct Key: Decodable {
+    let original: String
+    let language: String?
+  }
+
+  private struct Preference: Decodable {
+    let preferred: [String: String]?
+  }
+
+  private struct Entry: Decodable {
+    let key: Key
+    let preference: Preference?
+    let origin: String?
+  }
+
+  private struct State: Decodable {
+    let preferences: [Entry]?
+  }
+
+  static func storeURL() -> URL {
+    let environment = ProcessInfo.processInfo.environment
+    if let override = environment["TYPOVER_LEARNING_STORE_PATH"],
+      !override.isEmpty
+    {
+      return URL(fileURLWithPath: override)
+    }
+    let applicationSupport =
+      FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? FileManager.default.temporaryDirectory
+    return
+      applicationSupport
+      .appendingPathComponent("Typover", isDirectory: true)
+      .appendingPathComponent("correction-learning.json")
+  }
+
+  /// The distinct words a plan types, with trailing boundary characters
+  /// removed, so `teh ` and `teh.` both reduce to `teh`.
+  static func typedWords(in plan: BearHIDTestPlan) -> Set<String> {
+    Set(
+      plan.cases
+        .flatMap(\.correctionSegments)
+        .map { segment in
+          segment.typed.trimmingCharacters(
+            in: CharacterSet.letters.inverted
+          )
+        }
+        .filter { !$0.isEmpty }
+    )
+  }
+
+  static func conflicts(with plan: BearHIDTestPlan) -> [String] {
+    let words = typedWords(in: plan)
+    guard
+      !words.isEmpty,
+      let data = try? Data(contentsOf: storeURL()),
+      let state = try? JSONDecoder().decode(State.self, from: data),
+      let preferences = state.preferences
+    else {
+      return []
+    }
+    return preferences.compactMap { entry in
+      guard words.contains(entry.key.original.lowercased()) else {
+        return nil
+      }
+      let replacement = entry.preference?.preferred?.values.first
+      let described = replacement.map { "-> \"\($0)\"" } ?? "suppressed"
+      return
+        "\"\(entry.key.original)\" \(described) (origin: \(entry.origin ?? "unknown"))"
+    }
+  }
+}
+
 private enum HarnessError: Error, CustomStringConvertible {
   case usage(String)
   case commandFailed(String)
@@ -157,6 +241,7 @@ private struct DoctorReport: Encodable {
   let readyToRun: Bool
   let jigToolReady: Bool
   let jigClientReady: Bool
+  let learningStoreConflicts: [String]
 }
 
 private struct SnapshotReport: Encodable {
@@ -981,6 +1066,7 @@ private enum TypoverBearHIDHarness {
     let bearFrontmost =
       NSWorkspace.shared.frontmostApplication?.bundleIdentifier
       == BearAccessibilityProbe.bearBundleIdentifier
+    let learningConflicts = LearningStoreInspection.conflicts(with: plan)
     var fixtureStatus: FixtureStatus?
     var fixtureError: String?
     if clientReady {
@@ -1012,9 +1098,11 @@ private enum TypoverBearHIDHarness {
         wordsPerCase: plan.wordsPerCase,
         readyToRun: clientReady && fixtureStatus?.usbMounted == true
           && jigToolReady && jigClientReady && typoverRunning
-          && probe.status == .ready && bearFrontmost,
+          && probe.status == .ready && bearFrontmost
+          && learningConflicts.isEmpty,
         jigToolReady: jigToolReady,
-        jigClientReady: jigClientReady
+        jigClientReady: jigClientReady,
+        learningStoreConflicts: learningConflicts
       )
     )
   }
@@ -1053,6 +1141,18 @@ private enum TypoverBearHIDHarness {
       ).isEmpty
     else {
       throw HarnessError.commandFailed("Typover is not running.")
+    }
+    let learningConflicts = LearningStoreInspection.conflicts(with: plan)
+    guard learningConflicts.isEmpty else {
+      throw HarnessError.commandFailed(
+        """
+        A learned correction preference covers a word this run types, so the \
+        result would measure the preference rather than the engine:
+        \(learningConflicts.map { "  \($0)" }.joined(separator: "\n"))
+        Remove the entry from \(LearningStoreInspection.storeURL().path) and \
+        restart Typover, then re-run.
+        """
+      )
     }
 
     let awakeSession = AwakeSession()

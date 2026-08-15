@@ -61,12 +61,13 @@ final class BearVoiceOverSafetyLatch {
     else {
       return nil
     }
-    var buffer = [CChar](repeating: 0, count: size)
+    var buffer = [UInt8](repeating: 0, count: size)
     guard
       sysctlbyname("kern.bootsessionuuid", &buffer, &size, nil, 0) == 0
     else {
       return nil
     }
-    return String(cString: buffer)
+    let bytes = buffer.prefix { $0 != 0 }
+    return String(decoding: bytes, as: UTF8.self)
   }
 }

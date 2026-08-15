@@ -1498,7 +1498,7 @@ final class BearAutomaticCorrectionCoordinator {
         )
       }
       tracePrivate(
-        "outcome=deferredApplied original=\(correction.proposal.correction.original.debugDescription) replacement=\(correction.proposal.correction.replacement.debugDescription) range=\(correction.targetRange.location):\(correction.targetRange.length)"
+        "outcome=deferredApplied \(Self.shapeTrace(for: correction.proposal.correction)) original=\(correction.proposal.correction.original.debugDescription) replacement=\(correction.proposal.correction.replacement.debugDescription) range=\(correction.targetRange.location):\(correction.targetRange.length)"
       )
       // Keep the canonical marker shared with immediate applications so the
       // physical HID harness counts both execution paths consistently.
@@ -1722,6 +1722,23 @@ final class BearAutomaticCorrectionCoordinator {
     return await BearAccessibilityOperationLane.shared.run {
       reader.read()
     }
+  }
+
+  /// Describes a correction's *shape* — how far the replacement is from the
+  /// original and how much it changes the document — without carrying either
+  /// word. These two numbers stay in the content-free trace by design: a
+  /// corrupt `teh -> theteh` mapping reads as `editDistance=3 lengthDelta=3`
+  /// and is obvious at a glance, where the content-free trace previously
+  /// showed only `outcome=deferredApplied` and cost a day of host-level
+  /// investigation.
+  static func shapeTrace(for correction: Correction) -> String {
+    let distance = AutomaticCorrectionPolicy().optimalStringAlignmentDistance(
+      from: correction.original,
+      to: correction.replacement
+    )
+    let delta =
+      correction.replacement.utf16.count - correction.original.utf16.count
+    return "editDistance=\(distance) lengthDelta=\(delta)"
   }
 
   private func tracePrivate(_ message: String) {
