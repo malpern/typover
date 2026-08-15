@@ -68,21 +68,57 @@ so far.
 - **Not synthetic input.** First observed through injected `CGEvent` typing, then
   reproduced identically through real USB HID from the ESP32.
 
+## Ruled out on 2026-08-15, after four further rows
+
+- **A reboot does not clear it.** Run `15-06-59Z` followed a clean restart and a
+  fixture reset: `theteh` again, lengths 37 → 73. This kills the boot-scoped
+  framing entirely, and with it the "persists until the next boot" wording in
+  the VoiceOver record.
+- **Not the ESP32's transport state.** The board was reset between runs.
+- **Not Cotypist.** Run `15-10-02Z` had Cotypist stopped and verified dead
+  through the row. Still `theteh`.
+- **Not any third-party text agent.** Run `15-12-15Z` ran with Aqua Voice,
+  Cotypist, fixkey, Hammerspoon, VoxClaw, CodexBar, Granola, FigmaAgent and
+  Raycast all stopped, and `com.aqua-voice-hook.app` booted out of launchd so it
+  could not respawn. Still `theteh`.
+
+## The decisive comparison
+
+Typover's own decision log is identical between the passing morning run and the
+failing afternoon run — same outcomes, same counts, same telemetry, same test
+case:
+
+```
+unarmedValueChange: 15   idleDeferred: 5   rapidTypingCoalesced: 1
+deferredApplied: 5       redundantAutomaticValueChange: 1
+applied: 5               replacementRefused: 0
+```
+
+`04-41-23Z` produced `the the the the the`. `15-12-15Z` produced
+`theteh theteh …`. Typover made the same decisions and issued the same write in
+both. The divergence is therefore **not in Typover's correction logic** — it is
+in what the write does to the host once issued.
+
+Note also that the same `theteh` result appeared in Typover's **own controlled
+AppKit editor**, which does not go through the Accessibility path at all. A
+defect that spans both the in-process editor and the Bear AX adapter points at
+something shared and below both, not at the Bear integration.
+
 ## Untested, in priority order
 
-1. **Reboot.** The single most discriminating test. If a reboot restores correct
-   replacement, the "persists until the next boot" claim in the VoiceOver record
-   is real but its trigger is broader than VoiceOver — sleep/resume being the
-   obvious candidate given the overnight gap.
-2. **`AquaVoiceHook`.** Aqua Voice is an Electron dictation app with a hook
-   process, an `AquaMacOSBridge`, and Accessibility helpers. Quitting the main
-   app did not stop the hook, which respawned (PID 66044) and was live during
-   run `14-12-25Z`. Eliminating it needs its launch agent disabled, which was not
-   done. The harness contract explicitly warns about another text service being
-   credited to Typover.
-3. **Raycast Beta's `Accessibility.xpc`**, live throughout.
-4. **macOS `26A5406e`**, a beta build. Whether it changed since the passing runs
-   was not established.
+1. **The shared correction/range path.** Since the in-process editor and the
+   Bear adapter fail the same way while Typover's decision log is unchanged,
+   instrument what range and replacement the engine actually hands to the write.
+   A replacement issued against a zero-length or wrongly-anchored range would
+   produce exactly this insertion in both surfaces.
+2. **The correction source.** If the writing model changed availability — Apple
+   Intelligence loading or unloading between the morning and afternoon runs —
+   the suggestion and its range may now come from a different provider. Settings
+   → Model, and the engine's selection at run time, were not captured.
+3. **Bear's editor behaviour under an AX selected-range write**, independent of
+   Typover: does setting a selection and writing replace, or insert, right now?
+4. **macOS `26A5406e`**, a beta build. Whether it updated between the passing
+   and failing runs was not established.
 
 ## Consequences
 
