@@ -99,6 +99,13 @@ writers who never enable VoiceOver, so prior physical evidence does not
 transfer. The VoiceOver pause itself has deterministic coverage only; no
 recorded observation of the underlying host behaviour exists.
 
+**Blocked 2026-08-15.** The physical re-run did not pass. Four rows produced
+`theteh` rather than `the` for every word, on this candidate and on the
+pre-latch build, with Typover reporting the writes as applied. The candidate is
+not qualified and the claim that Bear mutation replaces an exact verified range
+is not currently supported by a passing physical row. See
+[Bear replacement became an insertion mid-boot](bugs/2026-08-15-bear-replacement-becomes-insertion.md).
+
 ## Prior candidate audit
 
 Candidate `0.1.0 (20260808224257)`, audited 2026-08-08. The runtime half was

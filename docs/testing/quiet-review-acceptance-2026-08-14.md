@@ -1,7 +1,12 @@
 # Quiet correction-review acceptance: 2026-08-14
 
-- Status: Partial pass; pointer-only and Reduced Motion visual rows remain, and
-  VoiceOver is now a shipped limitation rather than an open verification
+- Status: **Blocked as of 2026-08-15.** Physical Bear correction now fails on
+  this machine, producing `theteh` instead of `the` while Typover reports
+  success. The pointer rows cannot begin because no valid correction exists to
+  hover over. See
+  [Bear replacement became an insertion mid-boot](../bugs/2026-08-15-bear-replacement-becomes-insertion.md).
+  The observations recorded below stand as of 2026-08-14 but no longer
+  reproduce
 - Candidate: Typover `0.1.0 (20260808224257)`
 - Bear: `2.9.1`
 - Fixture: `0.3.2-esp32s3`, build `fc98a5acc0a5`

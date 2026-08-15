@@ -1,16 +1,18 @@
 # Typover roadmap
 
-- Status: Active
+- Status: **Blocked** — physical Bear correction is failing; see Current focus
 - Updated: 2026-08-14
 - Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45
   quiet-review physical Bear pass, including wrapped text and a native
   scroll-away/return row, plus a 42-test focused overlay pass and flat idle
-  CPU. VoiceOver turned out to change Bear's replacement semantics for the rest
-  of the boot, so Bear mutation is now latched off once VoiceOver is seen; that
-  is a shipped limitation, not an open row. The final beta gate is one short
-  pointer-only and Reduced Motion visual observation, plus a confirmation that
-  the VoiceOver pause engages and is communicated. The claim audit is complete,
-  but it predates the latch and its accessibility claims need a re-read.
+  CPU. **That is no longer the state.** On 2026-08-15 the physical harness began
+  producing `theteh` instead of `the` for every word, on both the notarized
+  candidate and the pre-latch build, while Typover reported the corrections as
+  applied and drew reversible marks over them. It passed three rows nine hours
+  earlier in the same boot. Root cause is unknown; VoiceOver is ruled out. The
+  candidate cannot be qualified and the beta cannot ship until this is
+  understood. See
+  [Bear replacement became an insertion mid-boot](../bugs/2026-08-15-bear-replacement-becomes-insertion.md).
 
 ## Goal
 
@@ -482,14 +484,20 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. Complete one short pointer-only visual row covering Bear proximity reveal,
-   350 ms menu intent, dismissal, focus retention, and Reduced Motion, then
-   separately confirm the VoiceOver pause. Wrapped text, native scrolling, idle
-   CPU, owned-editor review, and the exact-candidate physical Bear matrix
-   already pass.
-   Document the session that first observed the VoiceOver beside-insertion in
-   `docs/bugs/`, since the shipped latch currently rests on source rationale
-   alone, and note the Bear-under-VoiceOver limitation in the release notes.
+1. **Restore correct Bear replacement.** Physical rows currently produce
+   `theteh`. Start with a reboot, which is the single most discriminating test,
+   then eliminate `AquaVoiceHook` and Raycast's Accessibility XPC. Nothing below
+   can proceed until a physical row passes again.
+2. **Make Typover detect this class of failure.** It reported `applied` for a
+   write that inserted rather than replaced, and drew reversible marks over
+   corrupted text. That is a defect regardless of what triggered the host
+   behaviour.
+3. Then complete the pointer-only visual row covering Bear proximity reveal,
+   350 ms menu intent, dismissal, focus retention, and Reduced Motion, and
+   separately confirm the VoiceOver pause.
+4. Revisit the VoiceOver attribution. The same beside-insertion now reproduces
+   with VoiceOver off and the latch unarmed, so the shipped limitation may be
+   aimed at the wrong trigger.
 2. Publish the already-notarized beta binary. The MIT-licensed source, roadmap,
    waitlist, support channel, release notes, rollback guidance, clean-machine
    permission cycle, and artifact-to-claim audit are already complete.
