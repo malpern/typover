@@ -104,21 +104,85 @@ AppKit editor**, which does not go through the Accessibility path at all. A
 defect that spans both the in-process editor and the Bear AX adapter points at
 something shared and below both, not at the Bear integration.
 
-## Untested, in priority order
+## Corrected mechanism (second pass, 2026-08-15)
 
-1. **The shared correction/range path.** Since the in-process editor and the
-   Bear adapter fail the same way while Typover's decision log is unchanged,
-   instrument what range and replacement the engine actually hands to the write.
-   A replacement issued against a zero-length or wrongly-anchored range would
-   produce exactly this insertion in both surfaces.
-2. **The correction source.** If the writing model changed availability — Apple
-   Intelligence loading or unloading between the morning and afternoon runs —
-   the suggestion and its range may now come from a different provider. Settings
-   → Model, and the engine's selection at run time, were not captured.
-3. **Bear's editor behaviour under an AX selected-range write**, independent of
-   Typover: does setting a selection and writing replace, or insert, right now?
-4. **macOS `26A5406e`**, a beta build. Whether it updated between the passing
-   and failing runs was not established.
+Three earlier framings are now disproven by reading the code and probing the
+layers directly:
+
+- **The engine supplies no range.** `AppleSpellCheckerEngine.proposal(for:)`
+  takes a single word and returns strings only. The caller computes the range.
+  A "degenerate engine range" cannot occur.
+- **The write layer is honest.** A headless `NSTextView` probe shows
+  `insertText(_:replacementRange:)` honoring range lengths correctly.
+- **The write verification is not blind, and it passed.**
+  `BearExactRangeReplacement` reads the selection back after setting it,
+  precomputes the expected surrounding context, and verifies both the context
+  window and the total character count after the write. For `teh→the` an
+  insertion-without-deletion grows the count by 3 and fails both checks. All
+  five corrections in the failing runs reported `.applied` — the replacement
+  **really was in the document, verified, at write time**.
+
+Therefore the original `teh` **re-materialized after a verified successful
+replacement**. The adjacency pins down where: the final text is `theteh ` with
+`teh` immediately after `the`, *before* the space. Keystroke replay would land
+at the caret (after the space, producing `the teh `). Re-materialization at the
+original offset is the signature of Bear re-rendering from a second text model
+that still contains the typed original — Bear 2 is CRDT-based — merged with the
+AX edit.
+
+Also ruled out in this pass: Bear was **not** silently updated (bundle dated
+Jul 27, build 14638, no install-log entries), and no macOS update landed (last:
+Jul 16). The spell checker's adaptive state was probed and reset with no effect;
+`kern`-level and OS-update triggers are dead.
+
+The synthetic-input `theteh` in Typover's own controlled editor cannot share
+this mechanism (no Bear model involved) and is provisionally re-classified as a
+separate CGEvent-injection artifact. The physical Bear evidence is the load-
+bearing defect.
+
+## Open hypothesis and discriminating data
+
+**Hypothesis:** Bear's editor holds the typed original in a canonical model
+that AX selected-text writes do not fully reach; a reconciliation pass re-
+inserts the original beside the verified replacement. Something in Bear's
+persistent state flipped this behaviour on between 21:43 and 06:45 local and it
+survives Bear restarts and a macOS reboot. Candidate trigger: the burst of
+`bearcli`-created disposable notes and any resulting sync backlog. This would
+also retroactively explain the "VoiceOver changes Bear's semantics" finding —
+that session interacted with the same reconciliation layer, and the boot-scoped
+framing was coincidence.
+
+Data that would settle it:
+
+1. **A delayed re-read after one correction.** Enable the content-bearing
+   diagnostic (`Include bounded writing context`), run one row, and read the
+   trace: it should show `the ` verified at write time and `theteh ` on a later
+   read, timestamped. That converts the re-materialization from deduction to
+   observation.
+2. **Bear sync state.** Check Bear's sync/iCloud status; quiesce or clear the
+   backlog of disposable notes and re-run one row.
+3. **A fresh Bear database.** A clean macOS user account with Bear installed
+   (Bear is not in the VM lab base) separates note-store state from app.
+4. **Write-strategy cross-check.** The research fast lane edits via synthetic
+   key events, which enter Bear's model as ordinary typing. If a key-event
+   write of the same correction does not exhibit re-materialization, the
+   dual-model theory is confirmed and a viable alternate write path exists.
+
+## Solvability
+
+Two independent layers, both actionable:
+
+- **Fail-closed detection (Typover, certain).** The current verification is
+  immediate and was satisfied honestly. Add a delayed re-verification — re-read
+  the context window a few hundred milliseconds after `.applied`; if the
+  original resurfaced, open the mutation circuit, retire the mark, and surface
+  the pause. This turns silent corruption into a refusal regardless of root
+  cause, and also retires the silent-success defect recorded above.
+- **Correct-by-construction writes (contingent).** If the dual-model theory
+  holds, replacement via synthetic key events (select-then-type, as the fast
+  lane already does) enters Bear's canonical model directly and cannot be
+  reconciled away. That is a measured, existing code path — research-gated
+  today, but a candidate write strategy for exactly this host state.
 
 ## Consequences
 
