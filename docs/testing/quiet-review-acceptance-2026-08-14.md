@@ -54,6 +54,29 @@ visually certify Bear squiggle drawing or pointer-only hover. The harness still
 observed the correction collection and exact text, but those signals are not a
 substitute for the remaining visual interaction row.
 
+**Amended 2026-08-15.** The capture half of that limit is narrower than stated:
+with *both* Typover and Bear in the Computer Use allowlist, the screenshot
+compositor includes both applications' windows, and Typover's in-window marks
+are legible. The original limit looks like a grant-scope artifact of capturing
+Bear alone. This does **not** establish that the nonactivating overlay above
+Bear composites — that was never reached, for the reason below.
+
+The binding limit is input fidelity, not capture. Synthetic keystrokes injected
+through Computer Use do not produce a valid correction: typing `teh` then space
+into the controlled editor yields `theteh`, with the replacement inserted beside
+the original rather than replacing it, and a squiggle drawn over the whole
+thing. This reproduces identically on notarized candidate
+`0.1.0 (20260815055632)` and on the pre-latch development build `d77f902`, so it
+is not a property of the VoiceOver latch changes.
+
+Whether that is a genuine controlled-editor defect under injected `CGEvent`
+input or an artifact of injection is unresolved. The physical HID evidence
+shows correct replacement in this same editor, so injection fidelity is the
+leading explanation, and it is the reason the matrix uses the ESP32 fixture.
+The consequence for acceptance is direct: the pointer rows cannot be driven by
+synthetic typing, because no valid correction exists to hover over. Steps 1–4
+still need physical input.
+
 The Reduced Motion system setting was safely enabled and restored to its
 original off state. The app window became unavailable to the UI driver after a
 required Typover restart, so the live Reduced Motion visual row is not counted
