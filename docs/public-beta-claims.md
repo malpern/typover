@@ -99,12 +99,17 @@ writers who never enable VoiceOver, so prior physical evidence does not
 transfer. The VoiceOver pause itself has deterministic coverage only; no
 recorded observation of the underlying host behaviour exists.
 
-**Blocked 2026-08-15.** The physical re-run did not pass. Four rows produced
-`theteh` rather than `the` for every word, on this candidate and on the
-pre-latch build, with Typover reporting the writes as applied. The candidate is
-not qualified and the claim that Bear mutation replaces an exact verified range
-is not currently supported by a passing physical row. See
-[Bear replacement became an insertion mid-boot](bugs/2026-08-15-bear-replacement-becomes-insertion.md).
+**2026-08-15.** The physical re-run initially failed, producing `theteh` rather
+than `the` for every word. The cause was a corrupt learned preference,
+`teh → theteh`, applied without validation; deleting it restored a passing 5/5
+row on this candidate with no code change. See
+[A corrupt learned preference replaced every teh with theteh](bugs/2026-08-15-bear-replacement-becomes-insertion.md).
+
+Two consequences for these claims. The exact-range mutation claim is supported
+again, but only by a single 5-word row — the full matrix has not been re-run.
+And the claim that corrections are reversible needs qualification: Typover drew
+five reversible marks over five corrupted writes, so a corrupted correction is
+currently indistinguishable from a good one in the UI. That defect is open.
 
 ## Prior candidate audit
 

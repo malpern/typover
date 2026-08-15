@@ -1,18 +1,19 @@
 # Typover roadmap
 
-- Status: **Blocked** — physical Bear correction is failing; see Current focus
+- Status: Active — the 2026-08-15 physical failure is root-caused and cleared
 - Updated: 2026-08-14
 - Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45
   quiet-review physical Bear pass, including wrapped text and a native
   scroll-away/return row, plus a 42-test focused overlay pass and flat idle
-  CPU. **That is no longer the state.** On 2026-08-15 the physical harness began
-  producing `theteh` instead of `the` for every word, on both the notarized
-  candidate and the pre-latch build, while Typover reported the corrections as
-  applied and drew reversible marks over them. It passed three rows nine hours
-  earlier in the same boot. Root cause is unknown; VoiceOver is ruled out. The
-  candidate cannot be qualified and the beta cannot ship until this is
-  understood. See
-  [Bear replacement became an insertion mid-boot](../bugs/2026-08-15-bear-replacement-becomes-insertion.md).
+  CPU. On 2026-08-15 the physical harness began producing `theteh` for every
+  word. The cause was a corrupt learned preference, `teh → theteh`, that
+  Typover applied faithfully because the learned-preference path bypasses the
+  edit-distance guard every engine proposal must satisfy. Deleting the single
+  entry restored a 5/5 pass with no code change. Two code defects remain open —
+  learned preferences are applied unvalidated, and a corrupted correction still
+  reports success — and the VoiceOver finding needs re-testing against a clean
+  store, since it shares the same signature. See
+  [A corrupt learned preference replaced every teh with theteh](../bugs/2026-08-15-bear-replacement-becomes-insertion.md).
 
 ## Goal
 
@@ -484,20 +485,23 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. **Restore correct Bear replacement.** Physical rows currently produce
-   `theteh`. Start with a reboot, which is the single most discriminating test,
-   then eliminate `AquaVoiceHook` and Raycast's Accessibility XPC. Nothing below
-   can proceed until a physical row passes again.
-2. **Make Typover detect this class of failure.** It reported `applied` for a
-   write that inserted rather than replaced, and drew reversible marks over
-   corrupted text. That is a defect regardless of what triggered the host
-   behaviour.
-3. Then complete the pointer-only visual row covering Bear proximity reveal,
-   350 ms menu intent, dismissal, focus retention, and Reduced Motion, and
-   separately confirm the VoiceOver pause.
-4. Revisit the VoiceOver attribution. The same beside-insertion now reproduces
-   with VoiceOver off and the latch unarmed, so the shipped limitation may be
-   aimed at the wrong trigger.
+1. **Validate learned preferences.** They are applied with no check at all,
+   which is how `teh → theteh` survived. Enforce edit distance ≤ 1 and
+   membership in the engine's current guesses at record time and at application
+   time, and add a migration that drops impossible stored entries.
+2. **Make a corrupted correction fail closed.** Typover verified its own write
+   faithfully but never asked whether the replacement was plausible, so it drew
+   five reversible marks over five corruptions. Also log the replacement string
+   or its edit distance in the content-free trace; its absence cost nine
+   physical rows and a reboot.
+3. **Re-test the VoiceOver finding against a clean learning store.** It shares
+   the `theteh` signature and its boot-persistence matches an on-disk
+   preference better than an Accessibility server state, so the shipped latch
+   may be mitigating a misdiagnosis.
+4. **Re-run the full physical Bear matrix** on the candidate. Only a 5/5 row has
+   passed since the fix.
+5. Then complete the pointer-only visual row covering Bear proximity reveal,
+   350 ms menu intent, dismissal, focus retention, and Reduced Motion.
 2. Publish the already-notarized beta binary. The MIT-licensed source, roadmap,
    waitlist, support channel, release notes, rollback guidance, clean-machine
    permission cycle, and artifact-to-claim audit are already complete.
