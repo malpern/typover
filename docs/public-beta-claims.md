@@ -1,11 +1,15 @@
 # Public beta claims
 
-- Status: Audited against candidate `0.1.0 (20260808224257)` on 2026-08-08; the
-  claims below match the artifact. Input Monitoring is settled as included with
-  Accessibility rather than separately granted, and this candidate says so. The
-  binary stays held pending the quiet correction-review interaction pass. See
-  [Input Monitoring is not a separately grantable permission](bugs/2026-08-08-input-monitoring-reported-without-grant.md)
-- Updated: 2026-08-08
+- Status: Re-audited against candidate `0.1.0 (20260815055632)` on 2026-08-15.
+  The artifact half re-verifies; the runtime half is carried from the
+  `20260808224257` clean-guest audit and is marked below. Bear correction is
+  now unavailable under VoiceOver — a new stated limitation, see
+  [VoiceOver changes Bear's replacement semantics](bugs/2026-08-15-voiceover-bear-replacement-semantics.md).
+  Input Monitoring remains settled as included with Accessibility, see
+  [Input Monitoring is not a separately grantable permission](bugs/2026-08-08-input-monitoring-reported-without-grant.md).
+  The binary stays held pending the quiet correction-review interaction pass
+  and fresh physical Bear rows on this candidate
+- Updated: 2026-08-15
 
 ## Compatibility
 
@@ -17,6 +21,11 @@
 - The first Bear beta corrects verified eligible words after a short safe pause
   in typing. Immediate pre-dispatch Bear correction is research-only and is not
   a public beta feature.
+- Bear correction is unavailable under VoiceOver. VoiceOver changes Bear's
+  replacement semantics for the rest of the macOS boot, so Typover disables
+  Bear mutation as soon as VoiceOver is used and asks for a restart rather than
+  risking a write it cannot reverse. The controlled Typover editor keeps
+  working normally.
 - Support for another app, another Bear release, or native AppKit text editing
   in general must be measured separately; Typover does not claim system-wide
   compatibility.
@@ -49,7 +58,48 @@ Security or privacy reports that require non-public disclosure must not be
 filed with ordinary reproduction text in a public issue. Testers should use
 GitHub's private **Report a vulnerability** form described in `SECURITY.md`.
 
-## Candidate audit
+## Current candidate audit
+
+Candidate `0.1.0 (20260815055632)`, artifact half re-verified 2026-08-15
+against the built bundle.
+
+**Provenance and compatibility.** The bundle declares
+`LSMinimumSystemVersion 27.0`, `CFBundleVersion 20260815055632`, and clean
+source `1c16fb62b4a6ade1d66af4ce04e1fe377e77a43e` with `TypoverSourceDirty`
+false. Apple notarization was accepted (submission
+`c2875412-536e-4ff9-bfb5-f6b4d163e918`), stapled, and Gatekeeper-assessed as
+`source=Notarized Developer ID`; the archive checksum
+`2d3094aeba5ead9e5afa09710c995bc1fa5d72d5432614d1f8d1cd007c03b4c5` matches its
+receipt. Both supported Bear versions, `2.8.1` and `2.9.1`, are present.
+
+**No background persistence.** `Contents` holds only `_CodeSignature`, `MacOS`,
+`Resources`, `CodeResources`, and `Info.plist`. The bundle carries no
+entitlements, and the binary references none of `SMLoginItemSetEnabled`,
+`SMAppService`, `NSBackgroundActivity`, `Sparkle`, or `SUUpdater`.
+
+**No telemetry.** The only network hosts in the binary remain
+`https://api.openai.com`, `https://api.anthropic.com`, and
+`https://github.com`.
+
+**Bear correction under VoiceOver.** New in this candidate: Bear mutation is
+disabled for the remainder of the boot once VoiceOver is observed, and the
+status row says so. This is a stated limitation rather than a silent skip.
+
+### Not re-verified on this candidate
+
+The runtime half — clean-guest launch, background-item registry, Settings model
+and diagnostics defaults, and the permission journey — is carried from the
+`20260808224257` audit below. Nothing in this candidate's diff touches those
+paths, but they were not re-run on a guest.
+
+Two things in this candidate's diff are **not** carried and must be re-run
+before publication: the physical Bear matrix and the quiet correction-review
+interaction pass. Dropping post-write re-anchoring changes behaviour for
+writers who never enable VoiceOver, so prior physical evidence does not
+transfer. The VoiceOver pause itself has deterministic coverage only; no
+recorded observation of the underlying host behaviour exists.
+
+## Prior candidate audit
 
 Candidate `0.1.0 (20260808224257)`, audited 2026-08-08. The runtime half was
 run on a disposable macOS 27 guest that had never seen Typover, rather than on
@@ -128,12 +178,18 @@ evidence is the physical matrix above.
 
 ### Status
 
-The claims match the artifact. The binary remains held pending the quiet
-correction-review interaction pass: pointer-only dwell, Reduced Motion,
-VoiceOver, and Bear proximity/wrapped-line observations.
+The claims matched that artifact when audited. It is superseded by
+`0.1.0 (20260815055632)`; the binary remains held pending the quiet
+correction-review interaction pass — pointer-only dwell, Reduced Motion, and
+Bear proximity/wrapped-line observations — now to be run on the current
+candidate, plus fresh physical Bear rows on it.
 
 ## Known limitations
 
+- Bear correction is unavailable once VoiceOver has been used, until the Mac
+  restarts. VoiceOver changes Bear's replacement semantics for the rest of the
+  boot, and the resulting write cannot be reversed, so Typover refuses instead.
+  Typover's own editor continues to correct normally.
 - Bear correction depends on macOS Accessibility and Input Monitoring and may
   safely skip a correction when focus, selection, geometry, or timing is
   ambiguous.
