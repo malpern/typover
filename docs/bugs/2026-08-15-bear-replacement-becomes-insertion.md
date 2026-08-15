@@ -1,7 +1,7 @@
 # A corrupt learned preference replaced every `teh` with `theteh`
 
-- Status: **Root cause found and verified.** Environment repaired; two code
-  defects remain open
+- Status: **Root cause found, fixed, and verified.** One defect remains open:
+  a corrupted correction still reports success
 - Date: 2026-08-15
 - Scope: `CorrectionLearningStore` preference application; correction
   verification
@@ -76,27 +76,59 @@ behaviour on the first attempt:
 Run `typover-hid-2026-08-15T15-35-50Z`. The store was backed up to
 `correction-learning.json.pre-fix-20260815` first.
 
-## Provenance
+## Provenance — resolved by the activity trail
 
-The preference was recorded roughly three minutes after this session installed
-the candidate and began driving the controlled editor with synthetic
-`CGEvent` input. Synthetic input is already documented here as unrepresentative,
-and the most likely account is that this session created the entry. The first
-`theteh` therefore has an unknown proximate trigger, but every subsequent
-occurrence — including all nine physical rows — is fully explained by the
-stored preference.
+An earlier revision of this record guessed that the 2026-08-15 agent session
+created the entry, reading `updatedAt` as the creation time. That was wrong.
+`setPreference` refreshes `updatedAt` on every write, and the store's 1,874
+timestamped activities date the preference nine hours earlier:
 
-What is not explained: how an `explicitChoice` was recorded when no alternative
-was ever chosen, and how a string outside the guess list
-(`the, ten, yeh, tea, feh, ted, …`) became the preferred replacement. That path
-should be audited, because it is the mechanism that persisted the damage.
+```
+21:41:33–21:43:23   45 x src=appleSpelling, outcomes=[]        the 45/45 passing rows
+21:45:20            src=appleSpelling         [manuallyEdited]
+21:46:30            src=rememberedPreference  [manuallyEdited]  preference now in effect
+21:46:45 onward     every correction src=rememberedPreference
+```
+
+The preference was created between 21:43:23 and 21:46:30 on 2026-08-14 —
+during interactive acceptance work, immediately after the passing rows — and
+by a **manual edit**, not an alternative choice. Every correction from 21:46:45
+onward, including all nine physical rows the next morning, used it.
+
+## How a manual edit produced `theteh`
+
+`recordManualEdit` stored any replacement that passed
+`isSafeImplicitReplacement`, which rejects only empty strings, strings over 64
+characters, and strings containing whitespace or control characters. `theteh`
+passes all three. The existing ambiguity guard catches a multi-word edit such
+as `"Start Finish remains."` but not a single concatenated token.
+
+The reachable sequence is ordinary typing: a correction lands, the writer keeps
+typing, and the new characters join the corrected word. `teh` becomes `the`,
+typing continues, the word now reads `theteh`, and Typover infers that the
+writer edited its correction to `theteh` and remembers it permanently. Fast
+typing is Typover's own audience, so this is not an artifact of the harness.
+
+## Fix
+
+`recordManualEdit` now requires an inferred replacement to be within two edits
+of the original. `theteh` is three and is refused; `dont -> don't`,
+`resume -> résumé`, and `teh -> "the,"` are all within two and still learn.
+
+The bound applies **only** to the inferred path. An explicit choice may still
+expand to an arbitrary phrase (`addr -> 123 Main Street`), as may a manual
+mapping (`brb -> be right back`); both are stated intent. An earlier attempt
+applied the same bound to explicit choices and was withdrawn when the suite
+caught it breaking phrase expansion — the distinction is between honouring a
+stated intent and guessing at an unstated one.
 
 ## Open defects
 
-1. **Learned preferences are applied without validation.** Re-check the
-   invariant at application time and at write time: edit distance ≤ 1, and the
-   replacement present in the engine's current guesses. Ideally reject at
-   record time too, so the store cannot hold an impossible mapping.
+1. ~~Learned preferences are applied without validation.~~ Fixed at the source:
+   the inferred-edit path no longer stores a replacement more than two edits
+   from the original. Stores already holding such an entry are not repaired
+   automatically — Settings → Learning lists remembered rules with a remove
+   action, which is the recovery path.
 2. **A corrupted correction reports success.** Typover verified its own write
    faithfully but never asked whether the replacement was *plausible*. A
    correction that changes a word's length by +3 for a same-length typo should

@@ -95,6 +95,38 @@ struct CorrectionLearningStoreTests {
     }
   }
 
+  @Test("Typing onward into a corrected word is not learned as an edit")
+  func doesNotLearnTypedOnwardWord() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordApplied(proposal)
+    // `the` was applied, the writer kept typing, and the characters joined the
+    // corrected word. That is not a choice of `theteh` as the replacement.
+    store.recordManualEdit("theteh", for: proposal)
+
+    #expect(store.rememberedRules.isEmpty)
+    #expect(store.statistics().manuallyEdited == 1)
+    let next = try #require(store.applyingPreference(to: proposal))
+    #expect(next.correction.replacement == "the")
+    #expect(next.source == .appleSpelling)
+  }
+
+  @Test("An explicit choice is still free to expand beyond an inferred edit")
+  func explicitChoiceIsNotBoundedLikeAnInferredEdit() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordPreferred("theteh", for: proposal, outcome: .alternativeChosen)
+
+    let remembered = try #require(store.applyingPreference(to: proposal))
+    #expect(remembered.correction.replacement == "theteh")
+  }
+
   @Test("An ambiguous document edit counts as an override but is not learned")
   func doesNotRememberAmbiguousDocumentEdit() throws {
     let fixture = makeFixture()

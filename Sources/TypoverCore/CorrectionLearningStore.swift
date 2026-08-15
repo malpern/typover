@@ -398,7 +398,12 @@ public final class CorrectionLearningStore {
           for: proposal.correction.original,
           language: proposal.language
         )
-      } else if Self.isSafeImplicitReplacement(replacement) {
+      } else if Self.isSafeImplicitReplacement(replacement),
+        Self.isPlausibleInferredEdit(
+          replacement,
+          original: proposal.correction.original
+        )
+      {
         setPreference(
           .preferred(replacement),
           origin: .implicitLocalEdit,
@@ -588,6 +593,34 @@ public final class CorrectionLearningStore {
     }
     return migrated
   }
+
+  /// Whether an edit Typover *inferred* is close enough to the original to be
+  /// a correction of it rather than the writer typing onward.
+  ///
+  /// A correction lands, the writer keeps typing, and the new characters join
+  /// the corrected word: `teh` becomes `the`, typing continues, and the word
+  /// reads `theteh`. Nothing about that string looks unsafe — it is one token,
+  /// short, and free of whitespace — so it was stored as the writer's intended
+  /// replacement and applied to every later `teh`, silently, until the entry
+  /// was deleted by hand.
+  ///
+  /// This bound applies only to the inferred path. An explicit choice may
+  /// legitimately expand to an arbitrary phrase (`addr -> 123 Main Street`),
+  /// as may a manual mapping (`brb -> be right back`); both are the writer's
+  /// stated intent and stay exempt. Only guessing at intent needs the guard.
+  static func isPlausibleInferredEdit(
+    _ replacement: String,
+    original: String
+  ) -> Bool {
+    AutomaticCorrectionPolicy().optimalStringAlignmentDistance(
+      from: original,
+      to: replacement
+    ) <= maximumInferredEditDistance
+  }
+
+  /// Two edits covers the accents, apostrophes, and trailing punctuation a
+  /// real local edit adds, and excludes a word with another word joined to it.
+  static let maximumInferredEditDistance = 2
 
   private static func isSafeImplicitReplacement(_ replacement: String) -> Bool {
     guard
