@@ -6,6 +6,16 @@ public enum RememberedCorrectionPreference: Codable, Equatable, Sendable {
   case suppressed
 }
 
+/// What became of an edit Typover inferred from the writer's own typing.
+public enum InferredEditLearning: Equatable, Sendable {
+  case learned
+  case suppressed
+  /// The replacement was too far from the original to be a correction of it —
+  /// most often the writer typing onward into a word Typover had just fixed.
+  case refusedAsTooDistant(editDistance: Int)
+  case notLearned
+}
+
 public enum RememberedCorrectionOrigin: String, Codable, Equatable, Sendable {
   case explicitChoice
   case implicitLocalEdit
@@ -386,10 +396,12 @@ public final class CorrectionLearningStore {
     }
   }
 
+  @discardableResult
   public func recordManualEdit(
     _ replacement: String?,
     for proposal: CorrectionProposal
-  ) {
+  ) -> InferredEditLearning {
+    var result = InferredEditLearning.notLearned
     if let replacement, !replacement.isEmpty {
       if replacement == proposal.correction.original {
         setPreference(
@@ -398,21 +410,36 @@ public final class CorrectionLearningStore {
           for: proposal.correction.original,
           language: proposal.language
         )
-      } else if Self.isSafeImplicitReplacement(replacement),
-        Self.isPlausibleInferredEdit(
-          replacement,
-          original: proposal.correction.original
-        )
-      {
+        result = .suppressed
+      } else if !Self.isSafeImplicitReplacement(replacement) {
+        result = .notLearned
+      } else if Self.isPlausibleInferredEdit(
+        replacement,
+        original: proposal.correction.original
+      ) {
         setPreference(
           .preferred(replacement),
           origin: .implicitLocalEdit,
           for: proposal.correction.original,
           language: proposal.language
         )
+        result = .learned
+      } else {
+        // Refusing here is silent to the writer by design — the edit still
+        // applies to their text, it simply is not remembered. Report it so the
+        // caller can trace the decision; an edit that is never learned and
+        // never explained is its own kind of unexplained behaviour.
+        result = .refusedAsTooDistant(
+          editDistance: AutomaticCorrectionPolicy()
+            .optimalStringAlignmentDistance(
+              from: proposal.correction.original,
+              to: replacement
+            )
+        )
       }
     }
     record(.manuallyEdited, for: proposal.correction.id)
+    return result
   }
 
   public func removePreference(
@@ -620,7 +647,7 @@ public final class CorrectionLearningStore {
 
   /// Two edits covers the accents, apostrophes, and trailing punctuation a
   /// real local edit adds, and excludes a word with another word joined to it.
-  static let maximumInferredEditDistance = 2
+  public static let maximumInferredEditDistance = 2
 
   private static func isSafeImplicitReplacement(_ replacement: String) -> Bool {
     guard

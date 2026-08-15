@@ -105,8 +105,9 @@ struct CorrectionLearningStoreTests {
     store.recordApplied(proposal)
     // `the` was applied, the writer kept typing, and the characters joined the
     // corrected word. That is not a choice of `theteh` as the replacement.
-    store.recordManualEdit("theteh", for: proposal)
+    let learning = store.recordManualEdit("theteh", for: proposal)
 
+    #expect(learning == .refusedAsTooDistant(editDistance: 3))
     #expect(store.rememberedRules.isEmpty)
     #expect(store.statistics().manuallyEdited == 1)
     let next = try #require(store.applyingPreference(to: proposal))

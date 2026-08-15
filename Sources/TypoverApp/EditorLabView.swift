@@ -1329,7 +1329,20 @@ final class TypoverTextView: NSTextView {
     if isContextualSource(proposal.source) {
       learningStore.recordOutcome(.manuallyEdited, for: proposal)
     } else {
-      learningStore.recordManualEdit(replacement, for: proposal)
+      let learning = learningStore.recordManualEdit(replacement, for: proposal)
+      // Numbers only: the distance describes the edit's shape, never its
+      // words, so this is safe in a content-free log. An edit that is silently
+      // never learned is its own unexplained behaviour; this is the record
+      // that explains it.
+      if case let .refusedAsTooDistant(editDistance) = learning {
+        Self.transactionLogger.notice(
+          """
+          Inferred edit not learned, too far from the original \
+          editDistance=\(editDistance, privacy: .public) \
+          limit=\(CorrectionLearningStore.maximumInferredEditDistance, privacy: .public)
+          """
+        )
+      }
     }
   }
 
