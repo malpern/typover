@@ -16,6 +16,62 @@ public enum InferredEditLearning: Equatable, Sendable {
   case notLearned
 }
 
+/// What Typover did with a remembered preference when a correction was about
+/// to be applied.
+public enum RememberedPreferenceApplication: Equatable, Sendable {
+  /// Nothing was remembered for this word; the engine proposal stands.
+  case noPreference(CorrectionProposal)
+  /// A remembered replacement was substituted for the engine's.
+  case remembered(CorrectionProposal)
+  /// The writer changed this correction back; nothing is proposed.
+  case suppressed
+  /// The remembered replacement could not be a correction of this word, so it
+  /// was discarded and the engine proposal stands.
+  ///
+  /// Reported rather than silent. This is the shape a corrupted store takes,
+  /// and a writer whose text is being mangled has no way to suspect a JSON
+  /// file; it should be visible in diagnostics instead of costing a reboot.
+  case discardedAsImplausible(
+    proposal: CorrectionProposal,
+    editDistance: Int
+  )
+
+  /// The proposal to apply, or `nil` when the writer suppressed it.
+  public var proposal: CorrectionProposal? {
+    switch self {
+    case .noPreference(let proposal): proposal
+    case .remembered(let proposal): proposal
+    case .suppressed: nil
+    case .discardedAsImplausible(let proposal, _): proposal
+    }
+  }
+
+  static func remembered(
+    preferring replacement: String,
+    over proposal: CorrectionProposal
+  ) -> Self {
+    var seen = Set([proposal.correction.original, replacement])
+    let alternatives =
+      ([proposal.correction.replacement] + proposal.alternatives)
+      .filter { seen.insert($0).inserted }
+
+    return .remembered(
+      CorrectionProposal(
+        correction: Correction(
+          id: proposal.correction.id,
+          original: proposal.correction.original,
+          replacement: replacement,
+          createdAt: proposal.correction.createdAt
+        ),
+        alternatives: alternatives,
+        source: .rememberedPreference,
+        language: proposal.language,
+        lookupDuration: proposal.lookupDuration
+      )
+    )
+  }
+}
+
 public enum RememberedCorrectionOrigin: String, Codable, Equatable, Sendable {
   case explicitChoice
   case implicitLocalEdit
@@ -292,48 +348,64 @@ public final class CorrectionLearningStore {
     )
   }
 
-  public func applyingPreference(
+  /// Applies any remembered preference for this word, keeping the reason.
+  ///
+  /// `applyingPreference(to:)` remains the shorthand for callers that only
+  /// need the proposal; use this when the decision itself should be traced.
+  public func applyPreference(
     to proposal: CorrectionProposal
-  ) -> CorrectionProposal? {
+  ) -> RememberedPreferenceApplication {
     guard
       let entry = matchingPreferenceEntry(
         original: proposal.correction.original,
         language: proposal.language
       )
     else {
-      return proposal
+      return .noPreference(proposal)
     }
 
     switch entry.preference {
     case .suppressed:
-      return nil
+      return .suppressed
     case .preferred(let replacement):
+      // A manual mapping is the writer typing both sides deliberately, and is
+      // validated when it is created. Phrases are the point of it, so neither
+      // bound below applies.
+      guard entry.origin != .manualEntry else {
+        return .remembered(
+          preferring: replacement,
+          over: proposal
+        )
+      }
       guard
-        entry.origin != .implicitLocalEdit
-          || Self.isSafeImplicitReplacement(replacement)
+        Self.isPlausibleRememberedReplacement(
+          replacement,
+          original: proposal.correction.original,
+          origin: entry.origin
+        )
       else {
+        // Drop it rather than carry it. The entry cannot be a correction of
+        // this word, so leaving it in place would corrupt the next one too,
+        // and the writer has no reason to suspect the store.
         state.preferences.removeAll(where: { $0.key == entry.key })
         persist()
-        return proposal
+        return .discardedAsImplausible(
+          proposal: proposal,
+          editDistance: AutomaticCorrectionPolicy()
+            .optimalStringAlignmentDistance(
+              from: proposal.correction.original,
+              to: replacement
+            )
+        )
       }
-      var seen = Set([proposal.correction.original, replacement])
-      let alternatives =
-        ([proposal.correction.replacement] + proposal.alternatives)
-        .filter { seen.insert($0).inserted }
-
-      return CorrectionProposal(
-        correction: Correction(
-          id: proposal.correction.id,
-          original: proposal.correction.original,
-          replacement: replacement,
-          createdAt: proposal.correction.createdAt
-        ),
-        alternatives: alternatives,
-        source: .rememberedPreference,
-        language: proposal.language,
-        lookupDuration: proposal.lookupDuration
-      )
+      return .remembered(preferring: replacement, over: proposal)
     }
+  }
+
+  public func applyingPreference(
+    to proposal: CorrectionProposal
+  ) -> CorrectionProposal? {
+    applyPreference(to: proposal).proposal
   }
 
   public func recordApplied(_ proposal: CorrectionProposal) {
@@ -631,10 +703,12 @@ public final class CorrectionLearningStore {
   /// replacement and applied to every later `teh`, silently, until the entry
   /// was deleted by hand.
   ///
-  /// This bound applies only to the inferred path. An explicit choice may
-  /// legitimately expand to an arbitrary phrase (`addr -> 123 Main Street`),
-  /// as may a manual mapping (`brb -> be right back`); both are the writer's
-  /// stated intent and stay exempt. Only guessing at intent needs the guard.
+  /// This bound applies only to the inferred path. A manual mapping is the
+  /// writer typing both sides deliberately and may expand to an arbitrary
+  /// phrase (`brb -> be right back`), so it stays exempt. An explicit choice
+  /// is exempt from *this* bound but not from every one: see
+  /// `isPlausibleRememberedReplacement`, which is what an applied preference
+  /// must satisfy.
   static func isPlausibleInferredEdit(
     _ replacement: String,
     original: String
@@ -648,6 +722,82 @@ public final class CorrectionLearningStore {
   /// Two edits covers the accents, apostrophes, and trailing punctuation a
   /// real local edit adds, and excludes a word with another word joined to it.
   public static let maximumInferredEditDistance = 2
+
+  /// Whether a *remembered* replacement still looks like a correction of the
+  /// word it is remembered for, checked every time it is about to be applied
+  /// rather than only when it was stored.
+  ///
+  /// Storing it correctly is not enough. The `teh -> theteh` entry that
+  /// mangled nine harness rows was already in the store when the learning
+  /// guard landed, carried `origin: explicitChoice`, and so passed every
+  /// check the apply path made. A store is durable, survives upgrades, and is
+  /// hand-editable; what it holds has to be re-earned at the point of use.
+  ///
+  /// Two bounds, each with its own reason:
+  ///
+  /// 1. **Not joined to the original, for every non-manual origin.** A
+  ///    correction changes a word; it does not keep the word and add to it.
+  ///    This is the one shape no provenance excuses, because it is what a
+  ///    correction looks like after the writer typed onward through it.
+  /// 2. **Edit distance, for an inferred or unattributed origin.** The same
+  ///    bound the learning path requires, applied again on the way out, so a
+  ///    store poisoned before that guard existed heals itself instead of
+  ///    waiting to be found by hand in Settings.
+  ///
+  /// An explicit choice stays otherwise unbounded on purpose: the writer
+  /// picked it from a menu, and it may legitimately be far from the original
+  /// in edits. The cost of that freedom is that a corrupt explicit choice
+  /// which does *not* contain the original is still applied; bound it further
+  /// only with evidence that such an entry can occur.
+  static func isPlausibleRememberedReplacement(
+    _ replacement: String,
+    original: String,
+    origin: RememberedCorrectionOrigin?
+  ) -> Bool {
+    guard !isOriginalJoinedTo(replacement, original: original) else {
+      return false
+    }
+
+    switch origin {
+    case .manualEntry:
+      // Unreachable: the apply path exempts a manual mapping before asking.
+      // Answered here anyway so the exemption reads the same in both places.
+      return true
+    case .explicitChoice, .changedBack:
+      return true
+    case .implicitLocalEdit, .legacy, .none:
+      // An inferred edit is Typover guessing at intent, so it must also look
+      // like a single token. An explicit choice is spared this: the writer
+      // picked a menu item, which may legitimately be a phrase.
+      return isSafeImplicitReplacement(replacement)
+        && isPlausibleInferredEdit(replacement, original: original)
+    }
+  }
+
+  /// The `teh -> theteh` shape: the original survives whole inside the
+  /// replacement, with at least two more characters around it.
+  ///
+  /// Two is the smallest growth that cannot be ordinary spelling. One added
+  /// character is routine — a doubled letter or an apostrophe — and often
+  /// leaves the original intact (`cant -> can't` does not, but `helo -> hello`
+  /// contains neither). Two or more says another token was joined on.
+  static func isOriginalJoinedTo(
+    _ replacement: String,
+    original: String
+  ) -> Bool {
+    guard
+      !original.isEmpty,
+      replacement.count >= original.count + minimumJoinedGrowth
+    else {
+      return false
+    }
+    return replacement.range(
+      of: original,
+      options: [.caseInsensitive]
+    ) != nil
+  }
+
+  public static let minimumJoinedGrowth = 2
 
   private static func isSafeImplicitReplacement(_ replacement: String) -> Bool {
     guard

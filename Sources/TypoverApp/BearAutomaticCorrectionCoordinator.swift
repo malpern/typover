@@ -1162,9 +1162,17 @@ final class BearAutomaticCorrectionCoordinator {
       diagnostics.recordSafeSkip(.noSuggestion)
       return
     }
-    guard
-      let proposal = learningStore.applyingPreference(to: engineProposal)
-    else {
+    let application = learningStore.applyPreference(to: engineProposal)
+    if case let .discardedAsImplausible(_, editDistance) = application {
+      // The engine proposal still applies; only the remembered replacement was
+      // dropped. Trace it as a refusal so a corrupted store shows up in the
+      // diagnostics rather than in the writer's text.
+      tracePrivate(
+        "outcome=implausiblePreferenceDiscarded editDistance=\(editDistance)"
+      )
+      diagnostics.recordRefusal(.implausiblePreferenceDiscarded)
+    }
+    guard let proposal = application.proposal else {
       tracePrivate("outcome=learnedSuppression")
       diagnostics.recordSafeSkip(.learnedSuppression)
       return

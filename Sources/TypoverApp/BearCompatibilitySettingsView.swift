@@ -227,6 +227,11 @@ private extension BearAutomaticCorrectionDiagnosticOutcome {
       "Apple Spelling had no suggestion for the last completed word"
     case .learnedSuppression:
       "The last correction was skipped because you previously chose Change Back"
+    case .implausiblePreferenceDiscarded:
+      """
+      A remembered replacement was discarded because it could not be a \
+      correction of that word. Apple Spelling's own suggestion was used.
+      """
     case .proposalMismatch:
       "The last correction was refused because its source no longer matched"
     case .replacementRefused:

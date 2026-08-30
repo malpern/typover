@@ -13,6 +13,7 @@ enum BearAutomaticCorrectionDiagnosticOutcome: String, Equatable, Sendable {
   case contextChanged
   case noSuggestion
   case learnedSuppression
+  case implausiblePreferenceDiscarded
   case proposalMismatch
   case replacementRefused
   case capabilityUnavailable

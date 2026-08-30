@@ -122,10 +122,14 @@ struct CorrectionLearningStoreTests {
     let store = CorrectionLearningStore(fileURL: fixture.fileURL)
     let proposal = makeProposal(original: "teh", replacement: "the")
 
-    store.recordPreferred("theteh", for: proposal, outcome: .alternativeChosen)
+    // Three edits from the original, which the inferred path would refuse.
+    // The writer picked it, so it stands. This example used to be `theteh`;
+    // that one is now refused on its shape rather than its distance, and is
+    // covered by `discardsGrownRememberedReplacement`.
+    store.recordPreferred("than", for: proposal, outcome: .alternativeChosen)
 
     let remembered = try #require(store.applyingPreference(to: proposal))
-    #expect(remembered.correction.replacement == "theteh")
+    #expect(remembered.correction.replacement == "than")
   }
 
   @Test("An ambiguous document edit counts as an override but is not learned")
@@ -500,6 +504,154 @@ struct CorrectionLearningStoreTests {
 
     #expect(store.statistics().correctionsApplied == 0)
     #expect(store.rememberedRules.isEmpty)
+  }
+
+  @Test("A remembered replacement that grew the word is discarded when applied")
+  func discardsGrownRememberedReplacement() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    // Exactly the entry found in the 2026-08-15 store: the corrected word with
+    // the typo typed onward joined to it, recorded as an explicit choice.
+    store.recordPreferred("theteh", for: proposal)
+
+    let application = store.applyPreference(
+      to: makeProposal(original: "teh", replacement: "the")
+    )
+
+    guard
+      case let .discardedAsImplausible(applied, editDistance) = application
+    else {
+      Issue.record("expected the remembered replacement to be discarded")
+      return
+    }
+    #expect(editDistance == 3)
+    #expect(applied.correction.replacement == "the")
+    #expect(applied.source == .appleSpelling)
+    #expect(store.rememberedRules.isEmpty)
+  }
+
+  @Test("A discarded remembered replacement does not survive a relaunch")
+  func discardedRememberedReplacementIsNotPersisted() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordPreferred("theteh", for: proposal)
+    _ = store.applyPreference(to: proposal)
+
+    let relaunched = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let application = relaunched.applyPreference(
+      to: makeProposal(original: "teh", replacement: "the")
+    )
+
+    guard case let .noPreference(applied) = application else {
+      Issue.record("expected the discarded entry to be gone from the store")
+      return
+    }
+    #expect(applied.correction.replacement == "the")
+    #expect(relaunched.rememberedRules.isEmpty)
+  }
+
+  @Test("An alternative the writer chose still applies")
+  func keepsChosenAlternative() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordPreferred("ten", for: proposal)
+
+    let application = store.applyPreference(
+      to: makeProposal(original: "teh", replacement: "the")
+    )
+
+    guard case let .remembered(applied) = application else {
+      Issue.record("expected the chosen alternative to be remembered")
+      return
+    }
+    #expect(applied.correction.replacement == "ten")
+    #expect(applied.source == .rememberedPreference)
+  }
+
+  @Test("A manual mapping may expand well past what an inferred edit allows")
+  func keepsManualMappingExpansion() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    try store.addManualMapping(
+      ManualCorrectionMapping(
+        original: "brb",
+        replacement: "be right back",
+        language: "en_US"
+      )
+    )
+
+    let manual = try #require(
+      store.manualProposal(for: "brb", language: "en_US")
+    )
+    let application = store.applyPreference(to: manual)
+
+    guard case let .remembered(applied) = application else {
+      Issue.record("expected the manual mapping to survive the guard")
+      return
+    }
+    #expect(applied.correction.replacement == "be right back")
+    #expect(store.rememberedRules.count == 1)
+  }
+
+  @Test("An unattributed preference must also stay close in edits")
+  func discardsDistantLegacyPreference() throws {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    try FileManager.default.createDirectory(
+      at: fixture.directory,
+      withIntermediateDirectories: true
+    )
+    // Does not contain the original, so only the edit-distance bound that
+    // an unattributed origin carries can catch it.
+    let legacyState = LegacyPersistedState(
+      preferences: [
+        LegacyPreferenceEntry(
+          key: LegacyPreferenceKey(original: "teh", language: "en_US"),
+          preference: .preferred("cat"),
+          updatedAt: Date()
+        )
+      ],
+      activities: []
+    )
+    try JSONEncoder().encode(legacyState).write(
+      to: fixture.fileURL,
+      options: .atomic
+    )
+
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let application = store.applyPreference(
+      to: makeProposal(original: "teh", replacement: "the")
+    )
+
+    guard case .discardedAsImplausible = application else {
+      Issue.record("expected the unattributed preference to be discarded")
+      return
+    }
+    #expect(store.rememberedRules.isEmpty)
+  }
+
+  @Test("Change Back still suppresses after the plausibility guard")
+  func suppressionSurvivesThePlausibilityGuard() {
+    let fixture = makeFixture()
+    defer { fixture.remove() }
+    let store = CorrectionLearningStore(fileURL: fixture.fileURL)
+    let proposal = makeProposal(original: "teh", replacement: "the")
+
+    store.recordApplied(proposal)
+    store.recordReverted(proposal)
+
+    #expect(store.applyPreference(to: proposal) == .suppressed)
+    #expect(store.applyingPreference(to: proposal) == nil)
   }
 
   private func makeProposal(
