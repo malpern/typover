@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active — the 2026-08-15 physical failure is root-caused and cleared
-- Updated: 2026-08-14
+- Updated: 2026-08-15
 - Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45
   quiet-review physical Bear pass, including wrapped text and a native
   scroll-away/return row, plus a 42-test focused overlay pass and flat idle
