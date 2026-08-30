@@ -1,7 +1,8 @@
 # A corrupt learned preference replaced every `teh` with `theteh`
 
-- Status: **Root cause found, fixed, and verified.** One defect remains open:
-  a corrupted correction still reports success
+- Status: **Root cause found and fixed; the three defects it raised are now
+  closed in source.** Awaiting a physical run against a notarized build that
+  carries the apply-time guard
 - Date: 2026-08-15
 - Scope: `CorrectionLearningStore` preference application; correction
   verification
@@ -122,22 +123,53 @@ applied the same bound to explicit choices and was withdrawn when the suite
 caught it breaking phrase expansion — the distinction is between honouring a
 stated intent and guessing at an unstated one.
 
-## Open defects
+### The apply-time guard
 
-1. ~~Learned preferences are applied without validation.~~ Fixed at the source:
-   the inferred-edit path no longer stores a replacement more than two edits
-   from the original. Stores already holding such an entry are not repaired
-   automatically — Settings → Learning lists remembered rules with a remove
-   action, which is the recovery path.
-2. **A corrupted correction reports success.** Typover verified its own write
-   faithfully but never asked whether the replacement was *plausible*. A
-   correction that changes a word's length by +3 for a same-length typo should
-   never have been drawn as a reversible mark. The immediate verification is
-   necessary but not sufficient.
-3. **Diagnostics should surface the replacement string.** The content-free
-   trace logs `outcome=deferredApplied` without the replacement, which is why
-   nine rows and a reboot were spent chasing the host. Logging the replacement
-   length, or the edit distance, would have identified this in one run.
+Learning correctly was not enough, and this is the more important half of the
+fix. The entry that caused this was **already in the store** when the bound
+above landed, and it carried `origin: explicitChoice` — the one origin exempt
+from that bound, because the writer picked it from a menu. Nothing on the way
+out asked whether it could still be a correction of `teh`.
+
+`applyPreference(to:)` now asks, every time. A replacement that contains the
+whole original and is at least two characters longer is refused whatever its
+origin: that is not a spelling of the word, it is the word with another token
+joined on — precisely what a correction becomes when the writer types onward
+through it. An inferred or unattributed origin must additionally still be
+within two edits, so a store poisoned before either guard existed repairs
+itself at the moment of use rather than waiting to be found by hand.
+
+A refused entry is deleted, not merely skipped, and the engine's own
+suggestion applies in its place, so the following word is not corrupted too.
+
+The residual gap is stated rather than implied: a corrupt **explicit choice**
+that does not contain the original is still applied. Explicit choices keep
+their freedom because they record a real act by the writer; narrowing them
+further should wait for evidence that such an entry can occur.
+
+## Defects raised by this failure
+
+All three are now closed in source. None has been observed on physical input
+against a notarized build; that is the outstanding work, not further code.
+
+1. ~~Learned preferences are applied without validation.~~ Fixed on both
+   sides. The inferred-edit path no longer *stores* a replacement more than
+   two edits from the original, and `applyPreference(to:)` no longer *applies*
+   one that cannot be a correction of the word. A store already holding such
+   an entry is now repaired the next time that word is corrected; Settings →
+   Learning remains the manual recovery path.
+2. ~~A corrupted correction reports success.~~ Verifying the write was
+   necessary but not sufficient — Typover confirmed faithfully that it had
+   written what it meant to write, without ever asking whether what it meant
+   was plausible. The apply-time guard above is that missing question. A
+   refusal is reported as `implausiblePreferenceDiscarded`, counted as a
+   refusal, and explained in Settings, so it cannot pass as a success.
+3. ~~Diagnostics should surface the replacement string.~~ Addressed by
+   surfacing the replacement's *shape* instead, which the content-free
+   contract permits and which is what would have identified this: the trace
+   now carries `editDistance` and `lengthDelta`, so the corrupt mapping reads
+   as `editDistance=3 lengthDelta=3` on the applied row rather than as a bare
+   `outcome=deferredApplied`.
 
 ## Ruled out along the way
 

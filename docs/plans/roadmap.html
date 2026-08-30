@@ -158,9 +158,9 @@
 <body>
   <main>
     <header class="hero">
-      <span class="eyebrow">Roadmap · Updated August 15, 2026</span>
+      <span class="eyebrow">Roadmap · Updated August 30, 2026</span>
       <h1>Corrections you can trust—and take back.</h1>
-      <p class="lede">On August 15 the physical harness began producing <code>theteh</code> instead of <code>the</code> for every word in Bear. The cause was a single corrupt learned preference—<code>teh → theteh</code>—that Typover applied faithfully, because the learned-preference path skips the edit-distance guard every engine proposal must pass. Deleting one entry restored a 5/5 pass with no code change. Two defects stay open: learned preferences are applied unvalidated, and a corrupted correction still reports success rather than refusing.</p>
+      <p class="lede">On August 15 the physical harness began producing <code>theteh</code> instead of <code>the</code> for every word in Bear. The cause was a single corrupt learned preference—<code>teh → theteh</code>—that Typover applied faithfully, because the learned-preference path skips the edit-distance guard every engine proposal must pass. Deleting one entry restored a 5/5 pass with no code change. All three defects it raised are now closed in source: learning validates what it stores, applying validates what it uses, and a refused entry is reported rather than passing as a success. What remains is a physical run against a notarized build that carries the apply-time guard.</p>
       <div class="hero-meta">
         <span class="badge pending">Learned-preference validation open</span>
         <span class="badge">Replacement 0.1.0 notarized</span>

@@ -1,7 +1,7 @@
 # Typover roadmap
 
 - Status: Active — the 2026-08-15 physical failure is root-caused and cleared
-- Updated: 2026-08-15
+- Updated: 2026-08-30
 - Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45
   quiet-review physical Bear pass, including wrapped text and a native
   scroll-away/return row, plus a 42-test focused overlay pass and flat idle
@@ -9,9 +9,11 @@
   word. The cause was a corrupt learned preference, `teh → theteh`, that
   Typover applied faithfully because the learned-preference path bypasses the
   edit-distance guard every engine proposal must satisfy. Deleting the single
-  entry restored a 5/5 pass with no code change. Two code defects remain open —
-  learned preferences are applied unvalidated, and a corrupted correction still
-  reports success — and the VoiceOver finding needs re-testing against a clean
+  entry restored a 5/5 pass with no code change. All three code defects it
+  raised are now closed in source — learning validates what it stores, applying
+  validates what it uses, and a refused entry is reported rather than passing
+  as a success — leaving a physical run against a notarized build that carries
+  the apply-time guard, plus a re-test of the VoiceOver finding against a clean
   store, since it shares the same signature. See
   [A corrupt learned preference replaced every teh with theteh](../bugs/2026-08-15-bear-replacement-becomes-insertion.md).
 
@@ -485,27 +487,42 @@ evidence, not competing roadmaps.
 The dashboard above is the summary source of truth. The remaining work is
 ordered by what blocks a trustworthy beta:
 
-1. **Validate learned preferences.** They are applied with no check at all,
-   which is how `teh → theteh` survived. Enforce edit distance ≤ 1 and
-   membership in the engine's current guesses at record time and at application
-   time, and add a migration that drops impossible stored entries.
-2. **Make a corrupted correction fail closed.** Typover verified its own write
-   faithfully but never asked whether the replacement was plausible, so it drew
-   five reversible marks over five corruptions. Also log the replacement string
-   or its edit distance in the content-free trace; its absence cost nine
-   physical rows and a reboot.
-3. **Re-test the VoiceOver finding against a clean learning store.** It shares
+1. ~~**Validate learned preferences.**~~ Done, at record time and at
+   application time both. The rule that shipped is deliberately **not** the one
+   this item prescribed: edit distance ≤ 1 plus membership in the engine's
+   current guesses would also have refused every deliberate expansion
+   (`brb → be right back`) and would have made a remembered choice depend on
+   what the engine happens to suggest on a later OS. What applies instead is a
+   structural rule — a replacement containing the whole original and at least
+   two characters longer is refused whatever its origin — plus the existing
+   edit-distance bound for inferred and unattributed entries. A refused entry
+   is deleted as it is encountered, which is the migration this item asked for,
+   spread over use rather than run once at launch.
+2. ~~**Make a corrupted correction fail closed.**~~ Done. Verifying the write
+   was necessary but not sufficient; the apply-time guard is the question that
+   was missing, and a refusal is now counted, traced, and explained in Settings
+   rather than reported as a success. The content-free trace also carries
+   `editDistance` and `lengthDelta` on the applied row, so the mapping that
+   cost nine physical rows and a reboot now reads as `editDistance=3
+   lengthDelta=3`.
+3. **Build and notarize a candidate carrying both guards.** Everything below
+   observes a binary, and the newest notarized candidate,
+   `0.1.0 (20260815055632)`, predates all of this work.
+4. **Re-run the physical Bear matrix** on that candidate, including a row that
+   starts from a deliberately poisoned learning store and confirms the guard
+   refuses, reports, and leaves the text intact. Only a 5/5 row has passed
+   since the original fix.
+5. **Re-test the VoiceOver finding against a clean learning store.** It shares
    the `theteh` signature and its boot-persistence matches an on-disk
    preference better than an Accessibility server state, so the shipped latch
-   may be mitigating a misdiagnosis.
-4. **Re-run the full physical Bear matrix** on the candidate. Only a 5/5 row has
-   passed since the fix.
-5. Then complete the pointer-only visual row covering Bear proximity reveal,
+   may be mitigating a misdiagnosis. Its originating observation is also
+   unrecorded and must be written up before publication.
+6. Then complete the pointer-only visual row covering Bear proximity reveal,
    350 ms menu intent, dismissal, focus retention, and Reduced Motion.
-2. Publish the already-notarized beta binary. The MIT-licensed source, roadmap,
-   waitlist, support channel, release notes, rollback guidance, clean-machine
-   permission cycle, and artifact-to-claim audit are already complete.
-3. After the word-level beta is trustworthy, begin the deferred milestones:
+7. Publish the beta binary. The MIT-licensed source, roadmap, waitlist, support
+   channel, release notes, rollback guidance, clean-machine permission cycle,
+   and artifact-to-claim audit are already complete.
+8. After the word-level beta is trustworthy, begin the deferred milestones:
    bounded local contextual correction, then a TextEdit adapter, and finally
    broader model benchmarking.
 
