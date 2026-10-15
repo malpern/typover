@@ -1,5 +1,9 @@
 # Typover roadmap
 
+> Historical baseline: as of 2026-10-15, the [editor-first strategy](editor-first-strategy.md)
+> supersedes the Bear-first product sequencing below. Existing evidence and
+> safety requirements remain relevant; new editor milestones are still pending.
+
 - Status: Active — the 2026-08-15 physical failure is root-caused and cleared
 - Updated: 2026-08-30
 - Current focus: Candidate `0.1.0 (20260808224257)` now has a fresh 45/45

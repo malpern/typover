@@ -13,6 +13,20 @@ another suggestion.
 [Visual roadmap](https://malpern.github.io/typover/plans/roadmap.html) ·
 [Join the waitlist](https://github.com/malpern/typover/issues/new?template=waitlist.yml)
 
+## Current direction (2026-10-15)
+
+Development now prioritizes Typover's own writing editor: recoverable drafts,
+responsive typing, retrospective contextual correction, and personalization.
+Bear integration is retained as experimental work; its release sequencing is
+paused. The build/status descriptions below document the existing baseline,
+not completion of the new editor milestones.
+
+Start with the [editor-first strategy](docs/plans/editor-first-strategy.md),
+[implementation milestones](docs/plans/editor-first-implementation.md),
+[test protocol](docs/testing/editor-first-validation.md), and
+[Mac development prompt](docs/development/mac-development-prompt.md).
+These replace the older Bear-first roadmap as the active development plan.
+
 ## The interaction
 
 1. The writer completes a word or sentence.

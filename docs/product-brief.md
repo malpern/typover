@@ -1,5 +1,9 @@
 # Typover product brief
 
+> Historical baseline: as of 2026-10-15, the [editor-first strategy](plans/editor-first-strategy.md)
+> supersedes the Bear-first product sequencing below. Existing evidence and
+> safety requirements remain relevant; new editor milestones are still pending.
+
 ## Problem
 
 Traditional desktop spell checking identifies probable mistakes but requires
