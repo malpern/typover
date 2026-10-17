@@ -1,7 +1,7 @@
 # Editor-first implementation plan
 
 - Updated: 2026-10-15
-- Status: Planned; no milestone below is claimed complete
+- Status: M0 baseline tooling started; no milestone below is claimed complete
 - Authority: [strategy](editor-first-strategy.md)
 - Test protocol: [editor-first validation](../testing/editor-first-validation.md)
 - Execution: [Mac development prompt](../development/mac-development-prompt.md)
@@ -192,7 +192,7 @@ No public release or broad claim solely because unit tests passed.
 
 | Milestone | Status | Evidence / commit | Next action |
 | --- | --- | --- | --- |
-| M0 Baseline | Pending | None | Inspect target Mac |
+| M0 Baseline | In progress; Mac qualification blocked | [Handoff and collector evidence](../development/editor-first-handoff.md) | Run collector on target Mac; complete manual gates |
 | M1 Daily editor | Pending | None | Document/storage ADR after M0 |
 | M2 Responsiveness | Pending | None | Baseline instrumentation in M0 |
 | M3 Rolling context | Pending | None | Scheduler/transaction design after M2 |
